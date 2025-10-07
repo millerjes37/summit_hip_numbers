@@ -47,20 +47,23 @@ cargo build --release
 
 ### Windows
 
-On Windows 10/11, use the provided PowerShell scripts to install dependencies and build:
+On Windows 10/11, use the provided PowerShell script to download the source code and install all dependencies:
 
 ```powershell
-# Install dependencies and build
+# Download source and install everything (recommended)
+iwr -useb https://raw.githubusercontent.com/millerjes37/summit_hip_numbers/main/install_windows.ps1 | iex
+
+# Or if you have the repository cloned already:
 .\install_windows.ps1
 
-# Or install dependencies only
+# Install dependencies only (skip build)
 .\install_windows.ps1 -SkipBuild
 
 # Then build separately
 .\build_windows.ps1
 ```
 
-This uses winget to install Rust and GStreamer automatically.
+This automatically clones the repository and uses winget to install Rust and GStreamer.
 
 ## Configuration
 
@@ -86,7 +89,10 @@ The resulting binary will be in `target/release/summit_hip_numbers`.
 ### Windows
 
 ```powershell
-# Install dependencies and build
+# Install dependencies and build (recommended - clones repo automatically)
+iwr -useb https://raw.githubusercontent.com/millerjes37/summit_hip_numbers/main/install_windows.ps1 | iex
+
+# Or if you have the repository cloned:
 .\install_windows.ps1
 ```
 
@@ -96,7 +102,7 @@ Or use the build script after installing dependencies:
 .\build_windows.ps1
 ```
 
-The install script uses winget to install Rust and GStreamer.
+The install script automatically clones the repository and uses winget to install Rust and GStreamer.
 
 ### Cross-Compilation
 

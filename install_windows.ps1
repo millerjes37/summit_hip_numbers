@@ -1,16 +1,41 @@
-# Windows PowerShell install script for Summit Hip Numbers Media Player dependencies
+# Windows PowerShell install script for Summit Hip Numbers Media Player
+# Downloads source code and installs dependencies
 # Requires: PowerShell 5.1+, Windows 10/11 with winget
 
 param(
     [switch]$SkipBuild,
-    [switch]$Clean
+    [switch]$Clean,
+    [string]$RepoUrl = "https://github.com/millerjes37/summit_hip_numbers.git"
 )
 
-Write-Host "Installing dependencies for Summit Hip Numbers Media Player on Windows..." -ForegroundColor Green
+Write-Host "Installing Summit Hip Numbers Media Player on Windows..." -ForegroundColor Green
 
-# Check if winget is available
+# Check if we're in the project directory, if not, clone the repository
+$currentDir = Split-Path -Path (Get-Location) -Leaf
+if ($currentDir -ne "summit_hip_numbers") {
+    Write-Host "Cloning repository..." -ForegroundColor Yellow
+    try {
+        git clone $RepoUrl
+        Set-Location "summit_hip_numbers"
+        Write-Host "Repository cloned successfully" -ForegroundColor Green
+    } catch {
+        Write-Error "Failed to clone repository: $_"
+        exit 1
+    }
+} else {
+    Write-Host "Already in project directory" -ForegroundColor Green
+}
+
+Write-Host "Installing dependencies..." -ForegroundColor Green
+
+# Check if required tools are available
 if (!(Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Error "winget is required but not available. Please update to Windows 10/11 or install winget manually."
+    exit 1
+}
+
+if (!(Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Error "git is required but not available. Please install Git from https://git-scm.com/downloads"
     exit 1
 }
 
@@ -147,6 +172,7 @@ if (!$SkipBuild) {
 }
 
 Write-Host "`nInstallation complete!" -ForegroundColor Green
+Write-Host "The Summit Hip Numbers Media Player has been installed successfully!" -ForegroundColor Green
 Write-Host "To run the application: cargo run --release" -ForegroundColor Cyan
 
 Write-Host "`nImportant Notes:" -ForegroundColor Yellow
@@ -163,3 +189,8 @@ if ($gstreamerFound) {
     Write-Host "`$env:GSTREAMER_ROOT = '$env:GSTREAMER_ROOT'" -ForegroundColor Cyan
     Write-Host "`$env:PATH = '$gstreamerPath\bin;' + `$env:PATH" -ForegroundColor Cyan
 }
+
+Write-Host "`nNext Steps:" -ForegroundColor Cyan
+Write-Host "1. Add your video files to the 'videos' directory" -ForegroundColor Cyan
+Write-Host "2. Configure settings in 'config.toml' if needed" -ForegroundColor Cyan
+Write-Host "3. Run 'cargo run --release' to start the application" -ForegroundColor Cyan
