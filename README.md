@@ -181,16 +181,41 @@ summit_hip_numbers/
 
 ## Distribution
 
-The application can be distributed as a single binary. To distribute:
+### Portable Distribution (Windows)
 
-### macOS/Linux
+The Windows build script creates a fully portable version that can be distributed as a drag-and-drop folder:
+
+```powershell
+# Create portable distribution
+.\build_windows.ps1
+```
+
+This creates:
+- `dist/` folder with all files
+- `summit_hip_numbers_portable.zip` for easy distribution
+
+The portable version includes:
+- Application executable
+- GStreamer runtime (all DLLs and plugins)
+- Configuration file
+- Sample videos
+- Launcher script (`run.bat`)
+
+**To use the portable version:**
+1. Extract the zip file to any Windows 10+ computer
+2. Double-click `run.bat` to start
+3. Add your videos to the `videos/` folder
+4. Edit `config.toml` for customization
+
+### Platform-Specific Distribution
+
+#### macOS/Linux
 1. Build with `nix build`
 2. Copy the binary from `result/bin/`
 3. Include `config.toml` and your videos directory
 4. The Nix-built executable is self-contained
 
-### Windows
-1. Build with `.\build_windows.ps1`
-2. The script creates a `dist` folder with the executable, config, and videos
-3. Zip the `dist` folder for distribution
-4. Ensure GStreamer DLLs are available (installed via vcpkg in the build process)
+#### Windows (Alternative)
+1. Build with `.\build_windows.ps1 -SkipGStreamer`
+2. Requires GStreamer installed on target systems
+3. Smaller distribution but less portable
