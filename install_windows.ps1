@@ -14,16 +14,38 @@ Write-Host "Installing Summit Hip Numbers Media Player on Windows..." -Foregroun
 $currentDir = Split-Path -Path (Get-Location) -Leaf
 if ($currentDir -ne "summit_hip_numbers") {
     Write-Host "Cloning repository..." -ForegroundColor Yellow
-    try {
-        git clone $RepoUrl
+
+    # Check if directory already exists
+    if (Test-Path "summit_hip_numbers") {
+        Write-Host "Project directory already exists. Using existing directory." -ForegroundColor Green
         Set-Location "summit_hip_numbers"
-        Write-Host "Repository cloned successfully" -ForegroundColor Green
-    } catch {
-        Write-Error "Failed to clone repository: $_"
-        exit 1
+    } else {
+        try {
+            & git clone $RepoUrl
+            if ($LASTEXITCODE -eq 0) {
+                Set-Location "summit_hip_numbers"
+                Write-Host "Repository cloned successfully" -ForegroundColor Green
+            } else {
+                Write-Error "Failed to clone repository (exit code: $LASTEXITCODE)"
+                exit 1
+            }
+        } catch {
+            Write-Error "Failed to clone repository: $_"
+            Write-Host "Troubleshooting:" -ForegroundColor Yellow
+            Write-Host "- Ensure internet connection is available" -ForegroundColor Yellow
+            Write-Host "- Check if git is properly installed and configured" -ForegroundColor Yellow
+            Write-Host "- Try running: git clone $RepoUrl manually" -ForegroundColor Yellow
+            exit 1
+        }
     }
 } else {
     Write-Host "Already in project directory" -ForegroundColor Green
+}
+
+# Verify we're in the correct directory with the right files
+if (!(Test-Path "Cargo.toml")) {
+    Write-Error "Cargo.toml not found. This doesn't appear to be the summit_hip_numbers project directory."
+    exit 1
 }
 
 Write-Host "Installing dependencies..." -ForegroundColor Green
@@ -37,6 +59,24 @@ if (!(Get-Command winget -ErrorAction SilentlyContinue)) {
 if (!(Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Error "git is required but not available. Please install Git from https://git-scm.com/downloads"
     exit 1
+}
+
+# Configure git if not already configured
+Write-Host "Checking git configuration..." -ForegroundColor Yellow
+$gitUserName = & git config --global user.name 2>$null
+$gitUserEmail = & git config --global user.email 2>$null
+
+if (!$gitUserName -or !$gitUserEmail) {
+    Write-Host "Git not configured. Setting up basic configuration..." -ForegroundColor Yellow
+    try {
+        & git config --global user.name "Summit Hip Numbers User" 2>$null
+        & git config --global user.email "user@localhost" 2>$null
+        Write-Host "Git configured with default settings" -ForegroundColor Green
+    } catch {
+        Write-Warning "Could not configure git. Clone might fail if git is not properly configured."
+    }
+} else {
+    Write-Host "Git already configured" -ForegroundColor Green
 }
 
 # Clean previous installations if requested
