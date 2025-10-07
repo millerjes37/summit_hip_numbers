@@ -1,0 +1,17 @@
+# Summit Hip Numbers Media Player Configuration
+
+[video]
+# Directory containing media files (images and videos)
+directory = "./videos"
+
+[splash]
+# Enable splash screen on startup
+enabled = false
+# Duration to display splash screen in seconds
+duration_seconds = 0.0
+# Splash screen text
+text = "SUMMIT PROFESSIONAL Solutions\nMedia Player"
+# Splash screen background color (hex)
+background_color = "#000000"
+# Splash screen text color (hex)
+text_color = "#FFFFFF"
