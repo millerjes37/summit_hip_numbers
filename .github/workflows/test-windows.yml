@@ -1,0 +1,66 @@
+name: Test Windows Portable Executable
+
+on:
+  workflow_run:
+    workflows: ["Build Windows Distribution"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  test-portable-executable:
+    runs-on: windows-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    steps:
+    - name: Download portable bundle artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: summit-hip-numbers-windows-portable
+        path: portable-bundle
+        # Specify the workflow run ID to get the artifact from the correct run
+        run-id: ${{ github.event.workflow_run.id }}
+
+    - name: Unzip portable bundle
+      shell: pwsh
+      run: |
+        Expand-Archive -Path "portable-bundle\summit_hip_numbers_portable.zip" -DestinationPath "portable-bundle\unzipped"
+        Write-Host "Contents of unzipped bundle:"
+        Get-ChildItem -Path "portable-bundle\unzipped" -Recurse
+
+    - name: Run portable executable and log output
+      shell: pwsh
+      run: |
+        $exePath = "portable-bundle\unzipped\summit_hip_numbers.exe"
+        $logFile = "portable-bundle\run-log.txt"
+        
+        if (-not (Test-Path $exePath)) {
+          Write-Error "Executable not found at $exePath"
+          exit 1
+        }
+
+        Write-Host "Attempting to run $exePath for 15 seconds..."
+        
+        # Start the process in the background and redirect output
+        $process = Start-Process -FilePath $exePath -PassThru -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $logFile
+        
+        # Wait for a bit to see if it crashes immediately
+        Start-Sleep -Seconds 15
+        
+        # Stop the process
+        Stop-Process -Id $process.Id -Force
+        
+        Write-Host "Process stopped. Checking log file for errors."
+        $logContent = Get-Content $logFile -Raw -ErrorAction SilentlyContinue
+        
+        Write-Host "--- Log file content ---"
+        Write-Host $logContent
+        Write-Host "------------------------"
+
+    - name: Upload execution log
+      if: always() # Always upload the log, even if previous steps fail
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-portable-execution-log
+        path: portable-bundle/run-log.txt
