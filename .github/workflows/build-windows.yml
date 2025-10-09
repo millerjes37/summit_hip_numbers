@@ -49,15 +49,18 @@ jobs:
         RUSTFLAGS: -L native=/mingw64/lib
       run: cargo build --release --verbose
 
-    - name: Install Inno Setup
+    - name: Download and Install Inno Setup
       shell: pwsh
       run: |
         $inno_url = "https://files.jrsoftware.org/is/6/innosetup-${{ env.INNO_SETUP_VERSION }}.exe"
         $inno_path = "${{ runner.temp }}\innosetup.exe"
+        Write-Host "Downloading Inno Setup from $inno_url"
         Invoke-WebRequest -Uri $inno_url -OutFile $inno_path
-        $inno_args = "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /NORESTART"
-        Start-Process -FilePath $inno_path -ArgumentList $inno_args -Wait
-        echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+        Write-Host "Installing Inno Setup..."
+        Start-Process -FilePath $inno_path -ArgumentList "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /NORESTART" -Wait
+        $inno_dir = "C:\Program Files (x86)\Inno Setup 6"
+        Write-Host "Adding '$inno_dir' to GITHUB_PATH"
+        echo $inno_dir >> $env:GITHUB_PATH
 
     - name: Run Build Script to Create Distribution
       shell: pwsh
