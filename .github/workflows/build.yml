@@ -91,6 +91,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: mac-bundle
+      - name: Extract bundles to dist
+        run: |
+          mkdir -p dist
+          unzip summit_hip_numbers-linux.zip -d dist/linux/
+          unzip summit_hip_numbers-windows.zip -d dist/windows/
+          unzip summit_hip_numbers-macos.zip -d dist/mac/
       - uses: softprops/action-gh-release@v2
         with:
           files: |
