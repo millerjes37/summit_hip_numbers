@@ -3,6 +3,20 @@ name = "summit_hip_numbers"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.bundle]
+name = "Summit Hip Numbers"
+identifier = "com.summit.hipnumbers"
+version = "0.1.0"
+copyright = "Copyright (c) 2025 Summit Professional Services"
+category = "Utility"
+short_description = "Media player for hip numbers"
+long_description = "A video player application for displaying hip number videos"
+
+[package.metadata.bundle.resources]
+"config.toml" = "config.toml"
+"videos/" = "videos/"
+"splash/" = "splash/"
+
 [dependencies]
 eframe = "0.29"
 egui = "0.29"
@@ -16,4 +30,8 @@ gstreamer-video = "0.24"
 gstreamer-play = "0.24"
 anyhow = "1.0"
 tokio = { version = "1.0", features = ["full"] }
+ clap = { version = "4.0", features = ["derive"] }
+ log = "0.4"
+fern = "0.6"
+chrono = "0.4"
 

@@ -5,13 +5,34 @@
 directory = "./videos"
 
 [splash]
-# Enable splash screen on startup
+# Enable splash screen
 enabled = false
 # Duration to display splash screen in seconds
 duration_seconds = 0.0
-# Splash screen text
+# Splash screen text (if no images)
 text = "SUMMIT PROFESSIONAL Solutions\nMedia Player"
 # Splash screen background color (hex)
 background_color = "#000000"
 # Splash screen text color (hex)
 text_color = "#FFFFFF"
+# Interval for showing splash: once, every, every_other, every_third
+interval = "once"
+# Directory for splash images
+directory = "./splash"
+
+[logging]
+# Log file name
+file = "summit_hip_numbers.log"
+# Maximum number of lines to keep in log file
+max_lines = 10000
+
+[ui]
+# UI labels
+input_label = "3-digit hip number:"
+now_playing_label = "now playing"
+company_label = "SUMMIT PROFESSIONAL Solutions"
+# UI colors (hex)
+input_text_color = "#FFFFFF"
+input_stroke_color = "#FFFFFF"
+label_color = "#FFFFFF"
+background_color = "#000000"

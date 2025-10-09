@@ -9,12 +9,23 @@ param(
 
 Write-Host "Building Portable Summit Hip Numbers Media Player for Windows..." -ForegroundColor Green
 
-# Build the application
-cargo build --release
+# Build the application bundle
+cargo bundle --release
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "Build successful!" -ForegroundColor Green
-    Write-Host "Binary location: target\release\summit_hip_numbers.exe" -ForegroundColor Cyan
+    Write-Host "Bundle build successful!" -ForegroundColor Green
+
+    # Find the bundle directory
+    $bundleDir = "target\release\bundle\windows\summit_hip_numbers.exe"
+    if (!(Test-Path $bundleDir)) {
+        $bundleDir = "target\release\bundle\msvc\summit_hip_numbers.exe"
+    }
+    if (!(Test-Path $bundleDir)) {
+        Write-Host "Bundle exe not found!" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Bundle location: $bundleDir" -ForegroundColor Cyan
 
     # Create portable distribution package
     $distDir = "dist"
@@ -22,6 +33,9 @@ if ($LASTEXITCODE -eq 0) {
         Remove-Item $distDir -Recurse -Force
     }
     New-Item -ItemType Directory -Path $distDir
+
+    # Copy bundle exe
+    Copy-Item $bundleDir (Join-Path $distDir "summit_hip_numbers.exe")
 
     # Find GStreamer installation
     if (!$SkipGStreamer) {
@@ -45,26 +59,22 @@ if ($LASTEXITCODE -eq 0) {
         if ($GStreamerPath -and (Test-Path $GStreamerPath)) {
             Write-Host "Found GStreamer at: $GStreamerPath" -ForegroundColor Green
 
-            # Create GStreamer directory in dist
-            $gstDistDir = Join-Path $distDir "gstreamer"
-            New-Item -ItemType Directory -Path $gstDistDir
-
-            # Copy essential GStreamer files
+            # Copy essential GStreamer files to dist
             Write-Host "Copying GStreamer runtime..." -ForegroundColor Yellow
 
             # Copy bin directory (DLLs)
             if (Test-Path (Join-Path $GStreamerPath "bin")) {
-                Copy-Item (Join-Path $GStreamerPath "bin") $gstDistDir -Recurse
+                Copy-Item (Join-Path $GStreamerPath "bin\*") $distDir
             }
 
             # Copy lib directory (additional libraries)
             if (Test-Path (Join-Path $GStreamerPath "lib")) {
-                Copy-Item (Join-Path $GStreamerPath "lib") $gstDistDir -Recurse
+                Copy-Item (Join-Path $GStreamerPath "lib") $distDir -Recurse
             }
 
             # Copy share directory (plugins, etc.)
             if (Test-Path (Join-Path $GStreamerPath "share")) {
-                Copy-Item (Join-Path $GStreamerPath "share") $gstDistDir -Recurse
+                Copy-Item (Join-Path $GStreamerPath "share") $distDir -Recurse
             }
 
             Write-Host "GStreamer runtime copied" -ForegroundColor Green
@@ -73,13 +83,19 @@ if ($LASTEXITCODE -eq 0) {
         }
     }
 
-    # Copy application files
-    Copy-Item "target\release\summit_hip_numbers.exe" $distDir
-    Copy-Item "config.toml" $distDir
+    # Copy config.toml if exists
+    if (Test-Path "config.toml") {
+        Copy-Item "config.toml" $distDir
+    }
 
     # Copy videos directory if it exists
     if (Test-Path "videos") {
         Copy-Item "videos" $distDir -Recurse
+    }
+
+    # Copy splash directory if it exists
+    if (Test-Path "splash") {
+        Copy-Item "splash" $distDir -Recurse
     }
 
     # Create a launcher script for better compatibility
@@ -123,6 +139,7 @@ Files:
 - summit_hip_numbers.exe: Main application
 - config.toml: Configuration file
 - videos/: Directory for your video files
+- splash/: Directory for splash images
 - gstreamer/: GStreamer runtime (if included)
 - run.bat: Launcher script
 
@@ -155,9 +172,23 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
     Compress-Archive -Path $distDir -DestinationPath $zipPath
     Write-Host "Zip archive created: $zipPath" -ForegroundColor Green
 
+    # Create Inno Setup installer
+    if (Get-Command "iscc" -ErrorAction SilentlyContinue) {
+        Write-Host "Creating Inno Setup installer..." -ForegroundColor Yellow
+        & iscc installer.iss
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Installer created: dist\summit_hip_numbers_installer.exe" -ForegroundColor Green
+        } else {
+            Write-Warning "Failed to create installer. Inno Setup may not be installed."
+        }
+    } else {
+        Write-Warning "Inno Setup not found. Skipping installer creation."
+    }
+
     Write-Host "`nPortable distribution ready!" -ForegroundColor Green
     Write-Host "You can now copy the '$distDir' folder or '$zipPath' to any Windows computer and run it." -ForegroundColor Cyan
     Write-Host "Double-click 'run.bat' to start the application." -ForegroundColor Cyan
+    Write-Host "Or run the installer 'summit_hip_numbers_installer.exe' for a full installation." -ForegroundColor Cyan
 } else {
     Write-Host "Build failed!" -ForegroundColor Red
     exit 1
