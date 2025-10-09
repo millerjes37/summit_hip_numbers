@@ -840,6 +840,9 @@ fn main() -> eframe::Result<()> {
             Box::new(|_cc| Ok(Box::new(ConfigApp::new()))),
         )
     } else {
+        // Set GStreamer plugin path for bundled plugins
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        std::env::set_var("GST_PLUGIN_PATH", exe_dir.join("plugins"));
         gstreamer::init().expect("Failed to initialize GStreamer");
 
         let options = eframe::NativeOptions {

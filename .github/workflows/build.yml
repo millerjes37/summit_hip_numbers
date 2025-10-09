@@ -45,6 +45,8 @@ jobs:
           cp -r videos bundle/ 2>$null
           cp -r splash bundle/ 2>$null
           cp "C:/gstreamer/1.0/mingw_x86_64/bin/*.dll" bundle/
+          mkdir bundle/plugins
+          cp -r "C:/gstreamer/1.0/mingw_x86_64/lib/gstreamer-1.0" bundle/plugins/
           Compress-Archive -Path bundle -DestinationPath summit_hip_numbers-windows.zip
       - uses: actions/upload-artifact@v4
         with:
