@@ -32,8 +32,8 @@ jobs:
         run: |
           rustup update
           rustup target add x86_64-pc-windows-gnu
-      - name: Run library tests
-        run: cargo test --lib
+      - name: Run tests
+        run: cargo test
       - name: Install GStreamer
         shell: pwsh
         run: |
