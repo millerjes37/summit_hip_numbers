@@ -87,16 +87,42 @@ Write-Host "Build successful!" -ForegroundColor Green
             # Copy essential GStreamer files to dist
             Write-Host "Copying GStreamer runtime files..." -ForegroundColor Yellow
 
-             # Copy bin directory (DLLs)
-             $binPath = Join-Path $GStreamerPath "bin"
-             if (Test-Path $binPath) {
-                 Write-Host "  Copying DLLs from $binPath..." -ForegroundColor Gray
-                 Copy-Item -Path (Join-Path $binPath "*.dll") -Destination $distDir
-                 $dllCount = (Get-ChildItem $distDir -Filter "*.dll").Count
-                 Write-Host "  Copied $dllCount DLLs" -ForegroundColor Green
-             } else {
-                 Write-Host "  Bin directory not found at $binPath" -ForegroundColor Yellow
-             }
+              # Copy bin directory (DLLs)
+              $binPath = Join-Path $GStreamerPath "bin"
+              if (Test-Path $binPath) {
+                  Write-Host "  Copying DLLs from $binPath..." -ForegroundColor Gray
+                  Copy-Item -Path (Join-Path $binPath "*.dll") -Destination $distDir
+                  $dllCount = (Get-ChildItem $distDir -Filter "*.dll").Count
+                  Write-Host "  Copied $dllCount DLLs" -ForegroundColor Green
+
+                  # Ensure specific GLib and GStreamer DLLs are copied
+                  $specificDlls = @(
+                      "libglib-2.0-0.dll",
+                      "libgobject-2.0-0.dll",
+                      "libgio-2.0-0.dll",
+                      "libgstapp-1.0-0.dll",
+                      "libgstreamer-1.0-0.dll",
+                      "libgstvideo-1.0-0.dll",
+                      "libgstbase-1.0-0.dll",
+                      "libgstpbutils-1.0-0.dll"
+                  )
+                  foreach ($dll in $specificDlls) {
+                      $sourcePath = Join-Path $binPath $dll
+                      $destPath = Join-Path $distDir $dll
+                      if (Test-Path $sourcePath) {
+                          if (!(Test-Path $destPath)) {
+                              Copy-Item $sourcePath $destPath
+                              Write-Host "  Copied specific DLL: $dll" -ForegroundColor Green
+                          } else {
+                              Write-Host "  Specific DLL already exists: $dll" -ForegroundColor Gray
+                          }
+                      } else {
+                          Write-Host "  Specific DLL not found: $dll at $sourcePath" -ForegroundColor Yellow
+                      }
+                  }
+              } else {
+                  Write-Host "  Bin directory not found at $binPath" -ForegroundColor Yellow
+              }
 
              # Copy lib\gstreamer-1.0 directory (plugins)
              $pluginPath = Join-Path $GStreamerPath "lib\gstreamer-1.0"
