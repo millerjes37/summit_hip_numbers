@@ -85,7 +85,7 @@ jobs:
           mkdir -p dist
           unzip summit_hip_numbers-linux.zip -d dist/linux/
           unzip summit_hip_numbers_portable.zip -d dist/windows/
-          cp *.dmg dist/mac/
+           cp *.dmg dist/mac/
        - uses: softprops/action-gh-release@v2
          with:
            files: |
