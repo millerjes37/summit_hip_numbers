@@ -11,23 +11,23 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v25
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
+     steps:
+       - uses: actions/checkout@v4
+       - uses: cachix/install-nix-action@v25
+         with:
+           nix_path: nixpkgs=channel:nixos-unstable
        - run: nix build .
        - name: Create zip
          run: zip -r summit_hip_numbers-linux.zip result
-      - run: cp summit_hip_numbers-linux.zip dist/
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-bundle
-          path: summit_hip_numbers-linux.zip
+       - run: cp summit_hip_numbers-linux.zip dist/
+       - uses: actions/upload-artifact@v4
+         with:
+           name: linux-bundle
+           path: summit_hip_numbers-linux.zip
 
-  build-windows:
-    runs-on: windows-latest
-    steps:
+   build-windows:
+     runs-on: windows-latest
+     steps:
        - uses: actions/checkout@v4
        - name: Setup Rust
          run: |
@@ -35,7 +35,7 @@ jobs:
            rustup target add x86_64-pc-windows-gnu
        - name: Run library tests
          run: cargo test --lib
-      - name: Install GStreamer
+       - name: Install GStreamer
         shell: pwsh
         run: |
           $gstreamerUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/1.26.6/mingw/gstreamer-1.0-mingw-x86_64-1.26.6.msi"
