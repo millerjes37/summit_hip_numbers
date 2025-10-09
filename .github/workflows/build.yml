@@ -26,6 +26,31 @@ jobs:
           name: linux-bundle
           path: summit_hip_numbers-linux.zip
 
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install GStreamer
+        run: |
+          curl -o gst.msi https://gstreamer.freedesktop.org/data/pkg/windows/1.24.10/mingw/gstreamer-1.0-mingw-x86_64-1.24.10.msi
+          msiexec /i gst.msi /quiet /norestart
+      - run: cargo build --release
+      - name: Create zip
+        run: |
+          mkdir bundle
+          cp target/release/summit_hip_numbers.exe bundle/
+          cp config.toml bundle/
+          cp -r videos bundle/ 2>$null
+          cp -r splash bundle/ 2>$null
+          cp "C:/gstreamer/1.0/mingw_x86_64/bin/*.dll" bundle/
+          Compress-Archive -Path bundle -DestinationPath summit_hip_numbers-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundle
+          path: summit_hip_numbers-windows.zip
+
   build-mac:
     runs-on: macos-latest
     steps:
@@ -42,13 +67,16 @@ jobs:
           path: summit_hip_numbers-macos.zip
 
   release:
-    needs: [build-linux, build-mac]
+    needs: [build-linux, build-windows, build-mac]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: linux-bundle
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-bundle
       - uses: actions/download-artifact@v4
         with:
           name: mac-bundle
