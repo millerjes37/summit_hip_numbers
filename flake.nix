@@ -28,29 +28,25 @@
           buildInputs = [ rustToolchain ] ++ commonDeps ++ [ pkgs.cargo-bundle ];
         };                # Native build
         packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "summit_hip_numbers";
-          version = "0.1.0";
-          src = ./.;
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-          nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = gstLibs;
-           installPhase = ''
-             # Copy assets to bin directory where the binary is
-             cp config.toml $out/bin/
-             cp -r videos $out/bin/ 2>/dev/null || true
-             cp -r splash $out/bin/ 2>/dev/null || true
-           '';
-        };        # macOS build with cargo-bundle for DMG
+           pname = "summit_hip_numbers";
+           version = "0.1.0";
+           src = ./.;
+           cargoLock = {
+             lockFile = ./Cargo.lock;
+           };
+           nativeBuildInputs = [ pkgs.pkg-config ];
+           buildInputs = gstLibs;
+            postInstall = ''
+              # Copy assets to bin directory where the binary is
+              cp config.toml $out/bin/
+              cp -r videos $out/bin/ 2>/dev/null || true
+              cp -r splash $out/bin/ 2>/dev/null || true
+            '';
+         };
+
+        # macOS build with cargo-bundle for DMG
         packages.macos = pkgs.rustPlatform.buildRustPackage {
-          pname = "summit_hip_numbers-macos";
-          version = "0.1.0";
-          src = ./.;
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-          nativeBuildInputs = with pkgs; [
+           nativeBuildInputs = with pkgs; [
             pkg-config
             cargo-bundle
           ];
