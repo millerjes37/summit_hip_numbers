@@ -240,7 +240,7 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
     if (Get-Command "iscc" -ErrorAction SilentlyContinue) {
         Write-Host "Inno Setup found, creating installer..." -ForegroundColor Green
         & iscc installer.iss
-if ($LASTEXITCODE -eq 0 -or $SkipBuild) {
+        if ($LASTEXITCODE -eq 0) {
             Write-Host "Installer created successfully" -ForegroundColor Green
         } else {
             Write-Warning "Failed to create installer (exit code: $LASTEXITCODE)"
@@ -259,10 +259,4 @@ if ($LASTEXITCODE -eq 0 -or $SkipBuild) {
     }
     Write-Host "`nTo deploy:" -ForegroundColor Yellow
     Write-Host "1. Copy the '$distDir' folder to a flash drive" -ForegroundColor White
-    Write-Host "2. Or extract '$zipPath' on target machines" -ForegroundColor White
-    Write-Host "3. Double-click 'run.bat' to start the application" -ForegroundColor White
-} else {
-    Write-Host "=== Build Failed ===" -ForegroundColor Red
-    Write-Host "Cargo build exited with code: $LASTEXITCODE" -ForegroundColor Red
-    exit 1
-}
+    Write-Host "2. Double-click 'run.bat' to start the application" -ForegroundColor White
