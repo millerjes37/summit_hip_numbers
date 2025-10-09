@@ -10,6 +10,9 @@ on:
 
 jobs:
   test-portable-executable:
+    # Add permissions for the job to read artifacts from other workflows
+    permissions:
+      actions: read
     runs-on: windows-latest
     if: github.event.workflow_run.conclusion == 'success'
 
