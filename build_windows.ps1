@@ -21,21 +21,23 @@ Write-Host "Building Portable Summit Hip Numbers Media Player for Windows..." -F
 if (!$SkipBuild) {
     Write-Host "Running cargo build with verbose output..." -ForegroundColor Yellow
     cargo build --release --verbose
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "=== Build Failed ===" -ForegroundColor Red
+        Write-Host "Cargo build exited with code: $LASTEXITCODE" -ForegroundColor Red
+        exit 1
+    }
 } else {
     Write-Host "Skipping build step (already built)..." -ForegroundColor Yellow
 }
 
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "Build successful!" -ForegroundColor Green
+# Find the built exe
+$exePath = "target\release\summit_hip_numbers.exe"
+if (!(Test-Path $exePath)) {
+    Write-Host "Exe not found at $exePath! Build might have failed." -ForegroundColor Red
+    exit 1
+}
 
-    # Find the built exe
-    $exePath = "target\release\summit_hip_numbers.exe"
-    if (!(Test-Path $exePath)) {
-        Write-Host "Exe not found at $exePath!" -ForegroundColor Red
-        exit 1
-    }
-
-    Write-Host "Exe location: $exePath" -ForegroundColor Cyan
+Write-Host "Build successful!" -ForegroundColor Green
 
     # Create portable distribution package
     $distDir = "dist"
