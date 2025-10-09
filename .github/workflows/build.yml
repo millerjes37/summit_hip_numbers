@@ -16,7 +16,7 @@ jobs:
       - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - run: nix build .
+       - run: nix build .
        - name: Create zip
          run: zip -r summit_hip_numbers-linux.zip result
       - run: cp summit_hip_numbers-linux.zip dist/
@@ -28,7 +28,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+       - uses: actions/checkout@v4
        - name: Setup Rust
          run: |
            rustup update
