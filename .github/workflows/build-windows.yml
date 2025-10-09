@@ -53,9 +53,11 @@ jobs:
       shell: pwsh
       run: |
         $inno_url = "https://files.jrsoftware.org/is/6/innosetup-${{ env.INNO_SETUP_VERSION }}.exe"
-        $inno_args = "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /NORESTART /DIR=""C:\Program Files (x86)\Inno Setup 6"""
-        Start-Process -FilePath "ispack-6.2.2.exe" -ArgumentList $inno_args -Wait
-        echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        $inno_path = "${{ runner.temp }}\innosetup.exe"
+        Invoke-WebRequest -Uri $inno_url -OutFile $inno_path
+        $inno_args = "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /NORESTART"
+        Start-Process -FilePath $inno_path -ArgumentList $inno_args -Wait
+        echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
 
     - name: Run Build Script to Create Distribution
       shell: pwsh
