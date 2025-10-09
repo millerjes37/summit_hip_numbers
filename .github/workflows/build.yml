@@ -35,12 +35,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           target: x86_64-pc-windows-gnu
-          targets: x86_64-unknown-linux-gnu
       - name: Install GStreamer
         run: |
           curl -o gst.msi https://gstreamer.freedesktop.org/data/pkg/windows/1.24.10/mingw/gstreamer-1.0-mingw-x86_64-1.24.10.msi
           msiexec /i gst.msi /quiet /norestart
+      - name: Install pkg-config
+        run: choco install pkgconfiglite
       - run: cargo build --release --target x86_64-pc-windows-gnu
+        env:
+          PKG_CONFIG_PATH: C:/gstreamer/1.0/mingw_x86_64/lib/pkgconfig
       - name: Create zip
         run: |
           mkdir bundle
