@@ -7,38 +7,42 @@ param(
     [string]$GStreamerPath = ""
 )
 
+Write-Host "=== Starting Windows Build Script ===" -ForegroundColor Cyan
+Write-Host "Parameters: SkipGStreamer=$SkipGStreamer, GStreamerPath='$GStreamerPath'" -ForegroundColor Gray
+Write-Host "Current directory: $(Get-Location)" -ForegroundColor Gray
 Write-Host "Building Portable Summit Hip Numbers Media Player for Windows..." -ForegroundColor Green
 
-# Build the application bundle
-cargo bundle --release
+# Build the application
+cargo build --release
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "Bundle build successful!" -ForegroundColor Green
+    Write-Host "Build successful!" -ForegroundColor Green
 
-    # Find the bundle directory
-    $bundleDir = "target\release\bundle\windows\summit_hip_numbers.exe"
-    if (!(Test-Path $bundleDir)) {
-        $bundleDir = "target\release\bundle\msvc\summit_hip_numbers.exe"
-    }
-    if (!(Test-Path $bundleDir)) {
-        Write-Host "Bundle exe not found!" -ForegroundColor Red
+    # Find the built exe
+    $exePath = "target\release\summit_hip_numbers.exe"
+    if (!(Test-Path $exePath)) {
+        Write-Host "Exe not found at $exePath!" -ForegroundColor Red
         exit 1
     }
 
-    Write-Host "Bundle location: $bundleDir" -ForegroundColor Cyan
+    Write-Host "Exe location: $exePath" -ForegroundColor Cyan
 
     # Create portable distribution package
     $distDir = "dist"
+    Write-Host "Creating dist directory: $distDir" -ForegroundColor Yellow
     if (Test-Path $distDir) {
+        Write-Host "Removing existing dist directory..." -ForegroundColor Yellow
         Remove-Item $distDir -Recurse -Force
     }
-    New-Item -ItemType Directory -Path $distDir
+    New-Item -ItemType Directory -Path $distDir | Out-Null
+    Write-Host "Dist directory created" -ForegroundColor Green
 
-    # Copy bundle exe
-    Copy-Item $bundleDir (Join-Path $distDir "summit_hip_numbers.exe")
+    # Copy exe
+    Copy-Item $exePath (Join-Path $distDir "summit_hip_numbers.exe")
 
     # Find GStreamer installation
     if (!$SkipGStreamer) {
+        Write-Host "Looking for GStreamer installation..." -ForegroundColor Yellow
         if (!$GStreamerPath) {
             # Try to find GStreamer automatically
             $possiblePaths = @(
@@ -48,36 +52,57 @@ if ($LASTEXITCODE -eq 0) {
                 "${env:ProgramFiles(x86)}\gstreamer\1.0\x86_64\"
             )
 
+            Write-Host "Checking possible GStreamer paths:" -ForegroundColor Gray
             foreach ($path in $possiblePaths) {
+                Write-Host "  Checking: $path" -ForegroundColor Gray
                 if (Test-Path $path) {
                     $GStreamerPath = $path
+                    Write-Host "  Found at: $path" -ForegroundColor Green
                     break
+                } else {
+                    Write-Host "  Not found" -ForegroundColor Gray
                 }
             }
         }
 
         if ($GStreamerPath -and (Test-Path $GStreamerPath)) {
-            Write-Host "Found GStreamer at: $GStreamerPath" -ForegroundColor Green
+            Write-Host "Using GStreamer at: $GStreamerPath" -ForegroundColor Green
 
             # Copy essential GStreamer files to dist
-            Write-Host "Copying GStreamer runtime..." -ForegroundColor Yellow
+            Write-Host "Copying GStreamer runtime files..." -ForegroundColor Yellow
 
             # Copy bin directory (DLLs)
-            if (Test-Path (Join-Path $GStreamerPath "bin")) {
-                Copy-Item (Join-Path $GStreamerPath "bin\*") $distDir
+            $binPath = Join-Path $GStreamerPath "bin"
+            if (Test-Path $binPath) {
+                Write-Host "  Copying DLLs from $binPath..." -ForegroundColor Gray
+                $dllCount = (Get-ChildItem $binPath -Filter "*.dll").Count
+                Copy-Item (Join-Path $binPath "*") $distDir
+                Write-Host "  Copied $dllCount DLLs" -ForegroundColor Green
+            } else {
+                Write-Host "  Bin directory not found at $binPath" -ForegroundColor Yellow
             }
 
             # Copy lib directory (additional libraries)
-            if (Test-Path (Join-Path $GStreamerPath "lib")) {
-                Copy-Item (Join-Path $GStreamerPath "lib") $distDir -Recurse
+            $libPath = Join-Path $GStreamerPath "lib"
+            if (Test-Path $libPath) {
+                Write-Host "  Copying lib directory from $libPath..." -ForegroundColor Gray
+                Copy-Item $libPath $distDir -Recurse
+                Write-Host "  Lib directory copied" -ForegroundColor Green
+            } else {
+                Write-Host "  Lib directory not found at $libPath" -ForegroundColor Yellow
             }
 
             # Copy share directory (plugins, etc.)
-            if (Test-Path (Join-Path $GStreamerPath "share")) {
-                Copy-Item (Join-Path $GStreamerPath "share") $distDir -Recurse
+            $sharePath = Join-Path $GStreamerPath "share"
+            if (Test-Path $sharePath) {
+                Write-Host "  Copying share directory from $sharePath..." -ForegroundColor Gray
+                Copy-Item $sharePath $distDir -Recurse
+                Write-Host "  Share directory copied" -ForegroundColor Green
+            } else {
+                Write-Host "  Share directory not found at $sharePath" -ForegroundColor Yellow
             }
 
-            Write-Host "GStreamer runtime copied" -ForegroundColor Green
+            Write-Host "GStreamer runtime files copied successfully" -ForegroundColor Green
         } else {
             Write-Warning "GStreamer not found. The portable version may not work without GStreamer installed on the target system."
         }
@@ -85,20 +110,33 @@ if ($LASTEXITCODE -eq 0) {
 
     # Copy config.toml if exists
     if (Test-Path "config.toml") {
+        Write-Host "Copying config.toml..." -ForegroundColor Gray
         Copy-Item "config.toml" $distDir
+        Write-Host "Config file copied" -ForegroundColor Green
+    } else {
+        Write-Host "Config file not found" -ForegroundColor Yellow
     }
 
     # Copy videos directory if it exists
     if (Test-Path "videos") {
+        Write-Host "Copying videos directory..." -ForegroundColor Gray
         Copy-Item "videos" $distDir -Recurse
+        Write-Host "Videos directory copied" -ForegroundColor Green
+    } else {
+        Write-Host "Videos directory not found" -ForegroundColor Yellow
     }
 
     # Copy splash directory if it exists
     if (Test-Path "splash") {
+        Write-Host "Copying splash directory..." -ForegroundColor Gray
         Copy-Item "splash" $distDir -Recurse
+        Write-Host "Splash directory copied" -ForegroundColor Green
+    } else {
+        Write-Host "Splash directory not found" -ForegroundColor Yellow
     }
 
     # Create a launcher script for better compatibility
+    Write-Host "Creating launcher script..." -ForegroundColor Yellow
     $launcherScript = @"
 @echo off
 REM Summit Hip Numbers Media Player Launcher
@@ -123,8 +161,10 @@ pause
 "@
 
     $launcherScript | Out-File -FilePath (Join-Path $distDir "run.bat") -Encoding ASCII
+    Write-Host "Launcher script created" -ForegroundColor Green
 
     # Create a README for the portable version
+    Write-Host "Creating README file..." -ForegroundColor Yellow
     $readmeContent = @"
 Summit Hip Numbers Media Player - Portable Version
 ===============================================
@@ -157,6 +197,7 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
 "@
 
     $readmeContent | Out-File -FilePath (Join-Path $distDir "README.txt") -Encoding UTF8
+    Write-Host "README file created" -ForegroundColor Green
 
     Write-Host "Portable distribution package created in: $distDir" -ForegroundColor Green
     Write-Host "Contents:" -ForegroundColor Cyan
@@ -164,32 +205,47 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
 
     # Create a zip file for easy distribution
     $zipPath = "summit_hip_numbers_portable.zip"
+    Write-Host "Creating zip archive: $zipPath" -ForegroundColor Yellow
     if (Test-Path $zipPath) {
+        Write-Host "Removing existing zip file..." -ForegroundColor Gray
         Remove-Item $zipPath -Force
     }
 
-    Write-Host "Creating zip archive..." -ForegroundColor Yellow
+    $distSize = (Get-ChildItem $distDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
+    Write-Host "Compressing dist directory (approx. $([math]::Round($distSize, 2)) MB)..." -ForegroundColor Gray
     Compress-Archive -Path $distDir -DestinationPath $zipPath
-    Write-Host "Zip archive created: $zipPath" -ForegroundColor Green
+    $zipSize = (Get-Item $zipPath).Length / 1MB
+    Write-Host "Zip archive created: $zipPath ($( [math]::Round($zipSize, 2)) MB)" -ForegroundColor Green
 
     # Create Inno Setup installer
+    Write-Host "Checking for Inno Setup..." -ForegroundColor Yellow
     if (Get-Command "iscc" -ErrorAction SilentlyContinue) {
-        Write-Host "Creating Inno Setup installer..." -ForegroundColor Yellow
+        Write-Host "Inno Setup found, creating installer..." -ForegroundColor Green
         & iscc installer.iss
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "Installer created: dist\summit_hip_numbers_installer.exe" -ForegroundColor Green
+            Write-Host "Installer created successfully" -ForegroundColor Green
         } else {
-            Write-Warning "Failed to create installer. Inno Setup may not be installed."
+            Write-Warning "Failed to create installer (exit code: $LASTEXITCODE)"
         }
     } else {
-        Write-Warning "Inno Setup not found. Skipping installer creation."
+        Write-Host "Inno Setup not found, skipping installer creation" -ForegroundColor Yellow
     }
 
-    Write-Host "`nPortable distribution ready!" -ForegroundColor Green
-    Write-Host "You can now copy the '$distDir' folder or '$zipPath' to any Windows computer and run it." -ForegroundColor Cyan
-    Write-Host "Double-click 'run.bat' to start the application." -ForegroundColor Cyan
-    Write-Host "Or run the installer 'summit_hip_numbers_installer.exe' for a full installation." -ForegroundColor Cyan
+    Write-Host "`n=== Build Complete ===" -ForegroundColor Green
+    Write-Host "Portable distribution ready!" -ForegroundColor Green
+    Write-Host "Files created:" -ForegroundColor Cyan
+    Write-Host "  - Dist folder: $distDir" -ForegroundColor Cyan
+    Write-Host "  - Zip archive: $zipPath" -ForegroundColor Cyan
+    if (Test-Path "dist\summit_hip_numbers_installer.exe") {
+        Write-Host "  - Installer: dist\summit_hip_numbers_installer.exe" -ForegroundColor Cyan
+    }
+    Write-Host "`nTo deploy:" -ForegroundColor Yellow
+    Write-Host "1. Copy the '$distDir' folder to a flash drive" -ForegroundColor White
+    Write-Host "2. Or extract '$zipPath' on target machines" -ForegroundColor White
+    Write-Host "3. Double-click 'run.bat' to start the application" -ForegroundColor White
+    Write-Host "4. Or run 'summit_hip_numbers.exe' directly if GStreamer is installed" -ForegroundColor White
 } else {
-    Write-Host "Build failed!" -ForegroundColor Red
+    Write-Host "=== Build Failed ===" -ForegroundColor Red
+    Write-Host "Cargo build exited with code: $LASTEXITCODE" -ForegroundColor Red
     exit 1
 }
