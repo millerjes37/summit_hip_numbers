@@ -7,13 +7,18 @@ param(
     [string]$GStreamerPath = ""
 )
 
+# Enable verbose output
+$VerbosePreference = "Continue"
+
 Write-Host "=== Starting Windows Build Script ===" -ForegroundColor Cyan
 Write-Host "Parameters: SkipGStreamer=$SkipGStreamer, GStreamerPath='$GStreamerPath'" -ForegroundColor Gray
 Write-Host "Current directory: $(Get-Location)" -ForegroundColor Gray
+Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
 Write-Host "Building Portable Summit Hip Numbers Media Player for Windows..." -ForegroundColor Green
 
 # Build the application
-cargo build --release --target x86_64-pc-windows-gnu
+Write-Host "Running cargo build with verbose output..." -ForegroundColor Yellow
+cargo build --release --target x86_64-pc-windows-gnu --verbose
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful!" -ForegroundColor Green
@@ -38,7 +43,10 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Dist directory created" -ForegroundColor Green
 
     # Copy exe
+    Write-Host "Copying executable..." -ForegroundColor Gray
     Copy-Item $exePath (Join-Path $distDir "summit_hip_numbers.exe")
+    $exeSize = (Get-Item (Join-Path $distDir "summit_hip_numbers.exe")).Length / 1MB
+    Write-Host "Copied executable ($( [math]::Round($exeSize, 2)) MB)" -ForegroundColor Green
 
     # Find GStreamer installation
     if (!$SkipGStreamer) {
@@ -71,36 +79,42 @@ if ($LASTEXITCODE -eq 0) {
             # Copy essential GStreamer files to dist
             Write-Host "Copying GStreamer runtime files..." -ForegroundColor Yellow
 
-            # Copy bin directory (DLLs)
-            $binPath = Join-Path $GStreamerPath "bin"
-            if (Test-Path $binPath) {
-                Write-Host "  Copying DLLs from $binPath..." -ForegroundColor Gray
-                $dllCount = (Get-ChildItem $binPath -Filter "*.dll").Count
-                Copy-Item (Join-Path $binPath "*") $distDir
-                Write-Host "  Copied $dllCount DLLs" -ForegroundColor Green
-            } else {
-                Write-Host "  Bin directory not found at $binPath" -ForegroundColor Yellow
-            }
+             # Copy bin directory (DLLs)
+             $binPath = Join-Path $GStreamerPath "bin"
+             if (Test-Path $binPath) {
+                 Write-Host "  Copying DLLs from $binPath..." -ForegroundColor Gray
+                 $dlls = Get-ChildItem $binPath -Filter "*.dll"
+                 $dllCount = $dlls.Count
+                 Write-Host "  Found $dllCount DLLs to copy" -ForegroundColor Gray
+                 Copy-Item (Join-Path $binPath "*") $distDir
+                 Write-Host "  Copied $dllCount DLLs:" -ForegroundColor Green
+                 $dlls | Select-Object -First 5 | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor Cyan }
+                 if ($dllCount -gt 5) { Write-Host "    ... and $($dllCount - 5) more" -ForegroundColor Cyan }
+             } else {
+                 Write-Host "  Bin directory not found at $binPath" -ForegroundColor Yellow
+             }
 
-            # Copy lib directory (additional libraries)
-            $libPath = Join-Path $GStreamerPath "lib"
-            if (Test-Path $libPath) {
-                Write-Host "  Copying lib directory from $libPath..." -ForegroundColor Gray
-                Copy-Item $libPath $distDir -Recurse
-                Write-Host "  Lib directory copied" -ForegroundColor Green
-            } else {
-                Write-Host "  Lib directory not found at $libPath" -ForegroundColor Yellow
-            }
+             # Copy lib directory (additional libraries)
+             $libPath = Join-Path $GStreamerPath "lib"
+             if (Test-Path $libPath) {
+                 Write-Host "  Copying lib directory from $libPath..." -ForegroundColor Gray
+                 $libFiles = Get-ChildItem $libPath -Recurse
+                 Copy-Item $libPath $distDir -Recurse
+                 Write-Host "  Lib directory copied ($($libFiles.Count) files)" -ForegroundColor Green
+             } else {
+                 Write-Host "  Lib directory not found at $libPath" -ForegroundColor Yellow
+             }
 
-            # Copy share directory (plugins, etc.)
-            $sharePath = Join-Path $GStreamerPath "share"
-            if (Test-Path $sharePath) {
-                Write-Host "  Copying share directory from $sharePath..." -ForegroundColor Gray
-                Copy-Item $sharePath $distDir -Recurse
-                Write-Host "  Share directory copied" -ForegroundColor Green
-            } else {
-                Write-Host "  Share directory not found at $sharePath" -ForegroundColor Yellow
-            }
+             # Copy share directory (plugins, etc.)
+             $sharePath = Join-Path $GStreamerPath "share"
+             if (Test-Path $sharePath) {
+                 Write-Host "  Copying share directory from $sharePath..." -ForegroundColor Gray
+                 $shareFiles = Get-ChildItem $sharePath -Recurse
+                 Copy-Item $sharePath $distDir -Recurse
+                 Write-Host "  Share directory copied ($($shareFiles.Count) files)" -ForegroundColor Green
+             } else {
+                 Write-Host "  Share directory not found at $sharePath" -ForegroundColor Yellow
+             }
 
             Write-Host "GStreamer runtime files copied successfully" -ForegroundColor Green
         } else {
@@ -112,7 +126,8 @@ if ($LASTEXITCODE -eq 0) {
     if (Test-Path "config.toml") {
         Write-Host "Copying config.toml..." -ForegroundColor Gray
         Copy-Item "config.toml" $distDir
-        Write-Host "Config file copied" -ForegroundColor Green
+        $configSize = (Get-Item (Join-Path $distDir "config.toml")).Length / 1KB
+        Write-Host "Config file copied ($( [math]::Round($configSize, 2)) KB)" -ForegroundColor Green
     } else {
         Write-Host "Config file not found" -ForegroundColor Yellow
     }
@@ -120,8 +135,9 @@ if ($LASTEXITCODE -eq 0) {
     # Copy videos directory if it exists
     if (Test-Path "videos") {
         Write-Host "Copying videos directory..." -ForegroundColor Gray
+        $videoFiles = Get-ChildItem "videos" -Recurse
         Copy-Item "videos" $distDir -Recurse
-        Write-Host "Videos directory copied" -ForegroundColor Green
+        Write-Host "Videos directory copied ($($videoFiles.Count) files)" -ForegroundColor Green
     } else {
         Write-Host "Videos directory not found" -ForegroundColor Yellow
     }
@@ -129,8 +145,9 @@ if ($LASTEXITCODE -eq 0) {
     # Copy splash directory if it exists
     if (Test-Path "splash") {
         Write-Host "Copying splash directory..." -ForegroundColor Gray
+        $splashFiles = Get-ChildItem "splash" -Recurse
         Copy-Item "splash" $distDir -Recurse
-        Write-Host "Splash directory copied" -ForegroundColor Green
+        Write-Host "Splash directory copied ($($splashFiles.Count) files)" -ForegroundColor Green
     } else {
         Write-Host "Splash directory not found" -ForegroundColor Yellow
     }
@@ -201,7 +218,10 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
 
     Write-Host "Portable distribution package created in: $distDir" -ForegroundColor Green
     Write-Host "Contents:" -ForegroundColor Cyan
-    Get-ChildItem $distDir | ForEach-Object { Write-Host "  - $($_.Name)" -ForegroundColor Cyan }
+    Get-ChildItem $distDir | ForEach-Object {
+        $size = if ($_.PSIsContainer) { "DIR" } else { "$([math]::Round($_.Length / 1MB, 2)) MB" }
+        Write-Host "  - $($_.Name) ($size)" -ForegroundColor Cyan
+    }
 
     # Create a zip file for easy distribution
     $zipPath = "summit_hip_numbers_portable.zip"
@@ -211,11 +231,14 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
         Remove-Item $zipPath -Force
     }
 
-    $distSize = (Get-ChildItem $distDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
-    Write-Host "Compressing dist directory (approx. $([math]::Round($distSize, 2)) MB)..." -ForegroundColor Gray
-    Compress-Archive -Path $distDir -DestinationPath $zipPath
+    $distItems = Get-ChildItem $distDir -Recurse
+    $distSize = ($distItems | Measure-Object -Property Length -Sum).Sum / 1MB
+    $distFileCount = $distItems.Count
+    Write-Host "Compressing dist directory ($distFileCount files, approx. $([math]::Round($distSize, 2)) MB)..." -ForegroundColor Gray
+    Compress-Archive -Path $distDir -DestinationPath $zipPath -Verbose
     $zipSize = (Get-Item $zipPath).Length / 1MB
-    Write-Host "Zip archive created: $zipPath ($( [math]::Round($zipSize, 2)) MB)" -ForegroundColor Green
+    $compressionRatio = [math]::Round(($zipSize / $distSize) * 100, 2)
+    Write-Host "Zip archive created: $zipPath ($( [math]::Round($zipSize, 2)) MB, $compressionRatio% of original size)" -ForegroundColor Green
 
     # Create Inno Setup installer
     Write-Host "Checking for Inno Setup..." -ForegroundColor Yellow
