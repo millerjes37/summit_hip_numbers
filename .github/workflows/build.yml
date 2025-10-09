@@ -2,63 +2,63 @@ name: Build Distributions
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   release:
-    types: [ published ]
+    types: [published]
 
 jobs:
-   build-linux:
-     runs-on: ubuntu-latest
-     steps:
-       - uses: actions/checkout@v4
-       - uses: cachix/install-nix-action@v25
-         with:
-           nix_path: nixpkgs=channel:nixos-unstable
-       - run: nix build .
-       - name: Create zip
-         run: |
-           cd result
-           zip -r ../summit_hip_numbers-linux.zip .
-       - uses: actions/upload-artifact@v4
-         with:
-           name: linux-bundle
-           path: summit_hip_numbers-linux.zip
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - run: nix build .
+      - name: Create zip
+        run: |
+          cd result
+          zip -r ../summit_hip_numbers-linux.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundle
+          path: summit_hip_numbers-linux.zip
 
-   build-windows:
-     runs-on: ubuntu-latest
-     steps:
-       - uses: actions/checkout@v4
-       - uses: cachix/install-nix-action@v25
-         with:
-           nix_path: nixpkgs=channel:nixos-unstable
-       - run: nix build .#windows
-       - name: Create zip
-         run: |
-           cd result
-           zip -r ../summit_hip_numbers-windows.zip .
-       - uses: actions/upload-artifact@v4
-         with:
-           name: windows-bundle
-           path: summit_hip_numbers-windows.zip
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - run: nix build .#windows
+      - name: Create zip
+        run: |
+          cd result
+          zip -r ../summit_hip_numbers-windows.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundle
+          path: summit_hip_numbers-windows.zip
 
-   build-mac:
-     runs-on: macos-latest
-     steps:
-       - uses: actions/checkout@v4
-       - uses: cachix/install-nix-action@v25
-         with:
-           nix_path: nixpkgs=channel:nixos-unstable
-       - run: nix build .#macos
-       - name: Create zip
-         run: |
-           cd result
-           zip -r ../summit_hip_numbers-macos.zip .
-       - uses: actions/upload-artifact@v4
-         with:
-           name: mac-bundle
-           path: summit_hip_numbers-macos.zip
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - run: nix build .#macos
+      - name: Create zip
+        run: |
+          cd result
+          zip -r ../summit_hip_numbers-macos.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-bundle
+          path: summit_hip_numbers-macos.zip
 
   release:
     needs: [build-linux, build-windows, build-mac]
