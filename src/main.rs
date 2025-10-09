@@ -840,11 +840,20 @@ fn main() -> eframe::Result<()> {
             Box::new(|_cc| Ok(Box::new(ConfigApp::new()))),
         )
     } else {
-        // Set GStreamer paths for bundled plugins
-        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
-        let gstreamer_dir = exe_dir.join("gstreamer");
-        std::env::set_var("GSTREAMER_ROOT", &gstreamer_dir);
-        std::env::set_var("GST_PLUGIN_PATH", gstreamer_dir.join("lib").join("gstreamer-1.0"));
+        // Set GStreamer plugin path for bundled plugins
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                 // For portable distribution, check for gstreamer directory
+                let gstreamer_plugin_path = exe_dir.join("lib").join("gstreamer-1.0");
+                 if gstreamer_plugin_path.exists() {
+                    info!("Found bundled GStreamer plugins at: {}", gstreamer_plugin_path.display());
+                    std::env::set_var("GST_PLUGIN_PATH", gstreamer_plugin_path);
+                 } else {
+                    warn!("Bundled GStreamer plugin directory not found. Relying on system-wide installation.");
+                 }
+            }
+        }
+
         gstreamer::init().expect("Failed to initialize GStreamer");
 
         let options = eframe::NativeOptions {
