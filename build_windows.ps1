@@ -13,7 +13,7 @@ Write-Host "Current directory: $(Get-Location)" -ForegroundColor Gray
 Write-Host "Building Portable Summit Hip Numbers Media Player for Windows..." -ForegroundColor Green
 
 # Build the application
-cargo build --release
+cargo build --release --target x86_64-pc-windows-gnu
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful!" -ForegroundColor Green
@@ -248,4 +248,4 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
     Write-Host "=== Build Failed ===" -ForegroundColor Red
     Write-Host "Cargo build exited with code: $LASTEXITCODE" -ForegroundColor Red
     exit 1
-}
+}
