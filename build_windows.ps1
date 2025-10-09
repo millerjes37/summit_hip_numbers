@@ -18,7 +18,7 @@ Write-Host "Building Portable Summit Hip Numbers Media Player for Windows..." -F
 
 # Build the application
 Write-Host "Running cargo build with verbose output..." -ForegroundColor Yellow
-cargo build --release --target x86_64-pc-windows-gnu --verbose
+cargo build --release --verbose
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful!" -ForegroundColor Green
@@ -54,8 +54,9 @@ if ($LASTEXITCODE -eq 0) {
         if (!$GStreamerPath) {
             # Try to find GStreamer automatically
             $possiblePaths = @(
-                "C:\gstreamer\1.0\x86_64\",
+                "C:\gstreamer\1.0\msvc_x86_64\",
                 "C:\gstreamer\1.0\mingw_x86_64\",
+                "C:\gstreamer\1.0\x86_64\",
                 "${env:ProgramFiles}\gstreamer\1.0\x86_64\",
                 "${env:ProgramFiles(x86)}\gstreamer\1.0\x86_64\"
             )
@@ -83,35 +84,32 @@ if ($LASTEXITCODE -eq 0) {
              $binPath = Join-Path $GStreamerPath "bin"
              if (Test-Path $binPath) {
                  Write-Host "  Copying DLLs from $binPath..." -ForegroundColor Gray
-                 $dlls = Get-ChildItem $binPath -Filter "*.dll"
-                 $dllCount = $dlls.Count
-                 Write-Host "  Found $dllCount DLLs to copy" -ForegroundColor Gray
-                 Copy-Item (Join-Path $binPath "*") $distDir
-                 Write-Host "  Copied $dllCount DLLs:" -ForegroundColor Green
-                 $dlls | Select-Object -First 5 | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor Cyan }
-                 if ($dllCount -gt 5) { Write-Host "    ... and $($dllCount - 5) more" -ForegroundColor Cyan }
+                 Copy-Item -Path (Join-Path $binPath "*.dll") -Destination $distDir
+                 $dllCount = (Get-ChildItem $distDir -Filter "*.dll").Count
+                 Write-Host "  Copied $dllCount DLLs" -ForegroundColor Green
              } else {
                  Write-Host "  Bin directory not found at $binPath" -ForegroundColor Yellow
              }
 
-             # Copy lib directory (additional libraries)
-             $libPath = Join-Path $GStreamerPath "lib"
-             if (Test-Path $libPath) {
-                 Write-Host "  Copying lib directory from $libPath..." -ForegroundColor Gray
-                 $libFiles = Get-ChildItem $libPath -Recurse
-                 Copy-Item $libPath $distDir -Recurse
-                 Write-Host "  Lib directory copied ($($libFiles.Count) files)" -ForegroundColor Green
+             # Copy lib\gstreamer-1.0 directory (plugins)
+             $pluginPath = Join-Path $GStreamerPath "lib\gstreamer-1.0"
+             if (Test-Path $pluginPath) {
+                 Write-Host "  Copying plugins from $pluginPath..." -ForegroundColor Gray
+                 $pluginDest = Join-Path $distDir "lib\gstreamer-1.0"
+                 Copy-Item $pluginPath $pluginDest -Recurse
+                 $pluginFileCount = (Get-ChildItem $pluginDest -Recurse).Count
+                 Write-Host "  Copied $pluginFileCount plugin files" -ForegroundColor Green
              } else {
-                 Write-Host "  Lib directory not found at $libPath" -ForegroundColor Yellow
+                 Write-Host "  Plugin directory not found at $pluginPath" -ForegroundColor Yellow
              }
 
-             # Copy share directory (plugins, etc.)
+             # Copy share directory (schemas)
              $sharePath = Join-Path $GStreamerPath "share"
              if (Test-Path $sharePath) {
                  Write-Host "  Copying share directory from $sharePath..." -ForegroundColor Gray
-                 $shareFiles = Get-ChildItem $sharePath -Recurse
                  Copy-Item $sharePath $distDir -Recurse
-                 Write-Host "  Share directory copied ($($shareFiles.Count) files)" -ForegroundColor Green
+                 $shareFileCount = (Get-ChildItem (Join-Path $distDir "share") -Recurse).Count
+                 Write-Host "  Share directory copied ($shareFileCount files)" -ForegroundColor Green
              } else {
                  Write-Host "  Share directory not found at $sharePath" -ForegroundColor Yellow
              }
@@ -135,9 +133,9 @@ if ($LASTEXITCODE -eq 0) {
     # Copy videos directory if it exists
     if (Test-Path "videos") {
         Write-Host "Copying videos directory..." -ForegroundColor Gray
-        $videoFiles = Get-ChildItem "videos" -Recurse
         Copy-Item "videos" $distDir -Recurse
-        Write-Host "Videos directory copied ($($videoFiles.Count) files)" -ForegroundColor Green
+        $videoFilesCount = (Get-ChildItem (Join-Path $distDir "videos") -Recurse).Count
+        Write-Host "Videos directory copied ($videoFilesCount files)" -ForegroundColor Green
     } else {
         Write-Host "Videos directory not found" -ForegroundColor Yellow
     }
@@ -145,9 +143,9 @@ if ($LASTEXITCODE -eq 0) {
     # Copy splash directory if it exists
     if (Test-Path "splash") {
         Write-Host "Copying splash directory..." -ForegroundColor Gray
-        $splashFiles = Get-ChildItem "splash" -Recurse
         Copy-Item "splash" $distDir -Recurse
-        Write-Host "Splash directory copied ($($splashFiles.Count) files)" -ForegroundColor Green
+        $splashFilesCount = (Get-ChildItem (Join-Path $distDir "splash") -Recurse).Count
+        Write-Host "Splash directory copied ($splashFilesCount files)" -ForegroundColor Green
     } else {
         Write-Host "Splash directory not found" -ForegroundColor Yellow
     }
@@ -162,11 +160,8 @@ REM This script sets up the environment for the portable version
 echo Starting Summit Hip Numbers Media Player...
 
 REM Set GStreamer environment variables for portable version
-if exist "%~dp0gstreamer" (
-    set GSTREAMER_ROOT=%~dp0gstreamer
-    set PATH=%~dp0gstreamer\bin;%PATH%
-    set GST_PLUGIN_PATH=%~dp0gstreamer\lib\gstreamer-1.0
-)
+set GST_PLUGIN_PATH=%~dp0\lib\gstreamer-1.0
+set PATH=%~dp0;%PATH%
 
 REM Change to the application directory
 cd /d "%~dp0"
@@ -190,14 +185,13 @@ This is a portable version of the Summit Hip Numbers Media Player that includes 
 
 To run the application:
 1. Double-click "run.bat" (Windows batch file)
-2. Or run "summit_hip_numbers.exe" directly if GStreamer is installed system-wide
 
 Files:
 - summit_hip_numbers.exe: Main application
 - config.toml: Configuration file
 - videos/: Directory for your video files
 - splash/: Directory for splash images
-- gstreamer/: GStreamer runtime (if included)
+- lib/, share/, and *.dll files: GStreamer runtime
 - run.bat: Launcher script
 
 Configuration:
@@ -208,7 +202,6 @@ Place your MP4 video files in the "videos" directory. Files will be automaticall
 
 Requirements:
 - Windows 10 or later
-- If gstreamer/ folder is not included, GStreamer must be installed system-wide
 
 For more information, visit: https://github.com/millerjes37/summit_hip_numbers
 "@
@@ -231,14 +224,9 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
         Remove-Item $zipPath -Force
     }
 
-    $distItems = Get-ChildItem $distDir -Recurse
-    $distSize = ($distItems | Measure-Object -Property Length -Sum).Sum / 1MB
-    $distFileCount = $distItems.Count
-    Write-Host "Compressing dist directory ($distFileCount files, approx. $([math]::Round($distSize, 2)) MB)..." -ForegroundColor Gray
-    Compress-Archive -Path $distDir -DestinationPath $zipPath -Verbose
+    Compress-Archive -Path "$($distDir)\*" -DestinationPath $zipPath
     $zipSize = (Get-Item $zipPath).Length / 1MB
-    $compressionRatio = [math]::Round(($zipSize / $distSize) * 100, 2)
-    Write-Host "Zip archive created: $zipPath ($( [math]::Round($zipSize, 2)) MB, $compressionRatio% of original size)" -ForegroundColor Green
+    Write-Host "Zip archive created: $zipPath ($( [math]::Round($zipSize, 2)) MB)" -ForegroundColor Green
 
     # Create Inno Setup installer
     Write-Host "Checking for Inno Setup..." -ForegroundColor Yellow
@@ -266,9 +254,8 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
     Write-Host "1. Copy the '$distDir' folder to a flash drive" -ForegroundColor White
     Write-Host "2. Or extract '$zipPath' on target machines" -ForegroundColor White
     Write-Host "3. Double-click 'run.bat' to start the application" -ForegroundColor White
-    Write-Host "4. Or run 'summit_hip_numbers.exe' directly if GStreamer is installed" -ForegroundColor White
 } else {
     Write-Host "=== Build Failed ===" -ForegroundColor Red
     Write-Host "Cargo build exited with code: $LASTEXITCODE" -ForegroundColor Red
     exit 1
-}
+}
