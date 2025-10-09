@@ -37,17 +37,17 @@ jobs:
         update: true
         path-type: inherit
 
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
+    # Explicitly install and use the GNU toolchain for Rust to match MSYS2 libraries
+    - name: Set up Rust (GNU toolchain)
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        target: x86_64-pc-windows-gnu
-        override: true
-        
+        toolchain: stable-x86_64-pc-windows-gnu
+
     - name: Build Application
       env:
-        # Explicitly tell pkg-config where to find the GStreamer .pc files
+        # Explicitly tell pkg-config and the Rust linker where to find the GStreamer files
         PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
+        RUSTFLAGS: -L native=/mingw64/lib
       run: cargo build --release --verbose
 
     - name: Run Build Script to Create Distribution
