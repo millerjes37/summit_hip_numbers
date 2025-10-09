@@ -9,7 +9,6 @@ use tokio::sync::watch;
 
 pub struct VideoPlayer {
     pipeline: Element,
-    appsink: AppSink,
     eos: Arc<Mutex<bool>>,
     error: Arc<Mutex<Option<String>>>,
 }
@@ -82,7 +81,6 @@ impl VideoPlayer {
 
         let player = VideoPlayer {
             pipeline: pipeline.clone(),
-            appsink: appsink.clone(),
             eos: eos.clone(),
             error: error.clone(),
         };
@@ -198,14 +196,6 @@ impl VideoPlayer {
         Ok(())
     }
 
-    pub fn pause(&self) -> Result<()> {
-        println!("Setting pipeline to PAUSED state");
-        self.pipeline
-            .set_state(State::Paused)
-            .map_err(|e| anyhow!("Failed to set pipeline to PAUSED: {:?}", e))?;
-        Ok(())
-    }
-
     pub fn stop(&self) -> Result<()> {
         println!("Stopping pipeline");
 
@@ -224,24 +214,8 @@ impl VideoPlayer {
         *self.eos.lock().unwrap()
     }
 
-    pub fn reset_eos(&self) {
-        *self.eos.lock().unwrap() = false;
-    }
-
     pub fn get_error(&self) -> Option<String> {
         self.error.lock().unwrap().clone()
-    }
-
-    pub fn seek_to_start(&self) -> Result<()> {
-        println!("Seeking to start");
-        self.pipeline
-            .seek_simple(
-                gstreamer::SeekFlags::FLUSH | gstreamer::SeekFlags::KEY_UNIT,
-                gstreamer::ClockTime::ZERO,
-            )
-            .map_err(|e| anyhow!("Failed to seek: {:?}", e))?;
-        self.reset_eos();
-        Ok(())
     }
 }
 

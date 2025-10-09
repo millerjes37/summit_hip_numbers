@@ -27,6 +27,7 @@ jobs:
         install: >-
           mingw-w64-x86_64-toolchain
           mingw-w64-x86_64-pkg-config
+          mingw-w64-x86_64-glib2
           mingw-w64-x86_64-gstreamer
           mingw-w64-x86_64-gst-plugins-base
           mingw-w64-x86_64-gst-plugins-good
