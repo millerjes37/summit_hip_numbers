@@ -86,10 +86,9 @@ jobs:
           unzip summit_hip_numbers-linux.zip -d dist/linux/
           unzip summit_hip_numbers_portable.zip -d dist/windows/
           cp *.dmg dist/mac/
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            summit_hip_numbers-*.zip
-            *.dmg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+       - uses: softprops/action-gh-release@v2
+         with:
+           files: |
+             summit_hip_numbers-*.zip
+             *.dmg
+           token: ${{ secrets.GITHUB_TOKEN }}
