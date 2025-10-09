@@ -10,14 +10,12 @@ env:
   CARGO_TERM_COLOR: always
   # Define the MSYS2 installation directory for later use
   MSYS2_INSTALL_DIR: C:\msys64
+  # Inno Setup Version
+  INNO_SETUP_VERSION: 6.2.2
 
 jobs:
   build-windows:
     runs-on: windows-latest
-    # Set the default shell for all steps to the MSYS2 shell
-    defaults:
-      run:
-        shell: msys2 {0}
 
     steps:
     - uses: actions/checkout@v4
@@ -44,20 +42,34 @@ jobs:
         toolchain: stable-x86_64-pc-windows-gnu
 
     - name: Build Application
+      shell: msys2 {0}
       env:
         # Explicitly tell pkg-config and the Rust linker where to find the GStreamer files
         PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
         RUSTFLAGS: -L native=/mingw64/lib
       run: cargo build --release --verbose
 
-    - name: Run Build Script to Create Distribution
-      # Override the shell for this step to use PowerShell
+    - name: Install Inno Setup
       shell: pwsh
-      # Pass the GStreamer path from our MSYS2 installation to the build script
-      run: ./build_windows.ps1 -GStreamerPath "${{ env.MSYS2_INSTALL_DIR }}\mingw64"
+      run: |
+        $inno_url = "https://files.jrsoftware.org/is/6/innosetup-${{ env.INNO_SETUP_VERSION }}.exe"
+        $inno_args = "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /NORESTART /DIR=""C:\Program Files (x86)\Inno Setup 6"""
+        Start-Process -FilePath "ispack-6.2.2.exe" -ArgumentList $inno_args -Wait
+        echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Run Build Script to Create Distribution
+      shell: pwsh
+      # Pass the GStreamer path and SkipBuild flag to the build script
+      run: ./build_windows.ps1 -SkipBuild -GStreamerPath "${{ env.MSYS2_INSTALL_DIR }}\mingw64"
 
     - name: Upload Portable Application as Artifact
       uses: actions/upload-artifact@v4
       with:
         name: summit-hip-numbers-windows-portable
         path: summit_hip_numbers_portable.zip
+        
+    - name: Upload Installer as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: summit-hip-numbers-windows-installer
+        path: dist/summit_hip_numbers_installer.exe

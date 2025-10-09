@@ -4,6 +4,7 @@
 
 param(
     [switch]$SkipGStreamer,
+    [switch]$SkipBuild,
     [string]$GStreamerPath = ""
 )
 
@@ -16,9 +17,13 @@ Write-Host "Current directory: $(Get-Location)" -ForegroundColor Gray
 Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
 Write-Host "Building Portable Summit Hip Numbers Media Player for Windows..." -ForegroundColor Green
 
-# Build the application
-Write-Host "Running cargo build with verbose output..." -ForegroundColor Yellow
-cargo build --release --verbose
+# Build the application (unless skipped)
+if (!$SkipBuild) {
+    Write-Host "Running cargo build with verbose output..." -ForegroundColor Yellow
+    cargo build --release --verbose
+} else {
+    Write-Host "Skipping build step (already built)..." -ForegroundColor Yellow
+}
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful!" -ForegroundColor Green
@@ -233,7 +238,7 @@ For more information, visit: https://github.com/millerjes37/summit_hip_numbers
     if (Get-Command "iscc" -ErrorAction SilentlyContinue) {
         Write-Host "Inno Setup found, creating installer..." -ForegroundColor Green
         & iscc installer.iss
-        if ($LASTEXITCODE -eq 0) {
+if ($LASTEXITCODE -eq 0 -or $SkipBuild) {
             Write-Host "Installer created successfully" -ForegroundColor Green
         } else {
             Write-Warning "Failed to create installer (exit code: $LASTEXITCODE)"
