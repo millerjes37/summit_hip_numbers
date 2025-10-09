@@ -108,12 +108,24 @@ if (!(Get-Command cargo -ErrorAction SilentlyContinue)) {
 # Install GStreamer with all plugins
 Write-Host "Installing GStreamer (full)..." -ForegroundColor Yellow
 try {
-    # Install the full GStreamer package which includes all plugins
+    # Try winget first
     winget install GStreamer.GStreamer --accept-source-agreements --accept-package-agreements
 } catch {
-    Write-Error "Failed to install GStreamer: $_"
-    Write-Host "Note: If installation fails, you can manually download from https://gstreamer.freedesktop.org/download/" -ForegroundColor Yellow
-    exit 1
+    Write-Host "Winget installation failed, trying manual download..." -ForegroundColor Yellow
+    # Download GStreamer MSI if winget fails
+    $gstreamerUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/1.24.12/msvc/gstreamer-1.0-msvc-x86_64-1.24.12.msi"
+    $msiPath = "$env:TEMP\gstreamer.msi"
+    try {
+        Invoke-WebRequest -Uri $gstreamerUrl -OutFile $msiPath
+        Write-Host "Downloaded GStreamer MSI" -ForegroundColor Green
+        # Install MSI silently
+        Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Wait
+        Write-Host "Installed GStreamer MSI" -ForegroundColor Green
+    } catch {
+        Write-Error "Failed to download/install GStreamer: $_"
+        Write-Host "Please manually download from https://gstreamer.freedesktop.org/download/" -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 # Set environment variables for pkg-config and linking
@@ -195,7 +207,7 @@ if (!$SkipBuild) {
     Write-Host "Building Rust project..." -ForegroundColor Yellow
 
     # Ensure we're using the correct Rust target for Windows
-    $rustTarget = & rustc --print host
+    $rustTarget = & rustc --print host-tuple
     Write-Host "Rust target: $rustTarget" -ForegroundColor Cyan
 
     try {
@@ -209,11 +221,84 @@ if (!$SkipBuild) {
         Write-Host "3. Environment variables are set correctly" -ForegroundColor Yellow
         exit 1
     }
+
+    # Bundle GStreamer DLLs for portability
+    Write-Host "Bundling GStreamer DLLs for portable distribution..." -ForegroundColor Yellow
+    if ($gstreamerFound) {
+        $targetDir = "target\release"
+        $gstreamerBin = "$gstreamerPath\bin"
+
+        # Copy required GStreamer DLLs
+        $requiredDlls = @(
+            "libgstreamer-1.0-0.dll",
+            "libgstbase-1.0-0.dll",
+            "libgstvideo-1.0-0.dll",
+            "libgstapp-1.0-0.dll",
+            "libgstplay-1.0-0.dll",
+            "libgstaudio-1.0-0.dll",
+            "libgstpbutils-1.0-0.dll",
+            "libgobject-2.0-0.dll",
+            "libglib-2.0-0.dll",
+            "libintl-8.dll",
+            "libffi-8.dll",
+            "libpcre2-8-0.dll",
+            "libz-1.dll",
+            "libbz2-1.dll",
+            "libwinpthread-1.dll",
+            "libgcc_s_seh-1.dll",
+            "libstdc++-6.dll"
+        )
+
+        foreach ($dll in $requiredDlls) {
+            $sourcePath = Join-Path $gstreamerBin $dll
+            if (Test-Path $sourcePath) {
+                Copy-Item $sourcePath $targetDir -Force
+                Write-Host "Copied $dll" -ForegroundColor Green
+            } else {
+                Write-Warning "DLL not found: $dll"
+            }
+        }
+
+        # Create portable zip
+        Write-Host "Creating portable zip package..." -ForegroundColor Yellow
+        $zipName = "summit_hip_numbers_portable.zip"
+        $exeName = "summit_hip_numbers.exe"
+        $exePath = Join-Path $targetDir $exeName
+
+        if (Test-Path $exePath) {
+            # Create a temporary directory for zipping
+            $tempDir = "$env:TEMP\summit_portable"
+            if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
+            New-Item -ItemType Directory -Path $tempDir | Out-Null
+
+            # Copy exe and dlls
+            Copy-Item $exePath $tempDir
+            Get-ChildItem "$targetDir\*.dll" | Copy-Item -Destination $tempDir
+
+            # Also copy config files if they exist
+            if (Test-Path "config.toml") { Copy-Item "config.toml" $tempDir }
+            if (Test-Path "config.toml.example") { Copy-Item "config.toml.example" $tempDir }
+
+            # Create zip
+            Compress-Archive -Path "$tempDir\*" -DestinationPath $zipName -Force
+            Write-Host "Created portable zip: $zipName" -ForegroundColor Green
+
+            # Clean up temp dir
+            Remove-Item $tempDir -Recurse -Force
+        } else {
+            Write-Warning "Executable not found, skipping zip creation"
+        }
+    } else {
+        Write-Warning "GStreamer not found, cannot create portable bundle"
+    }
 }
 
 Write-Host "`nInstallation complete!" -ForegroundColor Green
 Write-Host "The Summit Hip Numbers Media Player has been installed successfully!" -ForegroundColor Green
 Write-Host "To run the application: cargo run --release" -ForegroundColor Cyan
+if (Test-Path "summit_hip_numbers_portable.zip") {
+    Write-Host "Portable version created: summit_hip_numbers_portable.zip" -ForegroundColor Cyan
+}
 
 Write-Host "`nImportant Notes:" -ForegroundColor Yellow
 Write-Host "- Visual Studio Build Tools with C++ support are required for compilation" -ForegroundColor Yellow
@@ -234,3 +319,6 @@ Write-Host "`nNext Steps:" -ForegroundColor Cyan
 Write-Host "1. Add your video files to the 'videos' directory" -ForegroundColor Cyan
 Write-Host "2. Configure settings in 'config.toml' if needed" -ForegroundColor Cyan
 Write-Host "3. Run 'cargo run --release' to start the application" -ForegroundColor Cyan
+if (Test-Path "summit_hip_numbers_portable.zip") {
+    Write-Host "4. Or distribute the portable zip to other machines" -ForegroundColor Cyan
+}
