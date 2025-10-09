@@ -76,4 +76,33 @@
               cp config.toml $out/
               cp -r videos $out/ 2>/dev/null || true
               cp -r splash $out/ 2>/dev/null || true
-            '';          };      });}
+            '';
+          };
+
+        # macOS build with cargo-bundle for DMG
+        packages.macos = pkgs.rustPlatform.buildRustPackage {
+          pname = "summit_hip_numbers-macos";
+          version = "0.1.0";
+          src = ./.;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            cargo-bundle
+          ];
+          buildInputs = [ ];
+          postBuild = ''
+            cargo-bundle --release --format dmg
+          '';
+          installPhase = ''
+            mkdir -p $out
+            cp -r target/release/bundle/osx/* $out/
+            # Copy config and assets
+            cp config.toml $out/
+            cp -r videos $out/ 2>/dev/null || true
+            cp -r splash $out/ 2>/dev/null || true
+          '';
+        };
+      });
+}
