@@ -8,9 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Define the MSYS2 installation directory for later use
   MSYS2_INSTALL_DIR: C:\msys64
-  # Inno Setup Version
   INNO_SETUP_VERSION: 6.2.2
 
 jobs:
@@ -36,7 +34,6 @@ jobs:
         update: true
         path-type: inherit
 
-    # Explicitly install and use the GNU toolchain for Rust to match MSYS2 libraries
     - name: Set up Rust (GNU toolchain)
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -45,7 +42,6 @@ jobs:
     - name: Build Application
       shell: msys2 {0}
       env:
-        # Explicitly tell pkg-config and the Rust linker where to find the GStreamer files
         PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
         RUSTFLAGS: -L native=/mingw64/lib
       run: cargo build --release --verbose
@@ -65,8 +61,94 @@ jobs:
 
     - name: Run Build Script to Create Distribution
       shell: pwsh
-      # Pass the GStreamer path and SkipBuild flag to the build script
       run: ./build_windows.ps1 -SkipBuild -GStreamerPath "${{ env.MSYS2_INSTALL_DIR }}\mingw64"
+
+    - name: Test Portable Executable
+      shell: pwsh
+      run: |
+        Write-Host "=== Testing Portable Executable ===" -ForegroundColor Cyan
+        
+        # Unzip the portable bundle
+        if (Test-Path "summit_hip_numbers_portable.zip") {
+          Expand-Archive -Path "summit_hip_numbers_portable.zip" -DestinationPath "test_portable" -Force
+          Write-Host "Extracted portable bundle" -ForegroundColor Green
+        } else {
+          Write-Error "Portable zip not found!"
+          exit 1
+        }
+        
+        # Show contents
+        Write-Host "`nPortable bundle contents:" -ForegroundColor Yellow
+        Get-ChildItem -Path "test_portable" -Recurse | Select-Object FullName, Length | Format-Table
+        
+        # Check for executable
+        $exePath = "test_portable\summit_hip_numbers.exe"
+        if (-not (Test-Path $exePath)) {
+          Write-Error "Executable not found at $exePath"
+          exit 1
+        }
+        Write-Host "`nExecutable found: $exePath" -ForegroundColor Green
+        
+        # Check for critical DLLs
+        Write-Host "`nChecking for critical DLLs:" -ForegroundColor Yellow
+        $criticalDlls = @(
+          "libglib-2.0-0.dll",
+          "libgobject-2.0-0.dll", 
+          "libgio-2.0-0.dll",
+          "libgstapp-1.0-0.dll",
+          "libgstreamer-1.0-0.dll"
+        )
+        
+        $missingDlls = @()
+        foreach ($dll in $criticalDlls) {
+          $dllPath = "test_portable\$dll"
+          if (Test-Path $dllPath) {
+            Write-Host "  ✓ $dll" -ForegroundColor Green
+          } else {
+            Write-Host "  ✗ $dll MISSING" -ForegroundColor Red
+            $missingDlls += $dll
+          }
+        }
+        
+        if ($missingDlls.Count -gt 0) {
+          Write-Error "Missing critical DLLs: $($missingDlls -join ', ')"
+          Write-Host "`nSearching for DLLs in test_portable:" -ForegroundColor Yellow
+          Get-ChildItem -Path "test_portable" -Filter "*.dll" | ForEach-Object {
+            Write-Host "  Found: $($_.Name)"
+          }
+          exit 1
+        }
+        
+        # Try to run the executable briefly
+        Write-Host "`nAttempting to run executable for 10 seconds..." -ForegroundColor Yellow
+        $logFile = "test_portable\test-run.log"
+        
+        try {
+          $process = Start-Process -FilePath $exePath -PassThru -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $logFile -WorkingDirectory "test_portable"
+          Write-Host "Process started with PID: $($process.Id)" -ForegroundColor Green
+          
+          Start-Sleep -Seconds 10
+          
+          if (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
+            Write-Host "✓ Process is running successfully!" -ForegroundColor Green
+            Stop-Process -Id $process.Id -Force
+            Write-Host "Process stopped" -ForegroundColor Green
+          } else {
+            Write-Warning "Process exited early - check logs"
+          }
+        } catch {
+          Write-Error "Failed to start process: $_"
+          exit 1
+        }
+        
+        # Show log output
+        if (Test-Path $logFile) {
+          Write-Host "`n=== Execution Log ===" -ForegroundColor Cyan
+          Get-Content $logFile
+          Write-Host "===================" -ForegroundColor Cyan
+        }
+        
+        Write-Host "`n✓ Portable executable test completed successfully!" -ForegroundColor Green
 
     - name: Upload Portable Application as Artifact
       uses: actions/upload-artifact@v4
@@ -76,6 +158,15 @@ jobs:
         
     - name: Upload Installer as Artifact
       uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: summit-hip-numbers-windows-installer
         path: dist/summit_hip_numbers_installer.exe
+
+    - name: Upload Test Log
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: portable-test-log
+        path: test_portable/test-run.log
+        if-no-files-found: ignore
