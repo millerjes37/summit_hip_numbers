@@ -46,7 +46,7 @@
         packages.windows =
           let
             pkgs-windows = import nixpkgs {
-              system = "x86_64-w64-mingw32";
+              system = system;
               crossSystem = {
                 config = "x86_64-w64-mingw32";
               };
@@ -56,15 +56,23 @@
               url = "https://gstreamer.freedesktop.org/data/pkg/windows/${gstVersion}/mingw/gstreamer-1.0-mingw-x86_64-${gstVersion}.msi";
               sha256 = "25349c03cb16edf55273b5d8fbc3319d013e6e0e907afe386e7cd8e6b08c0e32";
             };
+            gstLibsWindows = with pkgs-windows; [
+              glib
+              gst_all_1.gstreamer
+              gst_all_1.gst-plugins-base
+              gst_all_1.gst-plugins-good
+              gst_all_1.gst-plugins-bad
+              gst_all_1.gst-plugins-ugly
+            ];
           in
-          pkgs.rustPlatform.buildRustPackage {
+          pkgs-windows.rustPlatform.buildRustPackage {
             pname = "summit_hip_numbers-windows";
             version = "0.1.0";
             src = ./.;            cargoLock = {              lockFile = ./Cargo.lock;            };            # Use the Windows toolchain            toolchain = pkgs.rust-bin.stable.latest.default.override {              targets = [ "x86_64-pc-windows-gnu" ];            };                        # GStreamer dependencies for Windows
             nativeBuildInputs = [ pkgs.msitools ] ++ (with pkgs; [
               pkg-config
             ]);
-            buildInputs = [ ];
+            buildInputs = gstLibsWindows;
             installPhase = ''
               mkdir -p $out
               cp target/x86_64-pc-windows-gnu/release/summit_hip_numbers.exe $out/
