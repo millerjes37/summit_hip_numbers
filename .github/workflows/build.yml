@@ -40,7 +40,7 @@ jobs:
         run: |
           curl -o gst.msi https://gstreamer.freedesktop.org/data/pkg/windows/1.24.10/mingw/gstreamer-1.0-mingw-x86_64-1.24.10.msi
           msiexec /i gst.msi /quiet /norestart
-      - run: cargo build --release
+       - run: cargo build --release --target x86_64-pc-windows-gnu
       - name: Create zip
         run: |
           mkdir bundle
