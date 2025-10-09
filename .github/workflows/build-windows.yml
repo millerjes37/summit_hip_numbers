@@ -8,41 +8,55 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Define the MSYS2 installation directory for later use
+  MSYS2_INSTALL_DIR: C:\msys64
 
 jobs:
   build-windows:
     runs-on: windows-latest
+    # Set the default shell for all steps to the MSYS2 shell
+    defaults:
+      run:
+        shell: msys2 {0}
+
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up MSYS2
+    - name: Set up MSYS2 and GStreamer dependencies
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
-        update: true
         install: >-
+          mingw-w64-x86_64-toolchain
           mingw-w64-x86_64-pkg-config
           mingw-w64-x86_64-gstreamer
           mingw-w64-x86_64-gst-plugins-base
           mingw-w64-x86_64-gst-plugins-good
           mingw-w64-x86_64-gst-plugins-bad
           mingw-w64-x86_64-gst-plugins-ugly
+        update: true
+        path-type: inherit
 
     - name: Set up Rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
         target: x86_64-pc-windows-gnu
+        override: true
         
-    - name: Build
-      shell: msys2 {0}
+    - name: Build Application
+      env:
+        # Explicitly tell pkg-config where to find the GStreamer .pc files
+        PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
       run: cargo build --release --verbose
 
     - name: Run Build Script to Create Distribution
+      # Override the shell for this step to use PowerShell
       shell: pwsh
-      run: ./build_windows.ps1
+      # Pass the GStreamer path from our MSYS2 installation to the build script
+      run: ./build_windows.ps1 -GStreamerPath "${{ env.MSYS2_INSTALL_DIR }}\mingw64"
 
-    - name: Upload Artifact
+    - name: Upload Portable Application as Artifact
       uses: actions/upload-artifact@v4
       with:
         name: summit-hip-numbers-windows-portable
