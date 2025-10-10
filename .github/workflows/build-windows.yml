@@ -46,6 +46,62 @@ jobs:
         RUSTFLAGS: -L native=/mingw64/lib
       run: cargo build --release --verbose
 
+    - name: Copy GStreamer DLLs from MSYS2
+      shell: msys2 {0}
+      run: |
+        echo "=== Copying GStreamer DLLs from MSYS2 environment ==="
+        
+        # Create dist directory if it doesn't exist
+        mkdir -p dist
+        
+        # Show what's in /mingw64/bin to debug
+        echo "Contents of /mingw64/bin (first 20 DLLs):"
+        ls -lh /mingw64/bin/*.dll 2>/dev/null | head -20 || echo "No DLLs found!"
+        
+        # Copy all DLLs from mingw64/bin
+        echo "Copying DLLs from /mingw64/bin to dist/"
+        dll_count=0
+        for dll in /mingw64/bin/*.dll; do
+          if [ -f "$dll" ]; then
+            cp -v "$dll" dist/
+            dll_count=$((dll_count + 1))
+            if [ $dll_count -le 10 ]; then
+              echo "  Copied: $(basename $dll)"
+            fi
+          fi
+        done
+        
+        echo "Total DLLs copied: $dll_count"
+        
+        if [ $dll_count -eq 0 ]; then
+          echo "ERROR: No DLLs were copied!"
+          echo "Full contents of /mingw64/bin:"
+          ls -lh /mingw64/bin/ | head -50
+          exit 1
+        fi
+        
+        # Copy GStreamer plugins
+        echo "Copying GStreamer plugins..."
+        mkdir -p dist/lib/gstreamer-1.0
+        if [ -d /mingw64/lib/gstreamer-1.0 ]; then
+          cp -r /mingw64/lib/gstreamer-1.0/* dist/lib/gstreamer-1.0/
+          plugin_count=$(find dist/lib/gstreamer-1.0 -type f | wc -l)
+          echo "Copied $plugin_count plugin files"
+        else
+          echo "WARNING: Plugin directory not found"
+        fi
+        
+        # Copy share directory for schemas
+        echo "Copying share directory..."
+        if [ -d /mingw64/share ]; then
+          cp -r /mingw64/share dist/
+          echo "Share directory copied"
+        else
+          echo "WARNING: Share directory not found"
+        fi
+        
+        echo "✓ GStreamer dependencies copied successfully"
+
     - name: Download and Install Inno Setup
       shell: pwsh
       run: |
@@ -62,17 +118,17 @@ jobs:
     - name: Run Build Script to Create Distribution
       shell: pwsh
       run: |
-        Write-Host "=== Running Build Script ===" -ForegroundColor Cyan
-        ./build_windows.ps1 -SkipBuild -GStreamerPath "${{ env.MSYS2_INSTALL_DIR }}\mingw64"
+        Write-Host "=== Running Build Script (DLLs already copied) ===" -ForegroundColor Cyan
+        ./build_windows.ps1 -SkipBuild -SkipGStreamer
         
         Write-Host "`n=== Verifying dist directory contents ===" -ForegroundColor Cyan
         if (Test-Path "dist") {
           Write-Host "dist directory exists" -ForegroundColor Green
-          $dllCount = (Get-ChildItem "dist" -Filter "*.dll" -File).Count
+          $dllCount = (Get-ChildItem "dist" -Filter "*.dll" -File -ErrorAction SilentlyContinue).Count
           Write-Host "Found $dllCount DLL files in dist directory" -ForegroundColor Yellow
           
           if ($dllCount -eq 0) {
-            Write-Error "NO DLLs found in dist directory! Build script failed to copy DLLs."
+            Write-Error "NO DLLs found in dist directory!"
             Write-Host "`nContents of dist directory:" -ForegroundColor Yellow
             Get-ChildItem "dist" -Recurse | Select-Object FullName, Length | Format-Table
             exit 1
@@ -81,6 +137,31 @@ jobs:
           Write-Host "`nFirst 10 DLLs in dist:" -ForegroundColor Yellow
           Get-ChildItem "dist" -Filter "*.dll" -File | Select-Object -First 10 | ForEach-Object {
             Write-Host "  - $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)"
+          }
+          
+          # Verify critical DLLs
+          Write-Host "`nVerifying critical DLLs:" -ForegroundColor Yellow
+          $criticalDlls = @(
+            "libglib-2.0-0.dll",
+            "libgobject-2.0-0.dll",
+            "libgio-2.0-0.dll",
+            "libgstapp-1.0-0.dll",
+            "libgstreamer-1.0-0.dll"
+          )
+          
+          $missingCritical = @()
+          foreach ($dll in $criticalDlls) {
+            if (Test-Path "dist\$dll") {
+              Write-Host "  ✓ $dll" -ForegroundColor Green
+            } else {
+              Write-Host "  ✗ $dll MISSING" -ForegroundColor Red
+              $missingCritical += $dll
+            }
+          }
+          
+          if ($missingCritical.Count -gt 0) {
+            Write-Error "Missing critical DLLs: $($missingCritical -join ', ')"
+            exit 1
           }
         } else {
           Write-Error "dist directory does not exist!"
@@ -98,7 +179,7 @@ jobs:
           if (Test-Path $tempTest) { Remove-Item $tempTest -Recurse -Force }
           Expand-Archive -Path "summit_hip_numbers_portable.zip" -DestinationPath $tempTest
           
-          $zipDllCount = (Get-ChildItem $tempTest -Filter "*.dll" -File).Count
+          $zipDllCount = (Get-ChildItem $tempTest -Filter "*.dll" -File -ErrorAction SilentlyContinue).Count
           Write-Host "Found $zipDllCount DLL files in zip" -ForegroundColor Yellow
           
           if ($zipDllCount -eq 0) {
@@ -106,6 +187,16 @@ jobs:
             Write-Host "`nContents of zip:" -ForegroundColor Yellow
             Get-ChildItem $tempTest -Recurse | Select-Object FullName, Length | Format-Table
             exit 1
+          }
+          
+          # Verify critical DLLs in zip
+          Write-Host "`nVerifying critical DLLs in zip:" -ForegroundColor Yellow
+          foreach ($dll in $criticalDlls) {
+            if (Test-Path "$tempTest\$dll") {
+              Write-Host "  ✓ $dll" -ForegroundColor Green
+            } else {
+              Write-Host "  ✗ $dll MISSING FROM ZIP" -ForegroundColor Red
+            }
           }
           
           Remove-Item $tempTest -Recurse -Force
@@ -116,33 +207,10 @@ jobs:
         
         Write-Host "`n✓ Build verification passed!" -ForegroundColor Green
 
-    - name: Upload Portable Application as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: summit-hip-numbers-windows-portable
-        path: summit_hip_numbers_portable.zip
-        
-    - name: Upload Installer as Artifact
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: summit-hip-numbers-windows-installer
-        path: dist/summit_hip_numbers_installer.exe
-
-  test-portable:
-    runs-on: windows-latest
-    needs: build-windows
-
-    steps:
-    - name: Download Portable Bundle
-      uses: actions/download-artifact@v4
-      with:
-        name: summit-hip-numbers-windows-portable
-
     - name: Test Portable Executable
       shell: pwsh
       run: |
-        Write-Host "=== Testing Portable Executable in Clean Environment ===" -ForegroundColor Cyan
+        Write-Host "=== Testing Portable Executable ===" -ForegroundColor Cyan
         
         # Unzip the portable bundle
         if (Test-Path "summit_hip_numbers_portable.zip") {
@@ -225,6 +293,19 @@ jobs:
         }
         
         Write-Host "`n✓ Portable executable test completed successfully!" -ForegroundColor Green
+
+    - name: Upload Portable Application as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: summit-hip-numbers-windows-portable
+        path: summit_hip_numbers_portable.zip
+        
+    - name: Upload Installer as Artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: summit-hip-numbers-windows-installer
+        path: dist/summit_hip_numbers_installer.exe
 
     - name: Upload Test Log
       uses: actions/upload-artifact@v4
