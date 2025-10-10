@@ -92,15 +92,46 @@ if (!$SkipGStreamer) {
         $binPath = Join-Path $GStreamerPath "bin"
         if (Test-Path $binPath) {
             Write-Host "  Copying ALL DLLs from $binPath..." -ForegroundColor Gray
+            Write-Host "  Source: $binPath" -ForegroundColor Gray
+            Write-Host "  Destination: $distDir" -ForegroundColor Gray
             
-            # Copy all DLLs without filtering
-            Get-ChildItem -Path $binPath -Filter "*.dll" | ForEach-Object {
-                Copy-Item $_.FullName -Destination $distDir -Force
-                Write-Host "    Copied: $($_.Name)" -ForegroundColor Gray
+            # Get all DLLs first
+            $dllFiles = Get-ChildItem -Path $binPath -Filter "*.dll" -File
+            Write-Host "  Found $($dllFiles.Count) DLL files to copy" -ForegroundColor Yellow
+            
+            if ($dllFiles.Count -eq 0) {
+                Write-Error "No DLL files found in $binPath"
+                Write-Host "Contents of bin directory:" -ForegroundColor Yellow
+                Get-ChildItem -Path $binPath | Select-Object Name, Length | Format-Table
+                exit 1
             }
             
-            $dllCount = (Get-ChildItem $distDir -Filter "*.dll").Count
+            # Copy all DLLs
+            $copiedCount = 0
+            foreach ($dll in $dllFiles) {
+                try {
+                    Copy-Item $dll.FullName -Destination $distDir -Force -ErrorAction Stop
+                    $copiedCount++
+                    if ($copiedCount -le 5) {
+                        Write-Host "    Copied: $($dll.Name)" -ForegroundColor Gray
+                    }
+                } catch {
+                    Write-Error "Failed to copy $($dll.Name): $_"
+                }
+            }
+            
+            if ($copiedCount -gt 5) {
+                Write-Host "    ... and $($copiedCount - 5) more DLLs" -ForegroundColor Gray
+            }
+            
+            # Verify DLLs were copied
+            $dllCount = (Get-ChildItem $distDir -Filter "*.dll" -File).Count
             Write-Host "  Copied $dllCount DLLs total" -ForegroundColor Green
+            
+            if ($dllCount -eq 0) {
+                Write-Error "Failed to copy any DLLs to dist directory!"
+                exit 1
+            }
 
             # Verify critical DLLs are present
             $criticalDlls = @(
@@ -296,14 +327,47 @@ Get-ChildItem $distDir | ForEach-Object {
 # Create a zip file for easy distribution
 $zipPath = "summit_hip_numbers_portable.zip"
 Write-Host "Creating zip archive: $zipPath" -ForegroundColor Yellow
+
+# Final verification before zipping
+Write-Host "Final verification of dist directory before zipping:" -ForegroundColor Yellow
+$finalDllCount = (Get-ChildItem $distDir -Filter "*.dll" -File).Count
+Write-Host "  DLLs in dist: $finalDllCount" -ForegroundColor $(if ($finalDllCount -gt 0) { "Green" } else { "Red" })
+
+if ($finalDllCount -eq 0) {
+    Write-Error "CRITICAL: No DLLs found in dist directory before zipping! Aborting."
+    Write-Host "Contents of dist directory:" -ForegroundColor Yellow
+    Get-ChildItem $distDir -Recurse | Select-Object FullName, Length | Format-Table
+    exit 1
+}
+
+Write-Host "  Files in dist:" -ForegroundColor Yellow
+Get-ChildItem $distDir -File | ForEach-Object {
+    Write-Host "    - $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)"
+}
+
 if (Test-Path $zipPath) {
     Write-Host "Removing existing zip file..." -ForegroundColor Gray
     Remove-Item $zipPath -Force
 }
 
+Write-Host "Compressing archive..." -ForegroundColor Yellow
 Compress-Archive -Path "$($distDir)\*" -DestinationPath $zipPath -Force
 $zipSize = (Get-Item $zipPath).Length / 1MB
 Write-Host "Zip archive created: $zipPath ($( [math]::Round($zipSize, 2)) MB)" -ForegroundColor Green
+
+# Verify zip contents
+Write-Host "Verifying zip contents..." -ForegroundColor Yellow
+$tempVerify = "temp_verify_zip"
+if (Test-Path $tempVerify) { Remove-Item $tempVerify -Recurse -Force }
+Expand-Archive -Path $zipPath -DestinationPath $tempVerify
+$zipDllCount = (Get-ChildItem $tempVerify -Filter "*.dll" -File).Count
+Write-Host "  DLLs in zip: $zipDllCount" -ForegroundColor $(if ($zipDllCount -gt 0) { "Green" } else { "Red" })
+Remove-Item $tempVerify -Recurse -Force
+
+if ($zipDllCount -eq 0) {
+    Write-Error "CRITICAL: No DLLs found in created zip file!"
+    exit 1
+}
 
 # Create Inno Setup installer
 Write-Host "Checking for Inno Setup..." -ForegroundColor Yellow

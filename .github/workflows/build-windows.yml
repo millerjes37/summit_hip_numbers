@@ -61,7 +61,60 @@ jobs:
 
     - name: Run Build Script to Create Distribution
       shell: pwsh
-      run: ./build_windows.ps1 -SkipBuild -GStreamerPath "${{ env.MSYS2_INSTALL_DIR }}\mingw64"
+      run: |
+        Write-Host "=== Running Build Script ===" -ForegroundColor Cyan
+        ./build_windows.ps1 -SkipBuild -GStreamerPath "${{ env.MSYS2_INSTALL_DIR }}\mingw64"
+        
+        Write-Host "`n=== Verifying dist directory contents ===" -ForegroundColor Cyan
+        if (Test-Path "dist") {
+          Write-Host "dist directory exists" -ForegroundColor Green
+          $dllCount = (Get-ChildItem "dist" -Filter "*.dll" -File).Count
+          Write-Host "Found $dllCount DLL files in dist directory" -ForegroundColor Yellow
+          
+          if ($dllCount -eq 0) {
+            Write-Error "NO DLLs found in dist directory! Build script failed to copy DLLs."
+            Write-Host "`nContents of dist directory:" -ForegroundColor Yellow
+            Get-ChildItem "dist" -Recurse | Select-Object FullName, Length | Format-Table
+            exit 1
+          }
+          
+          Write-Host "`nFirst 10 DLLs in dist:" -ForegroundColor Yellow
+          Get-ChildItem "dist" -Filter "*.dll" -File | Select-Object -First 10 | ForEach-Object {
+            Write-Host "  - $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)"
+          }
+        } else {
+          Write-Error "dist directory does not exist!"
+          exit 1
+        }
+        
+        Write-Host "`n=== Verifying portable zip contents ===" -ForegroundColor Cyan
+        if (Test-Path "summit_hip_numbers_portable.zip") {
+          Write-Host "Portable zip exists" -ForegroundColor Green
+          $zipSize = (Get-Item "summit_hip_numbers_portable.zip").Length / 1MB
+          Write-Host "Zip size: $([math]::Round($zipSize, 2)) MB" -ForegroundColor Yellow
+          
+          # Extract to temp location to verify contents
+          $tempTest = "temp_zip_test"
+          if (Test-Path $tempTest) { Remove-Item $tempTest -Recurse -Force }
+          Expand-Archive -Path "summit_hip_numbers_portable.zip" -DestinationPath $tempTest
+          
+          $zipDllCount = (Get-ChildItem $tempTest -Filter "*.dll" -File).Count
+          Write-Host "Found $zipDllCount DLL files in zip" -ForegroundColor Yellow
+          
+          if ($zipDllCount -eq 0) {
+            Write-Error "NO DLLs found in portable zip! Zip creation failed."
+            Write-Host "`nContents of zip:" -ForegroundColor Yellow
+            Get-ChildItem $tempTest -Recurse | Select-Object FullName, Length | Format-Table
+            exit 1
+          }
+          
+          Remove-Item $tempTest -Recurse -Force
+        } else {
+          Write-Error "Portable zip does not exist!"
+          exit 1
+        }
+        
+        Write-Host "`n✓ Build verification passed!" -ForegroundColor Green
 
     - name: Upload Portable Application as Artifact
       uses: actions/upload-artifact@v4
