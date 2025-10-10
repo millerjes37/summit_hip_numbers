@@ -48,16 +48,52 @@ jobs:
         RUSTFLAGS: -L native=/mingw64/lib
       run: cargo build --release --verbose
 
-    - name: Create Portable Distribution (MSYS2)
+    - name: Create Distribution
       shell: msys2 {0}
       run: |
         chmod +x build_windows_msys2.sh
         ./build_windows_msys2.sh
 
+    - name: Download and Install Inno Setup
+      shell: pwsh
+      run: |
+        $inno_url = "https://files.jrsoftware.org/is/6/innosetup-${{ env.INNO_SETUP_VERSION }}.exe"
+        $inno_path = "${{ runner.temp }}\innosetup.exe"
+        Write-Host "Downloading Inno Setup from $inno_url"
+        Invoke-WebRequest -Uri $inno_url -OutFile $inno_path
+        Write-Host "Installing Inno Setup..."
+        Start-Process -FilePath $inno_path -ArgumentList "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /NORESTART" -Wait
+        $inno_dir = "C:\Program Files (x86)\Inno Setup 6"
+        Write-Host "Adding '$inno_dir' to GITHUB_PATH"
+        echo $inno_dir >> $env:GITHUB_PATH
+
+    - name: Upload Portable Application as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: summit-hip-numbers-windows-portable
+        path: summit_hip_numbers_portable.zip
+        
+    - name: Upload Installer as Artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: summit-hip-numbers-windows-installer
+        path: dist/summit_hip_numbers_installer.exe
+
+  test-portable:
+    runs-on: windows-latest
+    needs: build-windows
+
+    steps:
+    - name: Download Portable Bundle
+      uses: actions/download-artifact@v4
+      with:
+        name: summit-hip-numbers-windows-portable
+
     - name: Test Portable Executable
       shell: pwsh
       run: |
-        Write-Host "=== Testing Portable Executable ===" -ForegroundColor Cyan
+        Write-Host "=== Testing Portable Executable in Clean Environment ===" -ForegroundColor Cyan
         
         # Unzip the portable bundle
         if (Test-Path "summit_hip_numbers_portable.zip") {
@@ -140,19 +176,6 @@ jobs:
         }
         
         Write-Host "`n✓ Portable executable test completed successfully!" -ForegroundColor Green
-
-    - name: Upload Portable Application as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: summit-hip-numbers-windows-portable
-        path: summit_hip_numbers_portable.zip
-        
-    - name: Upload Installer as Artifact
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: summit-hip-numbers-windows-installer
-        path: dist/summit_hip_numbers_installer.exe
 
     - name: Upload Test Log
       uses: actions/upload-artifact@v4
