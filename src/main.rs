@@ -4,6 +4,7 @@ mod video_player;
 use clap::Parser;
 use eframe::egui;
 use dunce;
+use gstreamer::glib;
 
 #[derive(Parser)]
 struct Args {
@@ -499,7 +500,14 @@ impl MediaPlayerApp {
                     return;
                 }
             };
-            let uri = format!("file://{}", abs_path.to_string_lossy().replace("\\", "/"));
+            let uri = match glib::filename_to_uri(&abs_path, None) {
+                Ok(uri) => uri.to_string(),
+                Err(e) => {
+                    error!("Failed to convert path to URI {}: {}", abs_path.display(), e);
+                    self.current_file_name = format!("Error: {}", e);
+                    return;
+                }
+            };
 
             match VideoPlayer::new(&uri, self.texture_sender.clone()) {
                 Ok(player) => {
