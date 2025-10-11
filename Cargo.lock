@@ -4049,6 +4049,7 @@ dependencies = [
  "gstreamer-video",
  "image",
  "log",
+ "rand",
  "serde",
  "tempfile",
  "tokio",

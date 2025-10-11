@@ -19,7 +19,7 @@
 # Directory containing video files to be played
 # Files are sorted alphabetically and assigned hip numbers (001, 002, 003, etc.)
 # Supported formats: MP4, AVI, MKV, and other GStreamer-compatible formats
-directory = "./videos"
+directory = "./assetsvideos"
 
 # =============================================================================
 # SPLASH SCREEN SETTINGS
@@ -42,12 +42,22 @@ background_color = "#000000"
 # Text color for splash screen text (hex format)
 text_color = "#FFFFFF"
 
-# When to show the splash screen:
-# - "once": Only on application startup
-# - "every": Before every video
-# - "every_other": Before every other video
-# - "every_third": Before every third video
-interval = "once"
+# Show splash screen every N videos
+# 0 = Only show at application startup
+# 1 = Show before every video
+# 2 = Show before every 2nd video
+# 3 = Show before every 3rd video
+# etc.
+interval = 0
+
+# Splash screen rotation mode:
+# - "cycle": Cycle through splash screens in order (default)
+# - "random": Pick a random splash screen each time
+# - "static": Always show the same splash screen (requires static_splash_path)
+# rotation_mode = "cycle"
+
+# When using rotation_mode = "static", specify the path to the splash image
+# static_splash_path = "/path/to/specific/splash.png"
 
 # Directory containing splash screen images (PNG, JPG, JPEG, BMP)
 # Images are displayed in alphabetical order
@@ -153,7 +163,7 @@ stroke_width = 1.0
 invalid_input_timeout = 0.5
 
 # Duration in seconds to show "No Video Available" popup
-no_video_popup_timeout = 3.0
+no_video_popup_timeout = 2.0
 
 # -----------------------------------------------------------------------------
 # TEXT LABELS
@@ -162,7 +172,7 @@ no_video_popup_timeout = 3.0
 now_playing_label = "now playing"
 
 # Company/branding text displayed in the status bar
-company_label = "SUMMIT PROFESSIONAL Solutions"
+company_label = "Summit Professional Solutions"
 
 # -----------------------------------------------------------------------------
 # COLOR SETTINGS (Hex Format)

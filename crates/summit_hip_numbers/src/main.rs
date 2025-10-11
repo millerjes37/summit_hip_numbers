@@ -152,7 +152,7 @@ impl ConfigApp {
         app.splash_text = app.config.splash.text.clone();
         app.splash_bg_color = app.config.splash.background_color.clone();
         app.splash_text_color = app.config.splash.text_color.clone();
-        app.splash_interval = app.config.splash.interval.clone();
+        app.splash_interval = app.config.splash.interval.to_string();
         app.splash_dir_input = app.config.splash.directory.clone();
         app.input_label = app.config.ui.input_label.clone();
         app.now_playing_label = app.config.ui.now_playing_label.clone();
@@ -303,7 +303,7 @@ impl ConfigApp {
         self.config.splash.text = self.splash_text.clone();
         self.config.splash.background_color = self.splash_bg_color.clone();
         self.config.splash.text_color = self.splash_text_color.clone();
-        self.config.splash.interval = self.splash_interval.clone();
+        self.config.splash.interval = self.splash_interval.parse().unwrap_or(0);
         self.config.splash.directory = self.splash_dir_input.clone();
         self.config.ui.input_label = self.input_label.clone();
         self.config.ui.now_playing_label = self.now_playing_label.clone();
@@ -420,31 +420,8 @@ impl eframe::App for ConfigApp {
                 ui.label("Text Color (hex, e.g., #FFFFFF):");
                 ui.text_edit_singleline(&mut self.splash_text_color);
 
-                ui.label("Splash Interval:");
-                egui::ComboBox::from_label("Select interval")
-                    .selected_text(&self.splash_interval)
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut self.splash_interval,
-                            "once".to_string(),
-                            "Once at start",
-                        );
-                        ui.selectable_value(
-                            &mut self.splash_interval,
-                            "every".to_string(),
-                            "Every video",
-                        );
-                        ui.selectable_value(
-                            &mut self.splash_interval,
-                            "every_other".to_string(),
-                            "Every other video",
-                        );
-                        ui.selectable_value(
-                            &mut self.splash_interval,
-                            "every_third".to_string(),
-                            "Every third video",
-                        );
-                    });
+                ui.label("Splash Interval (show every N videos, 0 = only at startup):");
+                ui.text_edit_singleline(&mut self.splash_interval);
 
                 ui.label("Splash Directory:");
                 ui.text_edit_singleline(&mut self.splash_dir_input);
@@ -1271,9 +1248,9 @@ impl eframe::App for MediaPlayerApp {
         if self.show_splash {
             self.splash_timer += ctx.input(|i| i.unstable_dt) as f64;
             if self.splash_timer >= self.config.splash.duration_seconds {
-                // If videos are loaded and splash interval is "once", hide splash
-                if !self.video_files.is_empty() && self.config.splash.interval == "once" {
-                    info!("Hiding splash screen after duration (videos loaded, interval=once)");
+                // If videos are loaded and splash interval is 0 (only at startup), hide splash
+                if !self.video_files.is_empty() && self.config.splash.interval == 0 {
+                    info!("Hiding splash screen after duration (videos loaded, interval=0)");
                     self.show_splash = false;
                     self.splash_texture = None;
                 } else if self.video_files.is_empty() && !self.splash_images.is_empty() {
@@ -1649,7 +1626,9 @@ fn load_config_for_kiosk() -> Config {
             text: "Summit Professional Services".to_string(),
             background_color: "#000000".to_string(),
             text_color: "#FFFFFF".to_string(),
-            interval: "once".to_string(),
+            interval: 0,
+            rotation_mode: None,
+            static_splash_path: None,
             directory: "./splash".to_string(),
         },
         logging: LoggingConfig {
@@ -1702,7 +1681,9 @@ fn load_config_for_kiosk() -> Config {
             text: "Summit Professional Services".to_string(),
             background_color: "#000000".to_string(),
             text_color: "#FFFFFF".to_string(),
-            interval: "once".to_string(),
+            interval: 0,
+            rotation_mode: None,
+            static_splash_path: None,
             directory: "./splash".to_string(),
         },
         logging: LoggingConfig {
@@ -1908,7 +1889,7 @@ mod tests {
         };
         assert!(config.enabled);
         assert_eq!(config.duration_seconds, 3.0);
-        assert_eq!(config.interval, "once");
+        assert_eq!(config.interval, 0);
     }
 
     #[test]
