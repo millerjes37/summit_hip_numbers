@@ -1052,27 +1052,6 @@ impl eframe::App for MediaPlayerApp {
                         }
                     }
                 }
-
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let bg_color = Self::hex_to_color(&self.config.splash.background_color);
-                    ui.painter().rect_filled(ui.max_rect(), 0.0, bg_color);
-                    if let Some(texture) = &self.splash_texture {
-                        ui.centered_and_justified(|ui| {
-                            ui.image((texture.id(), ui.available_size()));
-                        });
-                    } else {
-                        let text_color = Self::hex_to_color(&self.config.splash.text_color);
-                        ui.centered_and_justified(|ui| {
-                            ui.label(
-                                egui::RichText::new(&self.config.splash.text)
-                                    .size(self.config.ui.splash_font_size)
-                                    .color(text_color),
-                            );
-                        });
-                    }
-                });
-                ctx.request_repaint();
-                return;
             }
         }
 
@@ -1161,38 +1140,57 @@ impl eframe::App for MediaPlayerApp {
             );
 
             ui.allocate_new_ui(egui::UiBuilder::new().max_rect(video_rect), |ui| {
-                ui.painter()
-                    .rect_filled(ui.max_rect(), 0.0, Self::hex_to_color(&self.config.ui.background_color));
-                if let Some(texture) = &self.current_texture {
-                    ui.image((texture.id(), ui.available_size()));
-                } else {
-                    ui.centered_and_justified(|ui| {
-                        ui.label(
-                            egui::RichText::new("🎬 VIDEO DISPLAY AREA")
-                                .size(self.config.ui.placeholder_font_size)
-                                .color(Self::hex_to_color(&self.config.ui.label_color)),
-                        );
-                    });
-                }
-
-                // Demo mode watermark
-                #[cfg(feature = "demo")]
-                ui.allocate_new_ui(
-                    egui::UiBuilder::new().max_rect(
-                        egui::Rect::from_min_size(
-                            egui::pos2(video_rect.right() - self.config.ui.demo_watermark_x_offset, video_rect.top() + self.config.ui.demo_watermark_y_offset),
-                            egui::vec2(self.config.ui.demo_watermark_width, self.config.ui.demo_watermark_height)
-                        )
-                    ),
-                    |ui| {
-                        ui.label(
-                            egui::RichText::new("DEMO ONLY")
-                                .size(self.config.ui.demo_watermark_font_size)
-                                .color(egui::Color32::from_rgb(255, 0, 0))
-                                .strong()
-                        );
+                if self.show_splash {
+                    let bg_color = Self::hex_to_color(&self.config.splash.background_color);
+                    ui.painter().rect_filled(ui.max_rect(), 0.0, bg_color);
+                    if let Some(texture) = &self.splash_texture {
+                        ui.centered_and_justified(|ui| {
+                            ui.image((texture.id(), ui.available_size()));
+                        });
+                    } else {
+                        let text_color = Self::hex_to_color(&self.config.splash.text_color);
+                        ui.centered_and_justified(|ui| {
+                            ui.label(
+                                egui::RichText::new(&self.config.splash.text)
+                                    .size(self.config.ui.splash_font_size)
+                                    .color(text_color),
+                            );
+                        });
                     }
-                );
+                } else {
+                    ui.painter()
+                        .rect_filled(ui.max_rect(), 0.0, Self::hex_to_color(&self.config.ui.background_color));
+                    if let Some(texture) = &self.current_texture {
+                        ui.image((texture.id(), ui.available_size()));
+                    } else {
+                        ui.centered_and_justified(|ui| {
+                            ui.label(
+                                egui::RichText::new("🎬 VIDEO DISPLAY AREA")
+                                    .size(self.config.ui.placeholder_font_size)
+                                    .color(Self::hex_to_color(&self.config.ui.label_color)),
+                            );
+                        });
+                    }
+
+                    // Demo mode watermark
+                    #[cfg(feature = "demo")]
+                    ui.allocate_new_ui(
+                        egui::UiBuilder::new().max_rect(
+                            egui::Rect::from_min_size(
+                                egui::pos2(video_rect.right() - self.config.ui.demo_watermark_x_offset, video_rect.top() + self.config.ui.demo_watermark_y_offset),
+                                egui::vec2(self.config.ui.demo_watermark_width, self.config.ui.demo_watermark_height)
+                            )
+                        ),
+                        |ui| {
+                            ui.label(
+                                egui::RichText::new("DEMO ONLY")
+                                    .size(self.config.ui.demo_watermark_font_size)
+                                    .color(egui::Color32::from_rgb(255, 0, 0))
+                                    .strong()
+                            );
+                        }
+                    );
+                }
             });
 
             let bar_height = available_rect.height() * self.config.ui.bar_height_ratio;
