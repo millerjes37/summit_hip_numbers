@@ -1331,14 +1331,8 @@ impl eframe::App for MediaPlayerApp {
                             ui.image((texture.id(), ui.available_size()));
                         });
                     } else {
-                        let text_color = Self::hex_to_color(&self.config.splash.text_color);
-                        ui.centered_and_justified(|ui| {
-                            ui.label(
-                                egui::RichText::new(&self.config.splash.text)
-                                    .size(self.config.ui.splash_font_size)
-                                    .color(text_color),
-                            );
-                        });
+                        // No text splash - just show black screen while loading
+                        // This ensures we only show image splashes
                     }
                 } else {
                     ui.painter().rect_filled(
