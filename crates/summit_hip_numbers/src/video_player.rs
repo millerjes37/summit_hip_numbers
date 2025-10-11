@@ -57,27 +57,27 @@ impl VideoPlayer {
 
         // Add elements to bin
         video_bin
-            .add(videoconvert.clone())
+            .add(&videoconvert)
             .map_err(|e| anyhow!("Failed to add videoconvert: {:?}", e))?;
         video_bin
-            .add(videoscale.clone())
+            .add(&videoscale)
             .map_err(|e| anyhow!("Failed to add videoscale: {:?}", e))?;
         video_bin
-            .add(capsfilter.clone())
+            .add(&capsfilter)
             .map_err(|e| anyhow!("Failed to add capsfilter: {:?}", e))?;
         video_bin
-            .add(appsink.clone().upcast::<Element>())
+            .add(appsink.upcast_ref::<Element>())
             .map_err(|e| anyhow!("Failed to add appsink: {:?}", e))?;
 
         // Link elements
         videoconvert
-            .link(videoscale.clone())
+            .link(&videoscale)
             .map_err(|e| anyhow!("Failed to link videoconvert to videoscale: {:?}", e))?;
         videoscale
-            .link(capsfilter.clone())
+            .link(&capsfilter)
             .map_err(|e| anyhow!("Failed to link videoscale to capsfilter: {:?}", e))?;
         capsfilter
-            .link(appsink.clone().upcast::<Element>())
+            .link(appsink.upcast_ref::<Element>())
             .map_err(|e| anyhow!("Failed to link capsfilter to appsink: {:?}", e))?;
 
         // Set ghost pad
@@ -86,7 +86,7 @@ impl VideoPlayer {
             .ok_or_else(|| anyhow!("Failed to get sink pad"))?;
         video_bin
             .add_pad(
-                gstreamer::GhostPad::with_target(pad.clone())
+                &gstreamer::GhostPad::with_target(&pad)
                     .map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?,
             )
             .map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?;
