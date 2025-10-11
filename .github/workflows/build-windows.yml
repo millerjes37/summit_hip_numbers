@@ -12,6 +12,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   MSYS2_INSTALL_DIR: C:\msys64
+  INNO_SETUP_VERSION: 6.2.2
 
 jobs:
   build-windows:
@@ -62,12 +63,26 @@ jobs:
         chmod +x scripts/build_windows_msys2.sh
         ./scripts/build_windows_msys2.sh ${{ matrix.variant }}
 
+    - name: Download and Install Inno Setup
+      if: matrix.variant == 'full'
+      shell: pwsh
+      run: |
+        $inno_url = "https://files.jrsoftware.org/is/6/innosetup-${{ env.INNO_SETUP_VERSION }}.exe"
+        $inno_path = "$env:TEMP\innosetup.exe"
+        Write-Host "Downloading Inno Setup from $inno_url"
+        Invoke-WebRequest -Uri $inno_url -OutFile $inno_path
+        Write-Host "Installing Inno Setup..."
+        Start-Process -FilePath $inno_path -ArgumentList "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /NORESTART /ALLUSERS /DIR=`"C:\Program Files (x86)\Inno Setup 6`"" -Wait
+        $inno_dir = "C:\Program Files (x86)\Inno Setup 6"
+        Write-Host "Adding '$inno_dir' to PATH"
+        echo "$inno_dir" >> $env:GITHUB_PATH
+
     - name: Build Installer
       if: matrix.variant == 'full'
-      uses: Minionguyjpro/Inno-Setup-Action@v1
-      with:
-        path: scripts/installer.iss
-        options: /Q
+      shell: pwsh
+      run: |
+        # Create installer using Inno Setup
+        iscc.exe /Q "scripts/installer.iss"
 
     - name: Upload Portable Application as Artifact
       uses: actions/upload-artifact@v4
