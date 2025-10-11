@@ -864,7 +864,7 @@ impl eframe::App for MediaPlayerApp {
                     ),
                     |ui| {
                         ui.label(
-                            egui::RichText::new("DEMO MODE")
+                            egui::RichText::new("DEMO ONLY")
                                 .size(24.0)
                                 .color(egui::Color32::from_rgb(255, 0, 0))
                                 .strong()
