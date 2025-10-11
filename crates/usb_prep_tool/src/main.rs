@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use eframe::egui;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use rfd;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -54,7 +53,7 @@ impl UsbPrepApp {
 
         // Check if it's writable (USB drives should be)
         match std::fs::metadata(path) {
-            Ok(metadata) => Ok(metadata.permissions().readonly() == false),
+            Ok(metadata) => Ok(!metadata.permissions().readonly()),
             Err(_) => Ok(false),
         }
     }
