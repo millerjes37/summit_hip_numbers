@@ -693,7 +693,7 @@ impl MediaPlayerApp {
         info!("Loading video files from {}", video_dir);
 
         match scan_video_files(&video_dir) {
-            Ok(files) => {
+            Ok(mut files) => {
                 #[allow(unused_mut)]
                 #[cfg(feature = "demo")]
                 {
