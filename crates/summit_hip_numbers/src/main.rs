@@ -538,7 +538,61 @@ impl Default for MediaPlayerApp {
         let (tx, rx) = watch::channel(None);
 
         // Create base config
+        #[cfg(feature = "demo")]
         let mut config = Config {
+            video: VideoConfig {
+                directory: "./videos".to_string(),
+            },
+            splash: SplashConfig {
+                enabled: true,
+                duration_seconds: 3.0,
+                text: "Summit Professional Services".to_string(),
+                background_color: "#000000".to_string(),
+                text_color: "#FFFFFF".to_string(),
+                interval: "once".to_string(),
+                directory: "./splash".to_string(),
+            },
+            logging: LoggingConfig {
+                file: "summit_hip_numbers.log".to_string(),
+                max_lines: 10000,
+            },
+            ui: UiConfig {
+                input_label: "3-digit hip number:".to_string(),
+                now_playing_label: "now playing".to_string(),
+                company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+                input_text_color: "#FFFFFF".to_string(),
+                input_stroke_color: "#FFFFFF".to_string(),
+                label_color: "#FFFFFF".to_string(),
+                background_color: "#000000".to_string(),
+                kiosk_mode: true,
+                enable_arrow_nav: true,
+                window_width: 1920.0,
+                window_height: 1080.0,
+                video_height_ratio: 0.92,
+                bar_height_ratio: 0.08,
+                splash_font_size: 48.0,
+                placeholder_font_size: 48.0,
+                demo_watermark_font_size: 24.0,
+                input_field_width: 45.0,
+                input_max_length: 3,
+                demo_watermark_x_offset: 200.0,
+                demo_watermark_y_offset: 10.0,
+                demo_watermark_width: 180.0,
+                demo_watermark_height: 30.0,
+                ui_spacing: 10.0,
+                stroke_width: 1.0,
+                invalid_input_timeout: 0.5,
+                no_video_popup_timeout: 3.0,
+            },
+            demo: DemoConfig {
+                timeout_seconds: 300,
+                max_videos: 5,
+                hip_number_limit: 5,
+            },
+        };
+
+        #[cfg(not(feature = "demo"))]
+        let config = Config {
             video: VideoConfig {
                 directory: "./videos".to_string(),
             },
@@ -693,8 +747,8 @@ impl MediaPlayerApp {
         info!("Loading video files from {}", video_dir);
 
         match scan_video_files(&video_dir) {
+            #[allow(unused_mut)]
             Ok(mut files) => {
-                #[allow(unused_mut)]
                 #[cfg(feature = "demo")]
                 {
                     if files.len() > self.config.demo.max_videos {
@@ -1223,7 +1277,61 @@ fn load_config_for_kiosk() -> Config {
         }
     }
     // Return default config if loading fails
+    #[cfg(feature = "demo")]
     let mut config = Config {
+        video: VideoConfig {
+            directory: "./videos".to_string(),
+        },
+        splash: SplashConfig {
+            enabled: true,
+            duration_seconds: 3.0,
+            text: "Summit Professional Services".to_string(),
+            background_color: "#000000".to_string(),
+            text_color: "#FFFFFF".to_string(),
+            interval: "once".to_string(),
+            directory: "./splash".to_string(),
+        },
+        logging: LoggingConfig {
+            file: "summit_hip_numbers.log".to_string(),
+            max_lines: 10000,
+        },
+        ui: UiConfig {
+            input_label: "3-digit hip number:".to_string(),
+            now_playing_label: "now playing".to_string(),
+            company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+            input_text_color: "#FFFFFF".to_string(),
+            input_stroke_color: "#FFFFFF".to_string(),
+            label_color: "#FFFFFF".to_string(),
+            background_color: "#000000".to_string(),
+            kiosk_mode: true,
+            enable_arrow_nav: true,
+            window_width: 1920.0,
+            window_height: 1080.0,
+            video_height_ratio: 0.92,
+            bar_height_ratio: 0.08,
+            splash_font_size: 48.0,
+            placeholder_font_size: 48.0,
+            demo_watermark_font_size: 24.0,
+            input_field_width: 45.0,
+            input_max_length: 3,
+            demo_watermark_x_offset: 200.0,
+            demo_watermark_y_offset: 10.0,
+            demo_watermark_width: 180.0,
+            demo_watermark_height: 30.0,
+            ui_spacing: 10.0,
+            stroke_width: 1.0,
+            invalid_input_timeout: 0.5,
+            no_video_popup_timeout: 3.0,
+        },
+        demo: DemoConfig {
+            timeout_seconds: 300,
+            max_videos: 5,
+            hip_number_limit: 5,
+        },
+    };
+
+    #[cfg(not(feature = "demo"))]
+    let config = Config {
         video: VideoConfig {
             directory: "./videos".to_string(),
         },
@@ -1453,6 +1561,23 @@ mod tests {
             background_color: "#000000".to_string(),
             kiosk_mode: true,
             enable_arrow_nav: true,
+            window_width: 1920.0,
+            window_height: 1080.0,
+            video_height_ratio: 0.92,
+            bar_height_ratio: 0.08,
+            splash_font_size: 48.0,
+            placeholder_font_size: 48.0,
+            demo_watermark_font_size: 24.0,
+            input_field_width: 45.0,
+            input_max_length: 3,
+            demo_watermark_x_offset: 200.0,
+            demo_watermark_y_offset: 10.0,
+            demo_watermark_width: 180.0,
+            demo_watermark_height: 30.0,
+            ui_spacing: 10.0,
+            stroke_width: 1.0,
+            invalid_input_timeout: 0.5,
+            no_video_popup_timeout: 3.0,
         };
         assert!(config.kiosk_mode);
         assert!(config.enable_arrow_nav);
@@ -1490,6 +1615,26 @@ mod tests {
             background_color: "#0000FF".to_string(),
             kiosk_mode: false,
             enable_arrow_nav: true,
+            window_width: "1920".to_string(),
+            window_height: "1080".to_string(),
+            video_height_ratio: "0.92".to_string(),
+            bar_height_ratio: "0.08".to_string(),
+            splash_font_size: "48".to_string(),
+            placeholder_font_size: "48".to_string(),
+            demo_watermark_font_size: "24".to_string(),
+            input_field_width: "45".to_string(),
+            input_max_length: "3".to_string(),
+            demo_watermark_x_offset: "200".to_string(),
+            demo_watermark_y_offset: "10".to_string(),
+            demo_watermark_width: "180".to_string(),
+            demo_watermark_height: "30".to_string(),
+            ui_spacing: "10".to_string(),
+            stroke_width: "1".to_string(),
+            invalid_input_timeout: "0.5".to_string(),
+            no_video_popup_timeout: "3".to_string(),
+            demo_timeout_seconds: "300".to_string(),
+            demo_max_videos: "5".to_string(),
+            demo_hip_number_limit: "5".to_string(),
             message: None,
         };
         assert_eq!(config_app.video_dir_input, "test");
@@ -1519,6 +1664,26 @@ mod tests {
             background_color: "#FF00FF".to_string(),
             kiosk_mode: true,
             enable_arrow_nav: false,
+            window_width: "1920".to_string(),
+            window_height: "1080".to_string(),
+            video_height_ratio: "0.92".to_string(),
+            bar_height_ratio: "0.08".to_string(),
+            splash_font_size: "48".to_string(),
+            placeholder_font_size: "48".to_string(),
+            demo_watermark_font_size: "24".to_string(),
+            input_field_width: "45".to_string(),
+            input_max_length: "3".to_string(),
+            demo_watermark_x_offset: "200".to_string(),
+            demo_watermark_y_offset: "10".to_string(),
+            demo_watermark_width: "180".to_string(),
+            demo_watermark_height: "30".to_string(),
+            ui_spacing: "10".to_string(),
+            stroke_width: "1".to_string(),
+            invalid_input_timeout: "0.5".to_string(),
+            no_video_popup_timeout: "3".to_string(),
+            demo_timeout_seconds: "300".to_string(),
+            demo_max_videos: "5".to_string(),
+            demo_hip_number_limit: "5".to_string(),
             message: None,
         };
 
