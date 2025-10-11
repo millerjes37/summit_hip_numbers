@@ -8,7 +8,7 @@ use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
 
-use file_scanner::{VideoFile, scan_video_files};
+use file_scanner::{scan_video_files, VideoFile};
 
 #[derive(Parser)]
 struct Cli {
@@ -765,6 +765,12 @@ impl MediaPlayerApp {
         app.load_logo();
         if !app.video_files.is_empty() {
             app.load_video_index = Some(0);
+        } else {
+            // If no videos but splash screens exist, ensure splash is showing
+            if !app.splash_images.is_empty() && app.config.splash.enabled {
+                app.show_splash = true;
+                info!("No videos found - starting with splash screens");
+            }
         }
         app
     }
@@ -857,10 +863,17 @@ impl MediaPlayerApp {
             video_dir_path.to_path_buf()
         } else if exe_dir.to_str().unwrap().contains("target") {
             // Development: use repo assets
-            std::env::current_dir()
-                .unwrap()
-                .join("assets")
-                .join(&self.config.video.directory)
+            // Check if the config path already contains "assets"
+            if self.config.video.directory.contains("assets") {
+                std::env::current_dir()
+                    .unwrap()
+                    .join(&self.config.video.directory)
+            } else {
+                std::env::current_dir()
+                    .unwrap()
+                    .join("assets")
+                    .join(&self.config.video.directory)
+            }
         } else {
             // Production: use exe dir
             exe_dir.join(&self.config.video.directory)
@@ -919,10 +932,17 @@ impl MediaPlayerApp {
             splash_dir_path.to_path_buf()
         } else if exe_dir.to_str().unwrap().contains("target") {
             // Development: use repo assets
-            std::env::current_dir()
-                .unwrap()
-                .join("assets")
-                .join(&self.config.splash.directory)
+            // Check if the config path already contains "assets"
+            if self.config.splash.directory.contains("assets") {
+                std::env::current_dir()
+                    .unwrap()
+                    .join(&self.config.splash.directory)
+            } else {
+                std::env::current_dir()
+                    .unwrap()
+                    .join("assets")
+                    .join(&self.config.splash.directory)
+            }
         } else {
             // Production: use exe dir
             exe_dir.join(&self.config.splash.directory)
@@ -1200,8 +1220,20 @@ impl eframe::App for MediaPlayerApp {
         if self.show_splash {
             self.splash_timer += ctx.input(|i| i.unstable_dt) as f64;
             if self.splash_timer >= self.config.splash.duration_seconds {
-                self.show_splash = false;
-                self.splash_texture = None;
+                // If no videos are loaded, keep cycling splash screens
+                if self.video_files.is_empty() && !self.splash_images.is_empty() {
+                    // Reset timer and move to next splash (if multiple)
+                    self.splash_timer = 0.0;
+                    if self.splash_images.len() > 1 {
+                        self.current_splash_index = (self.current_splash_index + 1) % self.splash_images.len();
+                        self.splash_texture = None; // Reset to load new image
+                        info!("No videos loaded - cycling to next splash screen {}", self.current_splash_index);
+                    }
+                    // If only one splash, just reset timer to keep showing it
+                } else {
+                    self.show_splash = false;
+                    self.splash_texture = None;
+                }
             } else {
                 // Load splash texture if not loaded
                 if self.splash_texture.is_none() {
