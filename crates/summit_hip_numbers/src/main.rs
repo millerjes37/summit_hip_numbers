@@ -1220,8 +1220,13 @@ impl eframe::App for MediaPlayerApp {
         if self.show_splash {
             self.splash_timer += ctx.input(|i| i.unstable_dt) as f64;
             if self.splash_timer >= self.config.splash.duration_seconds {
-                // If no videos are loaded, keep cycling splash screens
-                if self.video_files.is_empty() && !self.splash_images.is_empty() {
+                // If videos are loaded and splash interval is "once", hide splash
+                if !self.video_files.is_empty() && self.config.splash.interval == "once" {
+                    info!("Hiding splash screen after duration (videos loaded, interval=once)");
+                    self.show_splash = false;
+                    self.splash_texture = None;
+                } else if self.video_files.is_empty() && !self.splash_images.is_empty() {
+                    // If no videos are loaded, keep cycling splash screens
                     // Reset timer and move to next splash (if multiple)
                     self.splash_timer = 0.0;
                     if self.splash_images.len() > 1 {
@@ -1234,9 +1239,6 @@ impl eframe::App for MediaPlayerApp {
                         );
                     }
                     // If only one splash, just reset timer to keep showing it
-                } else {
-                    self.show_splash = false;
-                    self.splash_texture = None;
                 }
             } else {
                 // Load splash texture if not loaded
