@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use eframe::epaint::ColorImage;
 use gstreamer::prelude::*;
 use gstreamer::{Bin, Element, ElementFactory, MessageView, State};
@@ -57,27 +57,27 @@ impl VideoPlayer {
 
         // Add elements to bin
         video_bin
-            .add(&videoconvert)
+            .add(videoconvert.clone())
             .map_err(|e| anyhow!("Failed to add videoconvert: {:?}", e))?;
         video_bin
-            .add(&videoscale)
+            .add(videoscale.clone())
             .map_err(|e| anyhow!("Failed to add videoscale: {:?}", e))?;
         video_bin
-            .add(&capsfilter)
+            .add(capsfilter.clone())
             .map_err(|e| anyhow!("Failed to add capsfilter: {:?}", e))?;
         video_bin
-            .add(&appsink.clone().upcast::<Element>())
+            .add(appsink.clone().upcast::<Element>())
             .map_err(|e| anyhow!("Failed to add appsink: {:?}", e))?;
 
         // Link elements
         videoconvert
-            .link(&videoscale)
+            .link(videoscale.clone())
             .map_err(|e| anyhow!("Failed to link videoconvert to videoscale: {:?}", e))?;
         videoscale
-            .link(&capsfilter)
+            .link(capsfilter.clone())
             .map_err(|e| anyhow!("Failed to link videoscale to capsfilter: {:?}", e))?;
         capsfilter
-            .link(&appsink.clone().upcast::<Element>())
+            .link(appsink.clone().upcast::<Element>())
             .map_err(|e| anyhow!("Failed to link capsfilter to appsink: {:?}", e))?;
 
         // Set ghost pad
@@ -86,19 +86,19 @@ impl VideoPlayer {
             .ok_or_else(|| anyhow!("Failed to get sink pad"))?;
         video_bin
             .add_pad(
-                &gstreamer::GhostPad::with_target(&pad)
+                gstreamer::GhostPad::with_target(pad.clone())
                     .map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?,
             )
             .map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?;
 
         // Set video sink
-        pipeline.set_property("video-sink", &video_bin);
+        pipeline.set_property("video-sink", video_bin);
 
         // Create audio sink (autoaudiosink for system default)
         let audiosink = ElementFactory::make("autoaudiosink")
             .build()
             .map_err(|e| anyhow!("Failed to create audio sink: {:?}", e))?;
-        pipeline.set_property("audio-sink", &audiosink);
+        pipeline.set_property("audio-sink", audiosink);
 
         let eos = Arc::new(Mutex::new(false));
         let error = Arc::new(Mutex::new(None));
@@ -255,7 +255,7 @@ mod tests {
     use tokio::sync::watch;
 
     pub fn setup_gstreamer() -> bool {
-        if !gstreamer::init().is_ok() {
+        if gstreamer::init().is_err() {
             return false;
         }
         // Try to create a playbin to check if GStreamer is properly installed

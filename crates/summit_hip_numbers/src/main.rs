@@ -8,7 +8,7 @@ use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
 
-use file_scanner::{scan_video_files, VideoFile};
+use file_scanner::{VideoFile, scan_video_files};
 
 #[derive(Parser)]
 struct Cli {
@@ -26,8 +26,8 @@ use tokio::sync::watch;
 #[cfg(feature = "gstreamer")]
 use video_player::VideoPlayer;
 
-use chrono;
-use fern;
+use chrono; // Using full path for Local
+use fern; // Using full path for Dispatch
 use log::{error, info, warn};
 
 #[derive(Debug, Deserialize, serde::Serialize)]
@@ -596,6 +596,7 @@ struct MediaPlayerApp {
     current_splash_index: usize,
     videos_played: usize,
     splash_texture: Option<egui::TextureHandle>,
+    logo_uri: Option<String>,
     #[cfg(feature = "demo")]
     start_time: Instant,
 }
@@ -749,6 +750,7 @@ impl Default for MediaPlayerApp {
             current_splash_index: 0,
             videos_played: 0,
             splash_texture: None,
+            logo_uri: None,
             #[cfg(feature = "demo")]
             start_time: Instant::now(),
         }
@@ -760,10 +762,39 @@ impl MediaPlayerApp {
         let mut app = Self::load_config();
         app.check_asset_integrity();
         app.load_video_files();
+        app.load_logo();
         if !app.video_files.is_empty() {
             app.load_video_index = Some(0);
         }
         app
+    }
+
+    fn load_logo(&mut self) {
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let logo_path = if exe_dir.to_str().unwrap().contains("target") {
+            // Development: use repo assets
+            std::env::current_dir()
+                .unwrap()
+                .join("assets")
+                .join("logo")
+                .join("logo.svg")
+        } else {
+            // Production: use exe dir
+            exe_dir.join("logo").join("logo.svg")
+        };
+
+        if logo_path.exists() {
+            // Convert path to file:// URI for egui_extras
+            let uri = format!("file://{}", logo_path.display());
+            self.logo_uri = Some(uri);
+            info!("Logo loaded from {}", logo_path.display());
+        } else {
+            warn!("Logo not found at {}", logo_path.display());
+        }
     }
 
     fn load_config() -> Self {
@@ -1388,7 +1419,7 @@ impl eframe::App for MediaPlayerApp {
                         );
                         self.input_buffer = input_text
                             .chars()
-                            .filter(|c| c.is_digit(10))
+                            .filter(|c| c.is_ascii_digit())
                             .take(self.config.ui.input_max_length)
                             .collect();
 
@@ -1415,21 +1446,38 @@ impl eframe::App for MediaPlayerApp {
                                     "{} {}",
                                     self.config.ui.now_playing_label, self.current_file_name
                                 ))
-                                .color(Self::hex_to_color(&self.config.ui.label_color))
-                                .size(self.config.ui.placeholder_font_size),
+                                .color(Self::hex_to_color(&self.config.ui.label_color)),
                             );
                         },
                     );
 
                     ui.add_space(self.config.ui.ui_spacing); // Spacing
 
-                    // Right: Company label
+                    // Right: Logo
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(self.config.ui.ui_spacing);
-                        ui.label(
-                            egui::RichText::new(&self.config.ui.company_label)
-                                .color(Self::hex_to_color(&self.config.ui.label_color)),
-                        );
+                        ui.add_space(self.config.ui.ui_spacing * 3.0); // Add more padding from right edge
+                        if let Some(_logo_uri) = &self.logo_uri {
+                            // Calculate logo size to fit within the bar height
+                            let max_height = bar_height * 0.7; // Use 70% of bar height
+                            let logo_size = egui::Vec2::new(200.0, max_height);
+
+                            // Include the SVG bytes at compile time
+                            ui.add(
+                                egui::Image::from_bytes(
+                                    "bytes://logo.svg",
+                                    include_bytes!("../../../assets/logo/logo.svg"),
+                                )
+                                .fit_to_exact_size(logo_size)
+                                .maintain_aspect_ratio(true),
+                            );
+                        } else {
+                            // Fallback to text if no logo
+                            ui.label(
+                                egui::RichText::new(&self.config.ui.company_label)
+                                    .color(Self::hex_to_color(&self.config.ui.label_color))
+                                    .strong(),
+                            );
+                        }
                     });
                 });
             });
@@ -2213,7 +2261,11 @@ fn main() -> eframe::Result<()> {
         return eframe::run_native(
             "Summit Hip Numbers Config",
             options,
-            Box::new(|_cc| Ok(Box::new(ConfigApp::new()))),
+            Box::new(|cc| {
+                // Install image loaders
+                egui_extras::install_image_loaders(&cc.egui_ctx);
+                Ok(Box::new(ConfigApp::new()))
+            }),
         );
     } else {
         // Load config to check kiosk mode
@@ -2256,7 +2308,11 @@ fn main() -> eframe::Result<()> {
         return eframe::run_native(
             "Summit Hip Numbers Media Player",
             options,
-            Box::new(|_cc| Ok(Box::new(MediaPlayerApp::new()))),
+            Box::new(|cc| {
+                // Install image loaders
+                egui_extras::install_image_loaders(&cc.egui_ctx);
+                Ok(Box::new(MediaPlayerApp::new()))
+            }),
         );
     }
 }
