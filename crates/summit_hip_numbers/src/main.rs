@@ -576,7 +576,7 @@ impl eframe::App for ConfigApp {
 struct MediaPlayerApp {
     config: Config,
     video_files: Vec<VideoFile>,
-    hip_to_index: HashMap<String, usize>,
+    hip_to_index: HashMap<String, Vec<usize>>,
     current_index: usize,
     input_buffer: String,
     current_file_name: String,
@@ -900,7 +900,10 @@ impl MediaPlayerApp {
                 // Create lookup map for fast hip number access
                 self.hip_to_index.clear();
                 for (index, video) in self.video_files.iter().enumerate() {
-                    self.hip_to_index.insert(video.hip_number.clone(), index);
+                    self.hip_to_index
+                        .entry(video.hip_number.clone())
+                        .or_insert_with(Vec::new)
+                        .push(index);
                 }
 
                 if !self.video_files.is_empty() {
@@ -1132,12 +1135,21 @@ impl MediaPlayerApp {
                 return false;
             }
 
-            if let Some(&index) = self.hip_to_index.get(input) {
-                self.current_index = index;
-                self.load_video_index = Some(index);
-                self.videos_played += 1;
-                info!("Switching to video index {} for hip {}", index, input);
-                return true;
+            if let Some(indices) = self.hip_to_index.get(input) {
+                if !indices.is_empty() {
+                    // Load the first video for this hip number
+                    let index = indices[0];
+                    self.current_index = index;
+                    self.load_video_index = Some(index);
+                    self.videos_played += 1;
+                    info!(
+                        "Switching to video index {} for hip {} (1 of {} videos)",
+                        index,
+                        input,
+                        indices.len()
+                    );
+                    return true;
+                }
             } else {
                 // No video found
                 self.show_no_video_popup = true;
@@ -1150,6 +1162,30 @@ impl MediaPlayerApp {
 
     fn next_video(&mut self) {
         if !self.video_files.is_empty() {
+            // First check if current video has more videos for the same hip number
+            if let Some(current_video) = self.video_files.get(self.current_index) {
+                let current_hip = &current_video.hip_number;
+                if let Some(indices) = self.hip_to_index.get(current_hip) {
+                    // Find current position in the hip's video list
+                    if let Some(pos) = indices.iter().position(|&idx| idx == self.current_index) {
+                        // If there are more videos for this hip, play the next one
+                        if pos + 1 < indices.len() {
+                            let next_index = indices[pos + 1];
+                            self.current_index = next_index;
+                            self.load_video_index = Some(next_index);
+                            info!(
+                                "Playing next video for hip {} ({} of {})",
+                                current_hip,
+                                pos + 2,
+                                indices.len()
+                            );
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Otherwise, move to the next video in the list
             let next_index = (self.current_index + 1) % self.video_files.len();
             self.current_index = next_index;
             self.load_video_index = Some(next_index);
@@ -1290,14 +1326,18 @@ impl eframe::App for MediaPlayerApp {
             }
         }
 
-        // Check if we should show splash
-        if self.should_show_splash() && !self.show_splash {
+        // Check if we should show splash between videos
+        // Only check this after initial splash has been shown
+        if self.videos_played > 0 && self.should_show_splash() && !self.show_splash {
             self.show_splash = true;
             self.splash_timer = 0.0;
             self.current_splash_index =
                 (self.current_splash_index + 1) % self.splash_images.len().max(1);
             self.splash_texture = None; // Reset to load new
-            info!("Showing splash screen, index {}", self.current_splash_index);
+            info!(
+                "Showing splash screen between videos, index {}",
+                self.current_splash_index
+            );
         }
 
         ctx.input_mut(|i| {
