@@ -15,6 +15,7 @@ struct Cli {
     #[arg(long)]
     config: bool,
 }
+use rand::Rng;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -51,7 +52,9 @@ struct SplashConfig {
     text: String,
     background_color: String,
     text_color: String,
-    interval: String,
+    interval: usize,               // Show splash every N videos (0 = only at startup)
+    rotation_mode: Option<String>, // "cycle", "random", or "static"
+    static_splash_path: Option<String>, // For "static" mode
     directory: String,
 }
 
@@ -200,7 +203,9 @@ impl ConfigApp {
                 text: "Summit Professional Services".to_string(),
                 background_color: "#000000".to_string(),
                 text_color: "#FFFFFF".to_string(),
-                interval: "once".to_string(),
+                interval: 0,
+                rotation_mode: None,
+                static_splash_path: None,
                 directory: "./splash".to_string(),
             },
             logging: LoggingConfig {
@@ -617,7 +622,9 @@ impl Default for MediaPlayerApp {
                 text: "Summit Professional Services".to_string(),
                 background_color: "#000000".to_string(),
                 text_color: "#FFFFFF".to_string(),
-                interval: "once".to_string(),
+                interval: 0,
+                rotation_mode: None,
+                static_splash_path: None,
                 directory: "./splash".to_string(),
             },
             logging: LoggingConfig {
@@ -670,7 +677,9 @@ impl Default for MediaPlayerApp {
                 text: "Summit Professional Services".to_string(),
                 background_color: "#000000".to_string(),
                 text_color: "#FFFFFF".to_string(),
-                interval: "once".to_string(),
+                interval: 0,
+                rotation_mode: None,
+                static_splash_path: None,
                 directory: "./splash".to_string(),
             },
             logging: LoggingConfig {
@@ -1025,13 +1034,14 @@ impl MediaPlayerApp {
         if !self.config.splash.enabled {
             return false;
         }
-        match self.config.splash.interval.as_str() {
-            "once" => self.videos_played == 0,
-            "every" => self.videos_played > 0,
-            "every_other" => self.videos_played > 0 && self.videos_played % 2 == 1,
-            "every_third" => self.videos_played > 0 && self.videos_played % 3 == 1,
-            _ => false,
+
+        // interval = 0 means only show at startup
+        if self.config.splash.interval == 0 {
+            return self.videos_played == 0;
         }
+
+        // Show splash every N videos
+        self.videos_played % self.config.splash.interval == 0
     }
 
     fn trim_log(&self) {
@@ -1189,6 +1199,11 @@ impl MediaPlayerApp {
             let next_index = (self.current_index + 1) % self.video_files.len();
             self.current_index = next_index;
             self.load_video_index = Some(next_index);
+            self.videos_played += 1;
+            info!(
+                "Auto-advancing to next video, total played: {}",
+                self.videos_played
+            );
         }
     }
 
@@ -1327,16 +1342,52 @@ impl eframe::App for MediaPlayerApp {
         }
 
         // Check if we should show splash between videos
-        // Only check this after initial splash has been shown
-        if self.videos_played > 0 && self.should_show_splash() && !self.show_splash {
+        if self.should_show_splash() && !self.show_splash && self.load_video_index.is_some() {
+            // Delay video loading until after splash
             self.show_splash = true;
             self.splash_timer = 0.0;
-            self.current_splash_index =
-                (self.current_splash_index + 1) % self.splash_images.len().max(1);
+
+            // Select splash screen based on rotation mode
+            match self.config.splash.rotation_mode.as_deref() {
+                Some("cycle") => {
+                    // Cycle through splash screens in order
+                    self.current_splash_index =
+                        (self.current_splash_index + 1) % self.splash_images.len().max(1);
+                }
+                Some("random") => {
+                    // Pick a random splash screen
+                    if !self.splash_images.is_empty() {
+                        let mut rng = rand::thread_rng();
+                        self.current_splash_index = rng.gen_range(0..self.splash_images.len());
+                    }
+                }
+                Some("static") => {
+                    // Use static splash if specified
+                    if let Some(static_path) = &self.config.splash.static_splash_path {
+                        // Find index of static splash in splash_images
+                        if let Some(idx) = self
+                            .splash_images
+                            .iter()
+                            .position(|p| p.to_string_lossy() == *static_path)
+                        {
+                            self.current_splash_index = idx;
+                        }
+                    }
+                }
+                _ => {
+                    // Default: cycle through splash screens
+                    self.current_splash_index =
+                        (self.current_splash_index + 1) % self.splash_images.len().max(1);
+                }
+            }
+
             self.splash_texture = None; // Reset to load new
             info!(
-                "Showing splash screen between videos, index {}",
-                self.current_splash_index
+                "Showing splash screen {} before video {} (interval: {}, mode: {:?})",
+                self.current_splash_index,
+                self.videos_played + 1,
+                self.config.splash.interval,
+                self.config.splash.rotation_mode
             );
         }
 
@@ -1377,8 +1428,11 @@ impl eframe::App for MediaPlayerApp {
             }
         }
 
-        if let Some(index) = self.load_video_index.take() {
-            self.load_video(index);
+        // Load video only if splash screen is not showing
+        if !self.show_splash {
+            if let Some(index) = self.load_video_index.take() {
+                self.load_video(index);
+            }
         }
 
         self.update_playback(current_time);
@@ -1775,7 +1829,9 @@ mod tests {
                 text: "Test Splash".to_string(),
                 background_color: "#FF0000".to_string(),
                 text_color: "#00FF00".to_string(),
-                interval: "once".to_string(),
+                interval: 0,
+                rotation_mode: None,
+                static_splash_path: None,
                 directory: "./test_splash".to_string(),
             },
             logging: LoggingConfig {
@@ -1845,7 +1901,9 @@ mod tests {
             text: "Summit Professional Services".to_string(),
             background_color: "#000000".to_string(),
             text_color: "#FFFFFF".to_string(),
-            interval: "once".to_string(),
+            interval: 0,
+            rotation_mode: None,
+            static_splash_path: None,
             directory: "./splash".to_string(),
         };
         assert!(config.enabled);

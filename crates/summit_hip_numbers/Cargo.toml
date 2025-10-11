@@ -20,6 +20,7 @@ chrono = "0.4.38"
 tokio = { version = "1.38.0", features = ["sync"] }
 image = "0.25.2"
 dunce = "1.0"
+rand = "0.8"
 
 [dev-dependencies]
 tempfile = "3"
