@@ -536,58 +536,77 @@ struct MediaPlayerApp {
 impl Default for MediaPlayerApp {
     fn default() -> Self {
         let (tx, rx) = watch::channel(None);
+
+        // Create base config
+        let mut config = Config {
+            video: VideoConfig {
+                directory: "./videos".to_string(),
+            },
+            splash: SplashConfig {
+                enabled: true,
+                duration_seconds: 3.0,
+                text: "Summit Professional Services".to_string(),
+                background_color: "#000000".to_string(),
+                text_color: "#FFFFFF".to_string(),
+                interval: "once".to_string(),
+                directory: "./splash".to_string(),
+            },
+            logging: LoggingConfig {
+                file: "summit_hip_numbers.log".to_string(),
+                max_lines: 10000,
+            },
+            ui: UiConfig {
+                input_label: "3-digit hip number:".to_string(),
+                now_playing_label: "now playing".to_string(),
+                company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+                input_text_color: "#FFFFFF".to_string(),
+                input_stroke_color: "#FFFFFF".to_string(),
+                label_color: "#FFFFFF".to_string(),
+                background_color: "#000000".to_string(),
+                kiosk_mode: true,
+                enable_arrow_nav: true,
+                window_width: 1920.0,
+                window_height: 1080.0,
+                video_height_ratio: 0.92,
+                bar_height_ratio: 0.08,
+                splash_font_size: 48.0,
+                placeholder_font_size: 48.0,
+                demo_watermark_font_size: 24.0,
+                input_field_width: 45.0,
+                input_max_length: 3,
+                demo_watermark_x_offset: 200.0,
+                demo_watermark_y_offset: 10.0,
+                demo_watermark_width: 180.0,
+                demo_watermark_height: 30.0,
+                ui_spacing: 10.0,
+                stroke_width: 1.0,
+                invalid_input_timeout: 0.5,
+                no_video_popup_timeout: 3.0,
+            },
+            demo: DemoConfig {
+                timeout_seconds: 300,
+                max_videos: 5,
+                hip_number_limit: 5,
+            },
+        };
+
+        // Demo mode: Override with hardcoded demo settings
+        #[cfg(feature = "demo")]
+        {
+            config.video.directory = "./videos".to_string();
+            config.demo.timeout_seconds = 300;
+            config.demo.max_videos = 5;
+            config.demo.hip_number_limit = 5;
+            config.ui.window_width = 1920.0;
+            config.ui.window_height = 1080.0;
+            config.ui.kiosk_mode = true;
+            config.ui.enable_arrow_nav = true;
+            config.splash.enabled = true;
+            config.splash.duration_seconds = 3.0;
+        }
+
         Self {
-            config: Config {
-                video: VideoConfig {
-                    directory: "./videos".to_string(),
-                },
-                splash: SplashConfig {
-                    enabled: true,
-                    duration_seconds: 3.0,
-                    text: "Summit Professional Services".to_string(),
-                    background_color: "#000000".to_string(),
-                    text_color: "#FFFFFF".to_string(),
-                    interval: "once".to_string(),
-                    directory: "./splash".to_string(),
-                },
-                logging: LoggingConfig {
-                    file: "summit_hip_numbers.log".to_string(),
-                    max_lines: 10000,
-              },
-                   ui: UiConfig {
-                       input_label: "3-digit hip number:".to_string(),
-                       now_playing_label: "now playing".to_string(),
-                       company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
-                       input_text_color: "#FFFFFF".to_string(),
-                       input_stroke_color: "#FFFFFF".to_string(),
-                       label_color: "#FFFFFF".to_string(),
-                       background_color: "#000000".to_string(),
-                       kiosk_mode: true,
-                       enable_arrow_nav: true,
-                       window_width: 1920.0,
-                       window_height: 1080.0,
-                       video_height_ratio: 0.92,
-                       bar_height_ratio: 0.08,
-                       splash_font_size: 48.0,
-                       placeholder_font_size: 48.0,
-                       demo_watermark_font_size: 24.0,
-                       input_field_width: 45.0,
-                       input_max_length: 3,
-                       demo_watermark_x_offset: 200.0,
-                       demo_watermark_y_offset: 10.0,
-                       demo_watermark_width: 180.0,
-                       demo_watermark_height: 30.0,
-                       ui_spacing: 10.0,
-                       stroke_width: 1.0,
-                       invalid_input_timeout: 0.5,
-                       no_video_popup_timeout: 3.0,
-                   },
-                   demo: DemoConfig {
-                       timeout_seconds: 300,
-                       max_videos: 5,
-                       hip_number_limit: 5,
-                   },
-              },
+            config,
             video_files: Vec::new(),
             hip_to_index: HashMap::new(),
             current_index: 0,
@@ -647,10 +666,19 @@ impl MediaPlayerApp {
             warn!("Config file not found, using defaults");
         }
 
-        // Demo mode: Force default video directory to ensure only bundled samples are used
+        // Demo mode: Force specific configuration settings for consistent demo experience
         #[cfg(feature = "demo")]
         {
             app.config.video.directory = exe_dir.join("videos").to_string_lossy().to_string();
+            app.config.demo.timeout_seconds = 300; // 5 minutes
+            app.config.demo.max_videos = 5;
+            app.config.demo.hip_number_limit = 5;
+            app.config.ui.window_width = 1920.0;
+            app.config.ui.window_height = 1080.0;
+            app.config.ui.kiosk_mode = true;
+            app.config.ui.enable_arrow_nav = true;
+            app.config.splash.enabled = true;
+            app.config.splash.duration_seconds = 3.0;
         }
 
         // Set default video directory relative to exe
@@ -1195,7 +1223,7 @@ fn load_config_for_kiosk() -> Config {
         }
     }
     // Return default config if loading fails
-    Config {
+    let mut config = Config {
         video: VideoConfig {
             directory: "./videos".to_string(),
         },
@@ -1212,40 +1240,57 @@ fn load_config_for_kiosk() -> Config {
             file: "summit_hip_numbers.log".to_string(),
             max_lines: 10000,
         },
-                    ui: UiConfig {
-                        input_label: "3-digit hip number:".to_string(),
-                        now_playing_label: "now playing".to_string(),
-                        company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
-                        input_text_color: "#FFFFFF".to_string(),
-                        input_stroke_color: "#FFFFFF".to_string(),
-                        label_color: "#FFFFFF".to_string(),
-                        background_color: "#000000".to_string(),
-                        kiosk_mode: true,
-                        enable_arrow_nav: true,
-                        window_width: 1920.0,
-                        window_height: 1080.0,
-                        video_height_ratio: 0.92,
-                        bar_height_ratio: 0.08,
-                        splash_font_size: 48.0,
-                        placeholder_font_size: 48.0,
-                        demo_watermark_font_size: 24.0,
-                        input_field_width: 45.0,
-                        input_max_length: 3,
-                        demo_watermark_x_offset: 200.0,
-                        demo_watermark_y_offset: 10.0,
-                        demo_watermark_width: 180.0,
-                        demo_watermark_height: 30.0,
-                        ui_spacing: 10.0,
-                        stroke_width: 1.0,
-                        invalid_input_timeout: 0.5,
-                        no_video_popup_timeout: 3.0,
-                    },
-                    demo: DemoConfig {
-                        timeout_seconds: 300,
-                        max_videos: 5,
-                        hip_number_limit: 5,
-                    },
+        ui: UiConfig {
+            input_label: "3-digit hip number:".to_string(),
+            now_playing_label: "now playing".to_string(),
+            company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+            input_text_color: "#FFFFFF".to_string(),
+            input_stroke_color: "#FFFFFF".to_string(),
+            label_color: "#FFFFFF".to_string(),
+            background_color: "#000000".to_string(),
+            kiosk_mode: true,
+            enable_arrow_nav: true,
+            window_width: 1920.0,
+            window_height: 1080.0,
+            video_height_ratio: 0.92,
+            bar_height_ratio: 0.08,
+            splash_font_size: 48.0,
+            placeholder_font_size: 48.0,
+            demo_watermark_font_size: 24.0,
+            input_field_width: 45.0,
+            input_max_length: 3,
+            demo_watermark_x_offset: 200.0,
+            demo_watermark_y_offset: 10.0,
+            demo_watermark_width: 180.0,
+            demo_watermark_height: 30.0,
+            ui_spacing: 10.0,
+            stroke_width: 1.0,
+            invalid_input_timeout: 0.5,
+            no_video_popup_timeout: 3.0,
+        },
+        demo: DemoConfig {
+            timeout_seconds: 300,
+            max_videos: 5,
+            hip_number_limit: 5,
+        },
+    };
+
+    // Demo mode: Override with hardcoded demo settings
+    #[cfg(feature = "demo")]
+    {
+        config.video.directory = "./videos".to_string();
+        config.demo.timeout_seconds = 300;
+        config.demo.max_videos = 5;
+        config.demo.hip_number_limit = 5;
+        config.ui.window_width = 1920.0;
+        config.ui.window_height = 1080.0;
+        config.ui.kiosk_mode = true;
+        config.ui.enable_arrow_nav = true;
+        config.splash.enabled = true;
+        config.splash.duration_seconds = 3.0;
     }
+
+    config
 }
 
 fn load_config_for_logging() -> LoggingConfig {
