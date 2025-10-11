@@ -1015,7 +1015,7 @@ impl MediaPlayerApp {
         }
 
         // Show splash every N videos
-        self.videos_played % self.config.splash.interval == 0
+        self.videos_played.is_multiple_of(&self.config.splash.interval)
     }
 
     fn trim_log(&self) {
@@ -1377,14 +1377,13 @@ impl eframe::App for MediaPlayerApp {
             }
         });
 
-        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            if !self.input_buffer.is_empty() {
+        if ctx.input(|i| i.key_pressed(egui::Key::Enter))
+            && !self.input_buffer.is_empty() {
                 let input = self.input_buffer.clone();
                 if !self.validate_and_switch(&input) {
                     self.invalid_input_timer = self.config.ui.invalid_input_timeout;
                 }
                 self.input_buffer.clear();
-            }
         }
 
         // Arrow key navigation
@@ -2045,7 +2044,7 @@ mod tests {
         assert_eq!(config_app.config.video.directory, "./new_videos");
         assert!(!config_app.config.splash.enabled);
         assert_eq!(config_app.config.splash.duration_seconds, 5.0);
-        assert_eq!(config_app.config.ui.kiosk_mode, true);
+        assert!(config_app.config.ui.kiosk_mode);
     }
 
     #[test]
