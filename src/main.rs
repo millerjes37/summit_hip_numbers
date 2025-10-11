@@ -3,6 +3,7 @@ mod video_player;
 
 use clap::Parser;
 use eframe::egui;
+use dunce;
 
 #[derive(Parser)]
 struct Args {
@@ -490,7 +491,7 @@ impl MediaPlayerApp {
             self.current_file_name = video_file.name.clone();
             info!("Loading video: {}", std::path::Path::new(&video_file.path).display());
 
-            let abs_path = match std::fs::canonicalize(&video_file.path) {
+            let abs_path = match dunce::canonicalize(&video_file.path) {
                 Ok(path) => path,
                 Err(e) => {
                     error!("Failed to canonicalize path {}: {}", video_file.path, e);
@@ -498,7 +499,7 @@ impl MediaPlayerApp {
                     return;
                 }
             };
-            let uri = format!("file://{}", abs_path.display());
+            let uri = format!("file://{}", abs_path.to_string_lossy().replace("\\", "/"));
 
             match VideoPlayer::new(&uri, self.texture_sender.clone()) {
                 Ok(player) => {

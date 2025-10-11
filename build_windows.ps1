@@ -268,8 +268,8 @@ echo Starting Summit Hip Numbers Media Player...
 
 REM Set GStreamer environment variables for portable version
 set GST_PLUGIN_PATH=%~dp0lib\gstreamer-1.0
-set GST_PLUGIN_SYSTEM_PATH=%~dp0lib\gstreamer-1.0
-set PATH=%~dp0;%PATH%
+set GST_PLUGIN_SYSTEM_PATH=
+set PATH=%~dp0;%~dp0bin;%PATH%
 
 REM Change to the application directory
 cd /d "%~dp0"
