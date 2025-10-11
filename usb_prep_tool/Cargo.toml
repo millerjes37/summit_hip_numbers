@@ -1,0 +1,20 @@
+[package]
+name = "summit_usb_prep"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.29"
+egui = "0.29"
+notify = "6.1"
+walkdir = "2.5"
+anyhow = "1.0"
+rfd = "0.14"
+
+[package.metadata.bundle]
+name = "Summit USB Prep"
+identifier = "com.summit.usbprep"
+version = "0.1.0"
+category = "Utility"
+short_description = "Prepares USB drives for Summit kiosks"
+long_description = "A simple GUI tool to copy Summit kiosk software to USB drives"
