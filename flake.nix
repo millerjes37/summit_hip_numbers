@@ -36,12 +36,13 @@
            };
            nativeBuildInputs = [ pkgs.pkg-config ];
            buildInputs = gstLibs;
-            postInstall = ''
-              # Copy assets to bin directory where the binary is
-              cp config.toml $out/bin/
-              cp -r videos $out/bin/ 2>/dev/null || true
-              cp -r splash $out/bin/ 2>/dev/null || true
-            '';
+             postInstall = ''
+               # Copy assets to bin directory where the binary is
+               cp config.toml $out/bin/
+               cp -r videos $out/bin/ 2>/dev/null || true
+               cp -r splash $out/bin/ 2>/dev/null || true
+               cp -r logo $out/bin/ 2>/dev/null || true
+             '';
          };
 
         # macOS build with cargo-bundle for DMG
@@ -54,14 +55,15 @@
           postBuild = ''
             cargo-bundle --release --format dmg
           '';
-          installPhase = ''
-            mkdir -p $out
-            cp -r target/release/bundle/osx/* $out/
-            # Copy config and assets
-            cp config.toml $out/
-            cp -r videos $out/ 2>/dev/null || true
-            cp -r splash $out/ 2>/dev/null || true
-          '';
+           installPhase = ''
+             mkdir -p $out
+             cp -r target/release/bundle/osx/* $out/
+             # Copy config and assets
+             cp config.toml $out/
+             cp -r videos $out/ 2>/dev/null || true
+             cp -r splash $out/ 2>/dev/null || true
+             cp -r logo $out/ 2>/dev/null || true
+           '';
         };
       });
 }

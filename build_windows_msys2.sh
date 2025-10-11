@@ -132,6 +132,11 @@ if [ -d "splash" ]; then
     echo "  ✓ splash directory"
 fi
 
+if [ -d "logo" ]; then
+    cp -r "logo" "$DIST_DIR/"
+    echo "  ✓ logo directory"
+fi
+
 # Step 8: Create launcher script
 echo ""
 echo "=== Creating launcher script ==="

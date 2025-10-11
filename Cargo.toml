@@ -16,10 +16,12 @@ long_description = "A video player application for displaying hip number videos"
 "config.toml" = "config.toml"
 "videos/" = "videos/"
 "splash/" = "splash/"
+"logo/" = "logo/"
 
 [dependencies]
 eframe = "0.29"
 egui = "0.29"
+egui_extras = { version = "0.29.0", features = ["svg"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"

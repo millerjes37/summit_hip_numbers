@@ -6,6 +6,7 @@ use eframe::egui;
 use dunce;
 use gstreamer::glib;
 
+
 #[derive(Parser)]
 struct Args {
     #[arg(long)]
@@ -361,6 +362,7 @@ impl MediaPlayerApp {
     fn new() -> Self {
         let mut app = Self::load_config();
         app.load_video_files();
+        app.load_logo();
         if !app.video_files.is_empty() {
             app.load_video_index = Some(0);
         }
@@ -444,6 +446,11 @@ impl MediaPlayerApp {
         } else {
             warn!("Splash directory {} does not exist", splash_dir.display());
         }
+    }
+
+    fn load_logo(&mut self) {
+        // SVG logo loading will be implemented later when egui API stabilizes
+        // For now, we use the text fallback in the UI
     }
 
     fn should_show_splash(&self) -> bool {
@@ -778,6 +785,7 @@ impl eframe::App for MediaPlayerApp {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // For now, use text label - SVG loading needs more work with current egui API
                         ui.label(
                             egui::RichText::new(&self.config.ui.company_label)
                                 .color(Self::hex_to_color(&self.config.ui.label_color)),
