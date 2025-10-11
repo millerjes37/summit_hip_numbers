@@ -2376,7 +2376,7 @@ fn main() -> eframe::Result<()> {
             viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
             ..Default::default()
         };
-        return eframe::run_native(
+        eframe::run_native(
             "Summit Hip Numbers Config",
             options,
             Box::new(|cc| {
@@ -2384,7 +2384,7 @@ fn main() -> eframe::Result<()> {
                 egui_extras::install_image_loaders(&cc.egui_ctx);
                 Ok(Box::new(ConfigApp::new()))
             }),
-        );
+        )
     } else {
         // Load config to check kiosk mode
         let config = load_config_for_kiosk();
@@ -2423,7 +2423,7 @@ fn main() -> eframe::Result<()> {
             ..Default::default()
         };
 
-        return eframe::run_native(
+        eframe::run_native(
             "Summit Hip Numbers Media Player",
             options,
             Box::new(|cc| {
@@ -2431,6 +2431,6 @@ fn main() -> eframe::Result<()> {
                 egui_extras::install_image_loaders(&cc.egui_ctx);
                 Ok(Box::new(MediaPlayerApp::new()))
             }),
-        );
+        )
     }
 }
