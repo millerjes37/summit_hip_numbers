@@ -53,6 +53,15 @@ if [ -f "$TARGET_DIR/$EXE_NAME" ]; then
     cp "$TARGET_DIR/$EXE_NAME" "$DIST_DIR/$EXE_OUTPUT_NAME"
     exe_size=$(du -h "$DIST_DIR/$EXE_OUTPUT_NAME" | cut -f1)
     echo "✓ Copied $EXE_OUTPUT_NAME ($exe_size)"
+
+# Step 4: Create version file
+echo ""
+echo "=== Creating version file ==="
+VERSION_FILE="$DIST_DIR/VERSION.txt"
+echo "Build: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" > "$VERSION_FILE"
+echo "Git Commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')" >> "$VERSION_FILE"
+echo "Variant: $VARIANT" >> "$VERSION_FILE"
+echo "✓ Created version file"
 else
     echo "ERROR: Executable not found at $TARGET_DIR/$EXE_NAME"
     exit 1

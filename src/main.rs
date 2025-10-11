@@ -66,6 +66,7 @@ struct UiConfig {
     input_stroke_color: String,
     label_color: String,
     background_color: String,
+    kiosk_mode: bool,
 }
 
 struct ConfigApp {
@@ -85,6 +86,7 @@ struct ConfigApp {
     input_stroke_color: String,
     label_color: String,
     background_color: String,
+    kiosk_mode: bool,
     message: Option<String>,
 }
 
@@ -106,6 +108,7 @@ impl ConfigApp {
         app.input_stroke_color = app.config.ui.input_stroke_color.clone();
         app.label_color = app.config.ui.label_color.clone();
         app.background_color = app.config.ui.background_color.clone();
+        app.kiosk_mode = app.config.ui.kiosk_mode;
         app
     }
 
@@ -129,15 +132,16 @@ impl ConfigApp {
                 file: "summit_hip_numbers.log".to_string(),
                 max_lines: 10000,
             },
-            ui: UiConfig {
-                input_label: "3-digit hip number:".to_string(),
-                now_playing_label: "now playing".to_string(),
-                company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
-                input_text_color: "#FFFFFF".to_string(),
-                input_stroke_color: "#FFFFFF".to_string(),
-                label_color: "#FFFFFF".to_string(),
-                background_color: "#000000".to_string(),
-            },
+                 ui: UiConfig {
+                     input_label: "3-digit hip number:".to_string(),
+                     now_playing_label: "now playing".to_string(),
+                     company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+                     input_text_color: "#FFFFFF".to_string(),
+                     input_stroke_color: "#FFFFFF".to_string(),
+                     label_color: "#FFFFFF".to_string(),
+                     background_color: "#000000".to_string(),
+                     kiosk_mode: true,
+                 },
         };
         if let Ok(config_str) = fs::read_to_string(config_path) {
             if let Ok(loaded_config) = toml::from_str(&config_str) {
@@ -161,6 +165,7 @@ impl ConfigApp {
             input_stroke_color: String::new(),
             label_color: String::new(),
             background_color: String::new(),
+            kiosk_mode: false,
             message: None,
         }
     }
@@ -183,6 +188,7 @@ impl ConfigApp {
         self.config.ui.input_stroke_color = self.input_stroke_color.clone();
         self.config.ui.label_color = self.label_color.clone();
         self.config.ui.background_color = self.background_color.clone();
+        self.config.ui.kiosk_mode = self.kiosk_mode;
 
         let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
         let config_path = exe_dir.join("config.toml");
@@ -248,6 +254,8 @@ impl eframe::App for ConfigApp {
             ui.text_edit_singleline(&mut self.now_playing_label);
             ui.label("Company Label:");
             ui.text_edit_singleline(&mut self.company_label);
+
+            ui.checkbox(&mut self.kiosk_mode, "Enable Kiosk Mode (fullscreen, no decorations)");
 
             ui.label("UI Colors (hex):");
             ui.label("Input Text Color:");
@@ -328,15 +336,16 @@ impl Default for MediaPlayerApp {
                     file: "summit_hip_numbers.log".to_string(),
                     max_lines: 10000,
                 },
-                ui: UiConfig {
-                    input_label: "3-digit hip number:".to_string(),
-                    now_playing_label: "now playing".to_string(),
-                    company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
-                    input_text_color: "#FFFFFF".to_string(),
-                    input_stroke_color: "#FFFFFF".to_string(),
-                    label_color: "#FFFFFF".to_string(),
-                    background_color: "#000000".to_string(),
-                },
+                 ui: UiConfig {
+                     input_label: "3-digit hip number:".to_string(),
+                     now_playing_label: "now playing".to_string(),
+                     company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+                     input_text_color: "#FFFFFF".to_string(),
+                     input_stroke_color: "#FFFFFF".to_string(),
+                     label_color: "#FFFFFF".to_string(),
+                     background_color: "#000000".to_string(),
+                     kiosk_mode: true,
+                 },
             },
             video_files: Vec::new(),
             hip_to_index: HashMap::new(),
@@ -367,6 +376,7 @@ impl Default for MediaPlayerApp {
 impl MediaPlayerApp {
     fn new() -> Self {
         let mut app = Self::load_config();
+        app.check_asset_integrity();
         app.load_video_files();
         app.load_logo();
         if !app.video_files.is_empty() {
@@ -474,6 +484,41 @@ impl MediaPlayerApp {
     fn load_logo(&mut self) {
         // SVG logo loading will be implemented later when egui API stabilizes
         // For now, we use the text fallback in the UI
+    }
+
+    fn check_asset_integrity(&self) {
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+
+        let required_dirs = ["videos", "splash", "logo"];
+        let mut missing_dirs = Vec::new();
+
+        for dir in &required_dirs {
+            let dir_path = exe_dir.join(dir);
+            if !dir_path.exists() {
+                missing_dirs.push(dir.to_string());
+            }
+        }
+
+        if !missing_dirs.is_empty() {
+            warn!("Missing required directories: {:?}", missing_dirs);
+        }
+
+        // Check for at least one video file
+        let videos_dir = exe_dir.join("videos");
+        if videos_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&videos_dir) {
+                let video_count = entries.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension()
+                        .map(|ext| matches!(ext.to_str(), Some("mp4") | Some("avi") | Some("mkv")))
+                        .unwrap_or(false))
+                    .count();
+                if video_count == 0 {
+                    warn!("No video files found in videos directory");
+                } else {
+                    info!("Found {} video files", video_count);
+                }
+            }
+        }
     }
 
     fn should_show_splash(&self) -> bool {
@@ -866,6 +911,45 @@ impl eframe::App for MediaPlayerApp {
     }
 }
 
+fn load_config_for_kiosk() -> Config {
+    let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let config_path = exe_dir.join("config.toml");
+    if let Ok(config_str) = fs::read_to_string(&config_path) {
+        if let Ok(config) = toml::from_str::<Config>(&config_str) {
+            return config;
+        }
+    }
+    // Return default config if loading fails
+    Config {
+        video: VideoConfig {
+            directory: "./videos".to_string(),
+        },
+        splash: SplashConfig {
+            enabled: true,
+            duration_seconds: 3.0,
+            text: "Summit Professional Services".to_string(),
+            background_color: "#000000".to_string(),
+            text_color: "#FFFFFF".to_string(),
+            interval: "once".to_string(),
+            directory: "./splash".to_string(),
+        },
+        logging: LoggingConfig {
+            file: "summit_hip_numbers.log".to_string(),
+            max_lines: 10000,
+        },
+        ui: UiConfig {
+            input_label: "3-digit hip number:".to_string(),
+            now_playing_label: "now playing".to_string(),
+            company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+            input_text_color: "#FFFFFF".to_string(),
+            input_stroke_color: "#FFFFFF".to_string(),
+            label_color: "#FFFFFF".to_string(),
+            background_color: "#000000".to_string(),
+            kiosk_mode: true,
+        },
+    }
+}
+
 fn load_config_for_logging() -> LoggingConfig {
     let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
     let config_path = exe_dir.join("config.toml");
@@ -915,6 +999,9 @@ fn main() -> eframe::Result<()> {
             Box::new(|_cc| Ok(Box::new(ConfigApp::new()))),
         )
     } else {
+        // Load config to check kiosk mode
+        let config = load_config_for_kiosk();
+
         // Set GStreamer plugin path for bundled plugins
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
@@ -931,8 +1018,14 @@ fn main() -> eframe::Result<()> {
 
         gstreamer::init().expect("Failed to initialize GStreamer");
 
+        let mut viewport = egui::ViewportBuilder::default().with_inner_size([1920.0, 1080.0]);
+        if config.ui.kiosk_mode {
+            viewport = viewport.with_fullscreen(true).with_decorations(false);
+            info!("Kiosk mode enabled: fullscreen with no decorations");
+        }
+
         let options = eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default().with_inner_size([1920.0, 1080.0]),
+            viewport,
             ..Default::default()
         };
 

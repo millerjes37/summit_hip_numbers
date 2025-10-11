@@ -42,6 +42,11 @@
                cp -r videos $out/bin/ 2>/dev/null || true
                cp -r splash $out/bin/ 2>/dev/null || true
                cp -r logo $out/bin/ 2>/dev/null || true
+
+               # Create version file
+               echo "Build: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" > $out/bin/VERSION.txt
+               echo "Git Commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')" >> $out/bin/VERSION.txt
+               echo "Variant: full" >> $out/bin/VERSION.txt
              '';
           };
 
@@ -61,6 +66,12 @@
                cp -r videos $out/bin/ 2>/dev/null || true
                cp -r splash $out/bin/ 2>/dev/null || true
                cp -r logo $out/bin/ 2>/dev/null || true
+
+               # Create version file
+               echo "Build: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" > $out/bin/VERSION.txt
+               echo "Git Commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')" >> $out/bin/VERSION.txt
+               echo "Variant: demo" >> $out/bin/VERSION.txt
+
                # Rename binary for demo
                mv $out/bin/summit_hip_numbers $out/bin/summit_hip_numbers_demo
              '';
