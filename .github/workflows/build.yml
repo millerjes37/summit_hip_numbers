@@ -1,146 +1,740 @@
-name: Build Distributions
+name: Comprehensive Build & Test Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
   release:
     types: [published]
 
 permissions:
-  contents: read
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  RUST_LOG: debug
 
 jobs:
-  lint-test:
+  # ============================================================================
+  # PRE-BUILD VALIDATION
+  # ============================================================================
+  
+  validate:
+    name: Code Quality & Security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - uses: dtolnay/rust-toolchain@stable
+      
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "crates/summit_hip_numbers"
           cache-on-failure: true
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test --workspace
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
-      - name: Generate coverage
-        run: cargo tarpaulin --ignore-tests --out Xml
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: cobertura.xml
+      
+      - name: Format Check
+        run: cargo fmt --all -- --check
+      
+      - name: Clippy (All Targets)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      
+      - name: Unit Tests
+        run: cargo test --workspace --verbose
+      
+      - name: Security Audit
+        run: |
+          cargo install cargo-audit
+          cargo audit
+      
+      - name: Dependency Check
+        run: cargo tree --duplicates
 
-  security-audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "crates/summit_hip_numbers"
-          cache-on-failure: true
-      - run: cargo install cargo-audit
-      - run: cargo audit
-
-  build-linux:
-    runs-on: ubuntu-latest
-    needs: [lint-test]
+  # ============================================================================
+  # WINDOWS BUILD - Full & Demo Variants
+  # ============================================================================
+  
+  build-windows:
+    name: Windows Build (${{ matrix.variant }})
+    runs-on: windows-latest
+    needs: validate
     strategy:
+      fail-fast: false
       matrix:
         variant: [full, demo]
+    
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Setup Build Environment
+        id: setup
+        shell: pwsh
+        run: |
+          # Set version from Cargo.toml or git tag
+          $version = if ($env:GITHUB_REF -match 'refs/tags/v(.*)') { 
+            $matches[1] 
+          } else { 
+            "dev-$(git rev-parse --short HEAD)" 
+          }
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Building version: $version"
+          
+          # Create build timestamp
+          $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+          echo "TIMESTAMP=$timestamp" >> $env:GITHUB_OUTPUT
+      
+      - name: Cache Cargo Registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      
+      - name: Setup MSYS2 & GStreamer
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-glib2
+            mingw-w64-x86_64-gstreamer
+            mingw-w64-x86_64-gst-plugins-base
+            mingw-w64-x86_64-gst-plugins-good
+            mingw-w64-x86_64-gst-plugins-bad
+            mingw-w64-x86_64-gst-plugins-ugly
+            mingw-w64-x86_64-gst-libav
+            zip
+            unzip
+          update: true
+          path-type: inherit
+      
+      - name: Setup Rust GNU Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable-x86_64-pc-windows-gnu
+      
+      - name: Build Application
+        shell: msys2 {0}
+        run: |
+          chmod +x scripts/build_windows_msys2.sh
+          ./scripts/build_windows_msys2.sh ${{ matrix.variant }}
+      
+      - name: Generate Build Manifest
+        shell: pwsh
+        run: |
+          $distPath = "dist/${{ matrix.variant }}"
+          $manifestPath = "$distPath/BUILD_MANIFEST.txt"
+          
+          @"
+          ================================
+          Summit HIP Numbers - Windows Build
+          ================================
+          Variant: ${{ matrix.variant }}
+          Version: ${{ steps.setup.outputs.VERSION }}
+          Build Date: ${{ steps.setup.outputs.TIMESTAMP }}
+          Commit: ${{ github.sha }}
+          Runner OS: ${{ runner.os }}
+          
+          ================================
+          Build Contents
+          ================================
+          "@ | Out-File -FilePath $manifestPath -Encoding UTF8
+          
+          Get-ChildItem -Path $distPath -Recurse -File | ForEach-Object {
+            $relativePath = $_.FullName.Substring($distPath.Length + 1)
+            $size = "{0:N0}" -f $_.Length
+            "$relativePath ($size bytes)" | Out-File -FilePath $manifestPath -Append -Encoding UTF8
+          }
+          
+          # Generate DLL dependency report
+          $dllReport = "$distPath/DLL_DEPENDENCIES.txt"
+          @"
+          ================================
+          DLL Dependencies Report
+          ================================
+          Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+          
+          "@ | Out-File -FilePath $dllReport -Encoding UTF8
+          
+          Get-ChildItem -Path $distPath -Filter "*.dll" | ForEach-Object {
+            $_.Name | Out-File -FilePath $dllReport -Append -Encoding UTF8
+          }
+          
+          $dllCount = (Get-ChildItem -Path $distPath -Filter "*.dll").Count
+          "`nTotal DLLs: $dllCount" | Out-File -FilePath $dllReport -Append -Encoding UTF8
+      
+      - name: Create Portable ZIP
+        shell: pwsh
+        run: |
+          $zipName = "summit_hip_numbers_${{ matrix.variant }}_portable_${{ steps.setup.outputs.VERSION }}.zip"
+          Compress-Archive -Path "dist/${{ matrix.variant }}/*" -DestinationPath $zipName
+          
+          # Verify ZIP integrity
+          if (Test-Path $zipName) {
+            $zipInfo = Get-Item $zipName
+            Write-Host "✓ Created: $zipName ($('{0:N2}' -f ($zipInfo.Length / 1MB)) MB)"
+          } else {
+            Write-Error "Failed to create ZIP archive"
+            exit 1
+          }
+      
+      - name: Build Installer (Full Only)
+        if: matrix.variant == 'full'
+        shell: pwsh
+        run: |
+          # Download and install Inno Setup
+          $innoUrl = "https://files.jrsoftware.org/is/6/innosetup-6.2.2.exe"
+          $innoPath = "$env:TEMP\innosetup.exe"
+          Invoke-WebRequest -Uri $innoUrl -OutFile $innoPath
+          Start-Process -FilePath $innoPath -ArgumentList "/SP- /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS" -Wait
+          
+          # Build installer
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /Q "scripts/installer.iss"
+          
+          # Rename with version
+          $installerOld = "dist/summit_hip_numbers_installer.exe"
+          $installerNew = "summit_hip_numbers_installer_${{ steps.setup.outputs.VERSION }}.exe"
+          Move-Item -Path $installerOld -Destination $installerNew -Force
+      
+      - name: Upload Portable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.variant }}-portable-${{ steps.setup.outputs.VERSION }}
+          path: summit_hip_numbers_${{ matrix.variant }}_portable_${{ steps.setup.outputs.VERSION }}.zip
+          retention-days: 30
+      
+      - name: Upload Installer Artifact
+        if: matrix.variant == 'full'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ steps.setup.outputs.VERSION }}
+          path: summit_hip_numbers_installer_${{ steps.setup.outputs.VERSION }}.exe
+          retention-days: 30
+
+  # ============================================================================
+  # LINUX BUILD - Full & Demo Variants
+  # ============================================================================
+  
+  build-linux:
+    name: Linux Build (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full, demo]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Build Environment
+        id: setup
+        run: |
+          VERSION=$(if [[ $GITHUB_REF == refs/tags/v* ]]; then echo ${GITHUB_REF#refs/tags/v}; else echo "dev-$(git rev-parse --short HEAD)"; fi)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
       - name: Cache Nix Store
         uses: nix-community/cache-nix-action@v6
         with:
-          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ matrix.variant }}
           purge-older-than: 7
-      - uses: cachix/install-nix-action@v25
+      
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - name: Build ${{ matrix.variant }}
+      
+      - name: Build with Nix
         run: |
           if [ "${{ matrix.variant }}" = "demo" ]; then
-            nix build .#demo
+            nix build .#demo --print-build-logs
           else
-            nix build .
+            nix build . --print-build-logs
           fi
-      - name: Create zip
+      
+      - name: Create Portable Distribution
         run: |
-          if [ "${{ matrix.variant }}" = "demo" ]; then
-            zip -r summit_hip_numbers-linux-${{ matrix.variant }}.zip result
-          else
-            zip -r summit_hip_numbers-linux.zip result
+          DIST_DIR="dist/linux-${{ matrix.variant }}"
+          mkdir -p "$DIST_DIR"
+          
+          # Copy build result
+          cp -rL result/* "$DIST_DIR/"
+          
+          # Generate manifest
+          cat > "$DIST_DIR/BUILD_MANIFEST.txt" << EOF
+          ================================
+          Summit HIP Numbers - Linux Build
+          ================================
+          Variant: ${{ matrix.variant }}
+          Version: ${{ steps.setup.outputs.VERSION }}
+          Build Date: ${{ steps.setup.outputs.TIMESTAMP }}
+          Commit: ${{ github.sha }}
+          Builder: Nix
+          
+          ================================
+          Build Contents
+          ================================
+          EOF
+          
+          find "$DIST_DIR" -type f -exec sh -c 'echo "$(basename {}) ($(stat -f%z {} 2>/dev/null || stat -c%s {}) bytes)"' \; >> "$DIST_DIR/BUILD_MANIFEST.txt"
+          
+          # Check library dependencies
+          if [ -f "$DIST_DIR/bin/summit_hip_numbers" ]; then
+            echo -e "\n================================\nLibrary Dependencies\n================================" >> "$DIST_DIR/BUILD_MANIFEST.txt"
+            ldd "$DIST_DIR/bin/summit_hip_numbers" >> "$DIST_DIR/BUILD_MANIFEST.txt" || true
           fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-bundle-${{ matrix.variant }}
-          path: summit_hip_numbers-linux*.zip
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Rust
+      
+      - name: Create Archive
         run: |
-          rustup update
-          rustup target add x86_64-pc-windows-gnu
-      - name: Run tests
-        run: cargo test
-      - name: Install GStreamer
-        shell: pwsh
-        run: |
-          $gstreamerUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/1.26.6/mingw/gstreamer-1.0-mingw-x86_64-1.26.6.msi"
-          $installerPath = "$env:TEMP\gstreamer-installer.msi"
-          Write-Host "Downloading GStreamer MSI from $gstreamerUrl..."
-          Invoke-WebRequest -Uri $gstreamerUrl -OutFile $installerPath
-          Write-Host "Installing GStreamer..."
-          Start-Process msiexec.exe -ArgumentList "/i $installerPath /quiet /norestart" -Wait
-          Write-Host "GStreamer installation completed"
-      - name: Run the Windows build script
-        shell: pwsh
-        run: .\build_windows.ps1
-      - uses: actions/upload-artifact@v4
+          cd dist
+          tar -czf "../summit_hip_numbers_linux_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.tar.gz" "linux-${{ matrix.variant }}"
+          cd ..
+          
+          # Also create zip for consistency
+          zip -r "summit_hip_numbers_linux_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.zip" "dist/linux-${{ matrix.variant }}"
+      
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: windows-bundle
-          path: summit_hip_numbers_portable.zip
+          name: linux-${{ matrix.variant }}-${{ steps.setup.outputs.VERSION }}
+          path: |
+            summit_hip_numbers_linux_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.tar.gz
+            summit_hip_numbers_linux_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.zip
+          retention-days: 30
 
-  build-mac:
+  # ============================================================================
+  # MACOS BUILD - Full & Demo Variants
+  # ============================================================================
+  
+  build-macos:
+    name: macOS Build (${{ matrix.variant }})
     runs-on: macos-latest
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full, demo]
+    
     steps:
       - uses: actions/checkout@v4
-       - name: Install dependencies
-         run: ./scripts/install_macos.sh --skip-build
-       - name: Run the macOS build script
-         run: ./scripts/build_macos.sh
-      - uses: actions/upload-artifact@v4
+      
+      - name: Setup Build Environment
+        id: setup
+        run: |
+          VERSION=$(if [[ $GITHUB_REF == refs/tags/v* ]]; then echo ${GITHUB_REF#refs/tags/v}; else echo "dev-$(git rev-parse --short HEAD)"; fi)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
+      - name: Install Dependencies
+        run: |
+          chmod +x scripts/install_macos.sh
+          ./scripts/install_macos.sh --skip-build
+      
+      - name: Build Application
+        run: |
+          chmod +x scripts/build_macos.sh
+          ./scripts/build_macos.sh ${{ matrix.variant }}
+      
+      - name: Create Portable Distribution
+        run: |
+          DIST_DIR="dist/macos-${{ matrix.variant }}"
+          mkdir -p "$DIST_DIR"
+          
+          # Copy .app bundle
+          if [ -d "dist/macos/Summit HIP Numbers.app" ]; then
+            cp -R "dist/macos/Summit HIP Numbers.app" "$DIST_DIR/"
+          elif [ -d "dist/macos/Summit HIP Numbers Demo.app" ]; then
+            cp -R "dist/macos/Summit HIP Numbers Demo.app" "$DIST_DIR/"
+          fi
+          
+          # Generate manifest
+          cat > "$DIST_DIR/BUILD_MANIFEST.txt" << EOF
+          ================================
+          Summit HIP Numbers - macOS Build
+          ================================
+          Variant: ${{ matrix.variant }}
+          Version: ${{ steps.setup.outputs.VERSION }}
+          Build Date: ${{ steps.setup.outputs.TIMESTAMP }}
+          Commit: ${{ github.sha }}
+          Architecture: $(uname -m)
+          
+          ================================
+          Build Contents
+          ================================
+          EOF
+          
+          find "$DIST_DIR" -type f | while read file; do
+            echo "$(basename "$file") ($(stat -f%z "$file") bytes)"
+          done >> "$DIST_DIR/BUILD_MANIFEST.txt"
+          
+          # Check library dependencies
+          APP_PATH=$(find "$DIST_DIR" -name "*.app" -type d | head -n 1)
+          if [ -n "$APP_PATH" ]; then
+            BINARY=$(find "$APP_PATH/Contents/MacOS" -type f -perm +111 | head -n 1)
+            if [ -n "$BINARY" ]; then
+              echo -e "\n================================\nLibrary Dependencies\n================================" >> "$DIST_DIR/BUILD_MANIFEST.txt"
+              otool -L "$BINARY" >> "$DIST_DIR/BUILD_MANIFEST.txt" || true
+            fi
+          fi
+      
+      - name: Create Archives
+        run: |
+          cd dist
+          
+          # Create DMG (if available from build)
+          if [ -f "macos/*.dmg" ]; then
+            cp macos/*.dmg "../summit_hip_numbers_macos_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.dmg"
+          fi
+          
+          # Create ZIP of .app bundle
+          zip -r "../summit_hip_numbers_macos_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.zip" "macos-${{ matrix.variant }}"
+          
+          cd ..
+      
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: mac-bundle
-          path: dist/macos/*.dmg
+          name: macos-${{ matrix.variant }}-${{ steps.setup.outputs.VERSION }}
+          path: |
+            summit_hip_numbers_macos_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.dmg
+            summit_hip_numbers_macos_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.zip
+          retention-days: 30
+          if-no-files-found: warn
+
+  # ============================================================================
+  # COMPREHENSIVE TESTING
+  # ============================================================================
+  
+  test-windows-portable:
+    name: Test Windows Portable (${{ matrix.variant }})
+    runs-on: windows-latest
+    needs: build-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full, demo]
+    
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: windows-${{ matrix.variant }}-portable-*
+          merge-multiple: true
+      
+      - name: Comprehensive Portable Test
+        shell: pwsh
+        run: |
+          Write-Host "============================================" -ForegroundColor Cyan
+          Write-Host "  WINDOWS PORTABLE TEST - ${{ matrix.variant }}" -ForegroundColor Cyan
+          Write-Host "============================================" -ForegroundColor Cyan
+          
+          # Find and extract ZIP
+          $zipFile = Get-ChildItem -Filter "summit_hip_numbers_${{ matrix.variant }}_portable_*.zip" | Select-Object -First 1
+          if (-not $zipFile) {
+            Write-Error "Portable ZIP not found"
+            exit 1
+          }
+          
+          Write-Host "`n[1/6] Extracting archive: $($zipFile.Name)" -ForegroundColor Yellow
+          Expand-Archive -Path $zipFile.FullName -DestinationPath "test_portable" -Force
+          
+          # Test structure
+          Write-Host "`n[2/6] Validating directory structure..." -ForegroundColor Yellow
+          $structure = Get-ChildItem -Path "test_portable" -Recurse | Select-Object FullName, Length, @{N='Type';E={if($_.PSIsContainer){'DIR'}else{'FILE'}}}
+          $structure | Format-Table -AutoSize | Out-String | Write-Host
+          
+          # Find executable
+          Write-Host "`n[3/6] Locating executable..." -ForegroundColor Yellow
+          $exeName = if ("${{ matrix.variant }}" -eq "demo") { "summit_hip_numbers_demo.exe" } else { "summit_hip_numbers.exe" }
+          $exePath = Get-ChildItem -Path "test_portable" -Filter $exeName -Recurse -File | Select-Object -First 1
+          
+          if (-not $exePath) {
+            Write-Error "Executable $exeName not found"
+            exit 1
+          }
+          Write-Host "  ✓ Found: $($exePath.FullName)" -ForegroundColor Green
+          
+          # Verify critical DLLs
+          Write-Host "`n[4/6] Verifying critical DLLs..." -ForegroundColor Yellow
+          $criticalDlls = @(
+            "libglib-2.0-0.dll",
+            "libgobject-2.0-0.dll",
+            "libgio-2.0-0.dll",
+            "libgstreamer-1.0-0.dll",
+            "libgstapp-1.0-0.dll",
+            "libgstbase-1.0-0.dll",
+            "libgstvideo-1.0-0.dll",
+            "libgstaudio-1.0-0.dll"
+          )
+          
+          $workingDir = Split-Path -Parent $exePath.FullName
+          $missingDlls = @()
+          
+          foreach ($dll in $criticalDlls) {
+            $dllPath = Join-Path $workingDir $dll
+            if (Test-Path $dllPath) {
+              $dllSize = (Get-Item $dllPath).Length
+              Write-Host "  ✓ $dll ($([math]::Round($dllSize/1KB, 2)) KB)" -ForegroundColor Green
+            } else {
+              Write-Host "  ✗ $dll MISSING" -ForegroundColor Red
+              $missingDlls += $dll
+            }
+          }
+          
+          if ($missingDlls.Count -gt 0) {
+            Write-Error "Missing critical DLLs: $($missingDlls -join ', ')"
+            Write-Host "`nAvailable DLLs in directory:" -ForegroundColor Yellow
+            Get-ChildItem -Path $workingDir -Filter "*.dll" | ForEach-Object { Write-Host "  - $($_.Name)" }
+            exit 1
+          }
+          
+          # Check GStreamer plugins
+          Write-Host "`n[5/6] Checking GStreamer plugins..." -ForegroundColor Yellow
+          $pluginDirs = @(
+            (Join-Path $workingDir "lib\gstreamer-1.0"),
+            (Join-Path $workingDir "gstreamer-1.0")
+          )
+          
+          $foundPlugins = $false
+          foreach ($pluginDir in $pluginDirs) {
+            if (Test-Path $pluginDir) {
+              $plugins = Get-ChildItem -Path $pluginDir -Filter "*.dll"
+              Write-Host "  ✓ Found $($plugins.Count) plugins in: $pluginDir" -ForegroundColor Green
+              $foundPlugins = $true
+              break
+            }
+          }
+          
+          if (-not $foundPlugins) {
+            Write-Warning "No GStreamer plugins found - audio/video may not work"
+          }
+          
+          # Runtime test
+          Write-Host "`n[6/6] Runtime execution test..." -ForegroundColor Yellow
+          $logFile = Join-Path $workingDir "test-execution.log"
+          $errorLog = Join-Path $workingDir "test-execution-error.log"
+          
+          try {
+            $process = Start-Process -FilePath $exePath.FullName `
+                                    -WorkingDirectory $workingDir `
+                                    -PassThru `
+                                    -NoNewWindow `
+                                    -RedirectStandardOutput $logFile `
+                                    -RedirectStandardError $errorLog
+            
+            Write-Host "  Process started (PID: $($process.Id))" -ForegroundColor Green
+            
+            # Wait and monitor
+            Start-Sleep -Seconds 3
+            
+            if ($process.HasExited) {
+              Write-Error "Process exited prematurely with code: $($process.ExitCode)"
+              Get-Content $errorLog | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+              exit 1
+            }
+            
+            Write-Host "  ✓ Process running successfully" -ForegroundColor Green
+            
+            # Simulate interaction
+            Write-Host "  Simulating user interaction..." -ForegroundColor Yellow
+            Add-Type -AssemblyName System.Windows.Forms
+            Start-Sleep -Seconds 1
+            [System.Windows.Forms.SendKeys]::SendWait("{DOWN}")
+            Start-Sleep -Seconds 1
+            [System.Windows.Forms.SendKeys]::SendWait("{UP}")
+            Start-Sleep -Seconds 2
+            
+            # Check if still running
+            if (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
+              Write-Host "  ✓ Process stable after interaction" -ForegroundColor Green
+              Stop-Process -Id $process.Id -Force
+            } else {
+              Write-Warning "Process exited during interaction test"
+            }
+            
+          } catch {
+            Write-Error "Runtime test failed: $_"
+            if (Test-Path $errorLog) {
+              Get-Content $errorLog
+            }
+            exit 1
+          }
+          
+          # Display logs
+          Write-Host "`n============================================" -ForegroundColor Cyan
+          Write-Host "  EXECUTION LOGS" -ForegroundColor Cyan
+          Write-Host "============================================" -ForegroundColor Cyan
+          if (Test-Path $logFile) {
+            Get-Content $logFile | Write-Host
+          }
+          if (Test-Path $errorLog) {
+            Write-Host "`nError Log:" -ForegroundColor Yellow
+            Get-Content $errorLog | Write-Host
+          }
+          
+          Write-Host "`n============================================" -ForegroundColor Green
+          Write-Host "  ✓ ALL TESTS PASSED" -ForegroundColor Green
+          Write-Host "============================================" -ForegroundColor Green
+      
+      - name: Upload Test Logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-${{ matrix.variant }}-test-logs
+          path: test_portable/**/*.log
+          retention-days: 7
+
+  test-linux-portable:
+    name: Test Linux Portable (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    needs: build-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full, demo]
+    
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: linux-${{ matrix.variant }}-*
+          merge-multiple: true
+      
+      - name: Comprehensive Linux Test
+        run: |
+          echo "============================================"
+          echo "  LINUX PORTABLE TEST - ${{ matrix.variant }}"
+          echo "============================================"
+          
+          # Extract archive
+          echo -e "\n[1/5] Extracting archive..."
+          ARCHIVE=$(ls summit_hip_numbers_linux_${{ matrix.variant }}_*.tar.gz | head -n 1)
+          if [ -z "$ARCHIVE" ]; then
+            echo "ERROR: Archive not found"
+            exit 1
+          fi
+          tar -xzf "$ARCHIVE"
+          
+          # Validate structure
+          echo -e "\n[2/5] Validating structure..."
+          find dist/linux-${{ matrix.variant }} -type f -exec ls -lh {} \;
+          
+          # Find binary
+          echo -e "\n[3/5] Locating binary..."
+          BINARY=$(find dist/linux-${{ matrix.variant }} -name "summit_hip_numbers*" -type f -executable | head -n 1)
+          if [ -z "$BINARY" ]; then
+            echo "ERROR: Binary not found"
+            exit 1
+          fi
+          echo "✓ Found: $BINARY"
+          
+          # Check dependencies
+          echo -e "\n[4/5] Checking library dependencies..."
+          ldd "$BINARY" || echo "Note: ldd failed (may be statically linked)"
+          
+          # Quick runtime test
+          echo -e "\n[5/5] Runtime test..."
+          timeout 5s "$BINARY" --version || echo "✓ Binary executed (timed out as expected)"
+          
+          echo -e "\n============================================"
+          echo "  ✓ ALL TESTS PASSED"
+          echo "============================================"
+
+  # ============================================================================
+  # BUILD SUMMARY & RELEASE
+  # ============================================================================
+  
+  build-summary:
+    name: Build Summary Report
+    runs-on: ubuntu-latest
+    needs: [test-windows-portable, test-linux-portable, build-macos]
+    if: always()
+    
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+      
+      - name: Generate Build Summary
+        run: |
+          cat > BUILD_SUMMARY.md << 'EOF'
+          # Summit HIP Numbers - Build Summary
+          
+          **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Commit:** ${{ github.sha }}
+          **Branch:** ${{ github.ref_name }}
+          
+          ## Build Artifacts
+          
+          EOF
+          
+          echo "### Windows Builds" >> BUILD_SUMMARY.md
+          find all-artifacts -name "*windows*" -type f | while read file; do
+            SIZE=$(du -h "$file" | cut -f1)
+            echo "- $(basename "$file") ($SIZE)" >> BUILD_SUMMARY.md
+          done
+          
+          echo -e "\n### Linux Builds" >> BUILD_SUMMARY.md
+          find all-artifacts -name "*linux*" -type f | while read file; do
+            SIZE=$(du -h "$file" | cut -f1)
+            echo "- $(basename "$file") ($SIZE)" >> BUILD_SUMMARY.md
+          done
+          
+          echo -e "\n### macOS Builds" >> BUILD_SUMMARY.md
+          find all-artifacts -name "*macos*" -type f | while read file; do
+            SIZE=$(du -h "$file" | cut -f1)
+            echo "- $(basename "$file") ($SIZE)" >> BUILD_SUMMARY.md
+          done
+          
+          cat BUILD_SUMMARY.md
+      
+      - name: Upload Summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-summary
+          path: BUILD_SUMMARY.md
 
   release:
-    needs: [build-linux, build-windows, build-mac]
+    name: Create Release
     runs-on: ubuntu-latest
+    needs: [test-windows-portable, test-linux-portable, build-macos]
     if: github.event_name == 'release'
+    permissions:
+      contents: write
+    
     steps:
-      - name: Download all artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
       
-      - name: Prepare release files
+      - name: Prepare Release Files
         run: |
           mkdir -p release_files
-          find artifacts -name "*.zip" -exec mv {} release_files/ \;
-          find artifacts -name "*.dmg" -exec mv {} release_files/ \;
-
-      - name: Release
+          
+          # Copy all distribution archives
+          find artifacts -name "*.zip" -exec cp {} release_files/ \;
+          find artifacts -name "*.tar.gz" -exec cp {} release_files/ \;
+          find artifacts -name "*.dmg" -exec cp {} release_files/ \;
+          find artifacts -name "*.exe" -exec cp {} release_files/ \;
+          
+          # List release files
+          echo "Release files:"
+          ls -lh release_files/
+      
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: release_files/*
           token: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true

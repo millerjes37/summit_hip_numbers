@@ -8,11 +8,11 @@ pub struct VideoFile {
     pub hip_number: String,
 }
 
-pub fn scan_video_files(video_dir: &str) -> Result<Vec<VideoFile>, String> {
+pub fn scan_video_files(video_dir: &std::path::Path) -> Result<Vec<VideoFile>, String> {
     let path = Path::new(video_dir);
 
     if !path.exists() {
-        return Err(format!("Video directory does not exist: {}", video_dir));
+        return Err(format!("Video directory does not exist: {}", video_dir.display()));
     }
 
     let mut files = Vec::new();
@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn test_scan_video_files_nonexistent_dir() {
-        let result = scan_video_files("/nonexistent");
+        let result = scan_video_files(std::path::Path::new("/nonexistent"));
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Video directory does not exist"));
     }
@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn test_scan_video_files_empty_dir() {
         let temp_dir = TempDir::new().unwrap();
-        let result = scan_video_files(temp_dir.path().to_str().unwrap());
+        let result = scan_video_files(temp_dir.path());
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
     }
@@ -78,7 +78,7 @@ mod tests {
         File::create(dir_path.join("002.jpg")).unwrap();
         File::create(dir_path.join("003.png")).unwrap();
 
-        let result = scan_video_files(dir_path.to_str().unwrap());
+        let result = scan_video_files(dir_path);
         assert!(result.is_ok());
         let files = result.unwrap();
         assert_eq!(files.len(), 3);
@@ -96,7 +96,7 @@ mod tests {
         File::create(dir_path.join("001.txt")).unwrap();
         File::create(dir_path.join("002.mp3")).unwrap();
 
-        let result = scan_video_files(dir_path.to_str().unwrap());
+        let result = scan_video_files(dir_path);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
     }
@@ -110,7 +110,7 @@ mod tests {
         File::create(dir_path.join("video.mp4")).unwrap();
         File::create(dir_path.join("abc.jpg")).unwrap();
 
-        let result = scan_video_files(dir_path.to_str().unwrap());
+        let result = scan_video_files(dir_path);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
     }
@@ -124,7 +124,7 @@ mod tests {
         File::create(dir_path.join("1.mp4")).unwrap();
         File::create(dir_path.join("12.jpg")).unwrap();
 
-        let result = scan_video_files(dir_path.to_str().unwrap());
+        let result = scan_video_files(dir_path);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
     }
@@ -137,7 +137,7 @@ mod tests {
         // Create files with 4+ digit prefixes
         File::create(dir_path.join("1234.mp4")).unwrap();
 
-        let result = scan_video_files(dir_path.to_str().unwrap());
+        let result = scan_video_files(dir_path);
         assert!(result.is_ok());
         let files = result.unwrap();
         assert_eq!(files.len(), 0);
@@ -155,7 +155,7 @@ mod tests {
         File::create(dir_path.join("12.png")).unwrap();
         File::create(dir_path.join("003.txt")).unwrap();
 
-        let result = scan_video_files(dir_path.to_str().unwrap());
+        let result = scan_video_files(dir_path);
         assert!(result.is_ok());
         let files = result.unwrap();
         assert_eq!(files.len(), 2);
@@ -173,7 +173,7 @@ mod tests {
         File::create(dir_path.join("001.mp4")).unwrap();
         File::create(dir_path.join("002.mp4")).unwrap();
 
-        let result = scan_video_files(dir_path.to_str().unwrap());
+        let result = scan_video_files(dir_path);
         assert!(result.is_ok());
         let files = result.unwrap();
         assert_eq!(files.len(), 3);

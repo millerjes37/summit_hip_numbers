@@ -531,7 +531,6 @@ struct MediaPlayerApp {
     current_splash_index: usize,
     videos_played: usize,
     splash_texture: Option<egui::TextureHandle>,
-    logo_texture: Option<egui_extras::RetainedImage>,
     #[cfg(feature = "demo")]
     start_time: Instant,
 }
@@ -685,7 +684,6 @@ impl Default for MediaPlayerApp {
             current_splash_index: 0,
             videos_played: 0,
             splash_texture: None,
-            logo_texture: None,
             #[cfg(feature = "demo")]
             start_time: Instant::now(),
         }
@@ -697,7 +695,6 @@ impl MediaPlayerApp {
         let mut app = Self::load_config();
         app.check_asset_integrity();
         app.load_video_files();
-        app.load_logo_texture();
         if !app.video_files.is_empty() {
             app.load_video_index = Some(0);
         }
@@ -747,8 +744,21 @@ impl MediaPlayerApp {
     }
 
     fn load_video_files(&mut self) {
-        let video_dir = self.config.video.directory.clone();
-        info!("Loading video files from {}", video_dir);
+        self.video_files.clear();
+        self.hip_to_index.clear();
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let video_dir_path = std::path::Path::new(&self.config.video.directory);
+        let video_dir = if video_dir_path.is_absolute() {
+            // Absolute path (e.g., from tests)
+            video_dir_path.to_path_buf()
+        } else if exe_dir.to_str().unwrap().contains("target") {
+            // Development: use repo assets
+            std::env::current_dir().unwrap().join("assets").join(&self.config.video.directory)
+        } else {
+            // Production: use exe dir
+            exe_dir.join(&self.config.video.directory)
+        };
+        info!("Loading video files from {}", video_dir.display());
 
         match scan_video_files(&video_dir) {
             #[allow(unused_mut)]
@@ -788,7 +798,18 @@ impl MediaPlayerApp {
 
     fn load_splash_images(&mut self) {
         self.splash_images.clear();
-        let splash_dir = PathBuf::from(&self.config.splash.directory);
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let splash_dir_path = std::path::Path::new(&self.config.splash.directory);
+        let splash_dir = if splash_dir_path.is_absolute() {
+            // Absolute path (e.g., from tests)
+            splash_dir_path.to_path_buf()
+        } else if exe_dir.to_str().unwrap().contains("target") {
+            // Development: use repo assets
+            std::env::current_dir().unwrap().join("assets").join(&self.config.splash.directory)
+        } else {
+            // Production: use exe dir
+            exe_dir.join(&self.config.splash.directory)
+        };
         if splash_dir.exists() {
             if let Ok(entries) = fs::read_dir(&splash_dir) {
                 for entry in entries.flatten() {
@@ -808,25 +829,7 @@ impl MediaPlayerApp {
         }
     }
 
-    fn load_logo_texture(&mut self) {
-        let logo_dir = std::env::current_dir().unwrap().join("assets").join("logo");
-        if logo_dir.exists() {
-            if let Ok(entries) = fs::read_dir(&logo_dir) {
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        if path.extension().map(|ext| ext.to_str().unwrap_or("")) == Some("svg") {
-                            // TODO: Implement SVG rendering with resvg
-                            // For now, logo support is prepared but SVG loading is not implemented due to API issues
-                            warn!("Logo SVG loading not implemented yet, using text fallback");
-                        }
-                    }
-                }
-            }
-        } else {
-            warn!("Logo directory not found: {:?}", logo_dir);
-        }
-    }
+
 
     fn check_asset_integrity(&self) {
         let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
@@ -1262,19 +1265,12 @@ impl eframe::App for MediaPlayerApp {
 
                     ui.add_space(self.config.ui.ui_spacing); // Spacing
 
-                    // Right: Logo image or company label
-                    if let Some(logo) = &self.logo_texture {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(self.config.ui.ui_spacing); // Right padding
-                            logo.show_max_size(ui, egui::Vec2::new(self.config.ui.demo_watermark_width, bar_height * 0.8)); // Scale to fit bar height
-                        });
-                    } else {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(self.config.ui.ui_spacing);
-                            ui.label(egui::RichText::new(&self.config.ui.company_label)
-                                .color(Self::hex_to_color(&self.config.ui.label_color)));
-                        });
-                    }
+                    // Right: Company label
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_space(self.config.ui.ui_spacing);
+                        ui.label(egui::RichText::new(&self.config.ui.company_label)
+                            .color(Self::hex_to_color(&self.config.ui.label_color)));
+                    });
                 });
             });
         });

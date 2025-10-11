@@ -1,0 +1,146 @@
+name: Build Distributions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/summit_hip_numbers"
+          cache-on-failure: true
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+      - name: Generate coverage
+        run: cargo tarpaulin --ignore-tests --out Xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: cobertura.xml
+
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/summit_hip_numbers"
+          cache-on-failure: true
+      - run: cargo install cargo-audit
+      - run: cargo audit
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: [lint-test]
+    strategy:
+      matrix:
+        variant: [full, demo]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Nix Store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          purge-older-than: 7
+      - uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build ${{ matrix.variant }}
+        run: |
+          if [ "${{ matrix.variant }}" = "demo" ]; then
+            nix build .#demo
+          else
+            nix build .
+          fi
+      - name: Create zip
+        run: |
+          if [ "${{ matrix.variant }}" = "demo" ]; then
+            zip -r summit_hip_numbers-linux-${{ matrix.variant }}.zip result
+          else
+            zip -r summit_hip_numbers-linux.zip result
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundle-${{ matrix.variant }}
+          path: summit_hip_numbers-linux*.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        run: |
+          rustup update
+          rustup target add x86_64-pc-windows-gnu
+      - name: Run tests
+        run: cargo test
+      - name: Install GStreamer
+        shell: pwsh
+        run: |
+          $gstreamerUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/1.26.6/mingw/gstreamer-1.0-mingw-x86_64-1.26.6.msi"
+          $installerPath = "$env:TEMP\gstreamer-installer.msi"
+          Write-Host "Downloading GStreamer MSI from $gstreamerUrl..."
+          Invoke-WebRequest -Uri $gstreamerUrl -OutFile $installerPath
+          Write-Host "Installing GStreamer..."
+          Start-Process msiexec.exe -ArgumentList "/i $installerPath /quiet /norestart" -Wait
+          Write-Host "GStreamer installation completed"
+      - name: Run the Windows build script
+        shell: pwsh
+        run: .\build_windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundle
+          path: summit_hip_numbers_portable.zip
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+       - name: Install dependencies
+         run: ./scripts/install_macos.sh --skip-build
+       - name: Run the macOS build script
+         run: ./scripts/build_macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-bundle
+          path: dist/macos/*.dmg
+
+  release:
+    needs: [build-linux, build-windows, build-mac]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Prepare release files
+        run: |
+          mkdir -p release_files
+          find artifacts -name "*.zip" -exec mv {} release_files/ \;
+          find artifacts -name "*.dmg" -exec mv {} release_files/ \;
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_files/*
+          token: ${{ secrets.GITHUB_TOKEN }}
