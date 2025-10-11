@@ -5,14 +5,15 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use walkdir::WalkDir;
+use rfd;
 
 #[derive(Default)]
 struct UsbPrepApp {
-    drives: Arc<Mutex<HashSet<PathBuf>>>,
+    drives: Arc<Mutex<HashSet<PathBuf>>>,  // Detected USB drives
     selected_drive: Option<PathBuf>,
-    source_folder: Option<PathBuf>,
-    status: String,
-    watcher: Option<RecommendedWatcher>,
+    source_folder: Option<PathBuf>,  // dist folder
+    status: String,  // "Ready", "Copying...", errors
+    watcher: Option<RecommendedWatcher>,  // For drive detection
     is_copying: bool,
     total_files: usize,
     copied_files: usize,
@@ -21,8 +22,8 @@ struct UsbPrepApp {
 impl UsbPrepApp {
     fn new() -> Self {
         let mut app = Self::default();
-        app.scan_drives();
-        app.start_watcher();
+        app.scan_drives();  // Initial scan
+        app.start_watcher();  // Watch for changes
         app.status = "Ready - Select source folder and USB drive".to_string();
         app
     }
@@ -189,8 +190,8 @@ impl eframe::App for UsbPrepApp {
 
             // Copy button
             let can_copy = !self.is_copying &&
-                          self.source_folder.is_some() &&
-                          self.selected_drive.is_some();
+                           self.source_folder.is_some() &&
+                           self.selected_drive.is_some();
 
             if ui.add_enabled(can_copy, egui::Button::new("🚀 Copy to Selected Drive")).clicked() {
                 if let Err(e) = self.copy_to_drive(ctx) {
@@ -215,12 +216,9 @@ impl eframe::App for UsbPrepApp {
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([500.0, 400.0])
-            .with_resizable(false),
+        viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 300.0]),
         ..Default::default()
     };
-
     eframe::run_native(
         "Summit USB Prep",
         options,

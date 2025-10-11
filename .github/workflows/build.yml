@@ -8,21 +8,79 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
-  build-linux:
+  lint-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/summit_hip_numbers"
+          cache-on-failure: true
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+      - name: Generate coverage
+        run: cargo tarpaulin --ignore-tests --out Xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: cobertura.xml
+
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/summit_hip_numbers"
+          cache-on-failure: true
+      - run: cargo install cargo-audit
+      - run: cargo audit
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: [lint-test]
+    strategy:
+      matrix:
+        variant: [full, demo]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Nix Store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          purge-older-than: 7
       - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - run: nix build .
+      - name: Build ${{ matrix.variant }}
+        run: |
+          if [ "${{ matrix.variant }}" = "demo" ]; then
+            nix build .#demo
+          else
+            nix build .
+          fi
       - name: Create zip
-        run: zip -r summit_hip_numbers-linux.zip result
+        run: |
+          if [ "${{ matrix.variant }}" = "demo" ]; then
+            zip -r summit_hip_numbers-linux-${{ matrix.variant }}.zip result
+          else
+            zip -r summit_hip_numbers-linux.zip result
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-bundle
-          path: summit_hip_numbers-linux.zip
+          name: linux-bundle-${{ matrix.variant }}
+          path: summit_hip_numbers-linux*.zip
 
   build-windows:
     runs-on: windows-latest

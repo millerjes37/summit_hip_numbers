@@ -152,23 +152,23 @@ fi
 echo ""
 echo "=== Copying additional files ==="
 
-if [ -f "config.toml" ]; then
-    cp "config.toml" "$DIST_DIR/"
+if [ -f "../../assets/config.toml" ]; then
+    cp "../../assets/config.toml" "$DIST_DIR/"
     echo "  ✓ config.toml"
 fi
 
-if [ -d "videos" ]; then
-    cp -r "videos" "$DIST_DIR/"
+if [ -d "../../assets/videos" ]; then
+    cp -r "../../assets/videos" "$DIST_DIR/"
     echo "  ✓ videos directory"
 fi
 
-if [ -d "splash" ]; then
-    cp -r "splash" "$DIST_DIR/"
+if [ -d "../../assets/splash" ]; then
+    cp -r "../../assets/splash" "$DIST_DIR/"
     echo "  ✓ splash directory"
 fi
 
-if [ -d "logo" ]; then
-    cp -r "logo" "$DIST_DIR/"
+if [ -d "../../assets/logo" ]; then
+    cp -r "../../assets/logo" "$DIST_DIR/"
     echo "  ✓ logo directory"
 fi
 

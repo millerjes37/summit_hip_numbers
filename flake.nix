@@ -28,74 +28,100 @@
           buildInputs = [ rustToolchain ] ++ commonDeps ++ [ pkgs.cargo-bundle ];
         };                # Native build
          packages.default = pkgs.rustPlatform.buildRustPackage {
-            pname = "summit_hip_numbers";
-            version = "0.1.0";
-            src = ./.;
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-            };
-            nativeBuildInputs = [ pkgs.pkg-config ];
-            buildInputs = gstLibs;
-             postInstall = ''
-               # Copy assets to bin directory where the binary is
-               cp config.toml $out/bin/
-               cp -r videos $out/bin/ 2>/dev/null || true
-               cp -r splash $out/bin/ 2>/dev/null || true
-               cp -r logo $out/bin/ 2>/dev/null || true
+             pname = "summit_hip_numbers";
+             version = "0.1.0";
+             src = ./crates/summit_hip_numbers;
+             cargoLock = {
+               lockFile = ./Cargo.lock;
+             };
+             nativeBuildInputs = [ pkgs.pkg-config ];
+             buildInputs = gstLibs;
+              postInstall = ''
+                # Copy assets to bin directory where the binary is
+                cp ../../assets/config.toml $out/bin/
+                cp -r ../../assets/videos $out/bin/ 2>/dev/null || true
+                cp -r ../../assets/splash $out/bin/ 2>/dev/null || true
+                cp -r ../../assets/logo $out/bin/ 2>/dev/null || true
 
-               # Create version file
-               echo "Build: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" > $out/bin/VERSION.txt
-               echo "Git Commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')" >> $out/bin/VERSION.txt
-               echo "Variant: full" >> $out/bin/VERSION.txt
-             '';
-          };
+                # Create version file
+                echo "Build: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" > $out/bin/VERSION.txt
+                echo "Git Commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')" >> $out/bin/VERSION.txt
+                echo "Variant: full" >> $out/bin/VERSION.txt
+              '';
+           };
 
-          packages.demo = pkgs.rustPlatform.buildRustPackage {
-            pname = "summit_hip_numbers_demo";
-            version = "0.1.0";
-            src = ./.;
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-            };
-            nativeBuildInputs = [ pkgs.pkg-config ];
-            buildInputs = gstLibs;
-            cargoBuildFlags = "--features demo";
-             postInstall = ''
-               # Copy assets to bin directory where the binary is
-               cp config.toml $out/bin/
-               cp -r videos $out/bin/ 2>/dev/null || true
-               cp -r splash $out/bin/ 2>/dev/null || true
-               cp -r logo $out/bin/ 2>/dev/null || true
+           packages.demo = pkgs.rustPlatform.buildRustPackage {
+             pname = "summit_hip_numbers_demo";
+             version = "0.1.0";
+             src = ./crates/summit_hip_numbers;
+             cargoLock = {
+               lockFile = ./Cargo.lock;
+             };
+             nativeBuildInputs = [ pkgs.pkg-config ];
+             buildInputs = gstLibs;
+             cargoBuildFlags = "--features demo";
+              postInstall = ''
+                # Copy assets to bin directory where the binary is
+                cp ../../assets/config.toml $out/bin/
+                cp -r ../../assets/videos $out/bin/ 2>/dev/null || true
+                cp -r ../../assets/splash $out/bin/ 2>/dev/null || true
+                cp -r ../../assets/logo $out/bin/ 2>/dev/null || true
 
-               # Create version file
-               echo "Build: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" > $out/bin/VERSION.txt
-               echo "Git Commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')" >> $out/bin/VERSION.txt
-               echo "Variant: demo" >> $out/bin/VERSION.txt
+                # Create version file
+                echo "Build: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" > $out/bin/VERSION.txt
+                echo "Git Commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')" >> $out/bin/VERSION.txt
+                echo "Variant: demo" >> $out/bin/VERSION.txt
 
-               # Rename binary for demo
-               mv $out/bin/summit_hip_numbers $out/bin/summit_hip_numbers_demo
-             '';
-          };
+                # Rename binary for demo
+                mv $out/bin/summit_hip_numbers $out/bin/summit_hip_numbers_demo
+              '';
+           };
+
+           packages.usb-prep = pkgs.rustPlatform.buildRustPackage {
+             pname = "summit_usb_prep";
+             version = "0.1.0";
+             src = ./crates/usb_prep_tool;
+             cargoLock = {
+               lockFile = ./Cargo.lock;
+             };
+             nativeBuildInputs = [ pkgs.cargo-bundle ];
+             buildInputs = [ ];
+              postInstall = ''
+                # Bundle as macOS app
+                cd crates/usb_prep_tool
+                cargo-bundle --release --format dmg
+                mkdir -p $out
+                cp -r target/release/bundle/osx/* $out/
+                # Copy logo
+                cp -r ../../assets/logo $out/Contents/Resources/ 2>/dev/null || true
+              '';
+           };
 
         # macOS build with cargo-bundle for DMG
         packages.macos = pkgs.rustPlatform.buildRustPackage {
+           pname = "summit_hip_numbers";
+           version = "0.1.0";
+           src = ./crates/summit_hip_numbers;
+           cargoLock = {
+             lockFile = ./Cargo.lock;
+           };
            nativeBuildInputs = with pkgs; [
             pkg-config
             cargo-bundle
-          ];
-          buildInputs = [ ];
-          postBuild = ''
-            cargo-bundle --release --format dmg
-          '';
-           installPhase = ''
-             mkdir -p $out
-             cp -r target/release/bundle/osx/* $out/
-             # Copy config and assets
-             cp config.toml $out/
-             cp -r videos $out/ 2>/dev/null || true
-             cp -r splash $out/ 2>/dev/null || true
-             cp -r logo $out/ 2>/dev/null || true
+           ];
+           buildInputs = gstLibs;
+           postBuild = ''
+             cargo-bundle --release --format dmg
            '';
-        };
+            installPhase = ''
+              mkdir -p $out
+              cp -r target/release/bundle/osx/* $out/
+              # Copy config and assets
+              cp ../../assets/config.toml $out/
+              cp -r ../../assets/videos $out/ 2>/dev/null || true
+              cp -r ../../assets/splash $out/ 2>/dev/null || true
+              cp -r ../../assets/logo $out/ 2>/dev/null || true
+            '';
+         };
       });
 }
