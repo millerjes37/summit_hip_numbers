@@ -1,11 +1,11 @@
-[[ignores]]
+[[advisories.ignore]]
 id = "RUSTSEC-2020-0071"
 reason = "chrono time zone vulnerability - low impact for kiosk application"
 
-[[ignores]]
+[[advisories.ignore]]
 id = "RUSTSEC-2020-0159"
 reason = "tokio async task vulnerability - low impact for sync-only usage"
 
-[[ignores]]
+[[advisories.ignore]]
 id = "RUSTSEC-2021-0139"
 reason = "ansi_term color vulnerability - not used in this application"
