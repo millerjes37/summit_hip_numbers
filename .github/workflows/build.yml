@@ -114,10 +114,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: ./install_macos.sh --skip-build
-      - name: Run the macOS build script
-        run: ./build_macos.sh
+       - name: Install dependencies
+         run: ./scripts/install_macos.sh --skip-build
+       - name: Run the macOS build script
+         run: ./scripts/build_macos.sh
       - uses: actions/upload-artifact@v4
         with:
           name: mac-bundle
