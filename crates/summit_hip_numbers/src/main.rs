@@ -7,7 +7,7 @@ use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
 
-use file_scanner::{VideoFile, scan_video_files};
+use file_scanner::{scan_video_files, VideoFile};
 
 #[derive(Parser)]
 struct Cli {
