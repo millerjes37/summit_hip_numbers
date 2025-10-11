@@ -7,7 +7,7 @@ use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
 
-use file_scanner::{scan_video_files, VideoFile};
+use file_scanner::{VideoFile, scan_video_files};
 
 #[derive(Parser)]
 struct Cli {
@@ -1015,7 +1015,8 @@ impl MediaPlayerApp {
         }
 
         // Show splash every N videos
-        self.videos_played.is_multiple_of(&self.config.splash.interval)
+        self.videos_played
+            .is_multiple_of(&self.config.splash.interval)
     }
 
     fn trim_log(&self) {
@@ -1377,13 +1378,12 @@ impl eframe::App for MediaPlayerApp {
             }
         });
 
-        if ctx.input(|i| i.key_pressed(egui::Key::Enter))
-            && !self.input_buffer.is_empty() {
-                let input = self.input_buffer.clone();
-                if !self.validate_and_switch(&input) {
-                    self.invalid_input_timer = self.config.ui.invalid_input_timeout;
-                }
-                self.input_buffer.clear();
+        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !self.input_buffer.is_empty() {
+            let input = self.input_buffer.clone();
+            if !self.validate_and_switch(&input) {
+                self.invalid_input_timer = self.config.ui.invalid_input_timeout;
+            }
+            self.input_buffer.clear();
         }
 
         // Arrow key navigation
