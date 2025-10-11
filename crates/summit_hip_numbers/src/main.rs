@@ -1016,7 +1016,7 @@ impl MediaPlayerApp {
 
         // Show splash every N videos
         self.videos_played
-            .is_multiple_of(&self.config.splash.interval)
+            .is_multiple_of(self.config.splash.interval)
     }
 
     fn trim_log(&self) {
