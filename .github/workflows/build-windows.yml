@@ -57,13 +57,6 @@ jobs:
       with:
         toolchain: stable-x86_64-pc-windows-gnu
 
-    - name: Build Application
-      shell: msys2 {0}
-      env:
-        PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
-        RUSTFLAGS: -L native=/mingw64/lib
-      run: cargo build --release --verbose
-
     - name: Create Distribution
       shell: msys2 {0}
       run: |
@@ -82,6 +75,13 @@ jobs:
         $inno_dir = "C:\Program Files (x86)\Inno Setup 6"
         Write-Host "Adding '$inno_dir' to GITHUB_PATH"
         echo $inno_dir >> $env:GITHUB_PATH
+
+    - name: Build Installer
+      if: matrix.variant == 'full'
+      shell: pwsh
+      run: |
+        # Create installer using Inno Setup
+        iscc.exe /Q "scripts/summit_hip_numbers.iss"
 
     - name: Upload Portable Application as Artifact
       uses: actions/upload-artifact@v4
