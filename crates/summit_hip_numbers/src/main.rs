@@ -694,7 +694,7 @@ impl MediaPlayerApp {
         let mut app = Self::load_config();
         app.check_asset_integrity();
         app.load_video_files();
-        app.load_logo();
+
         if !app.video_files.is_empty() {
             app.load_video_index = Some(0);
         }
@@ -805,10 +805,7 @@ impl MediaPlayerApp {
         }
     }
 
-    fn load_logo(&mut self) {
-        // SVG logo loading will be implemented later when egui API stabilizes
-        // For now, we use the text fallback in the UI
-    }
+
 
     fn check_asset_integrity(&self) {
         let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
@@ -1203,60 +1200,52 @@ impl eframe::App for MediaPlayerApp {
                 .rect_filled(bar_rect, 0.0, Self::hex_to_color(&self.config.ui.background_color));
 
             ui.allocate_new_ui(egui::UiBuilder::new().max_rect(bar_rect), |ui| {
-                ui.horizontal_centered(|ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        ui.label(
-                            egui::RichText::new(&self.config.ui.input_label).color(Self::hex_to_color(&self.config.ui.label_color)),
-                        );
-                        ui.add_space(self.config.ui.ui_spacing);
+                ui.horizontal(|ui| {
+                    ui.add_space(self.config.ui.ui_spacing); // Left padding
 
-                        let text_color = if self.invalid_input_timer > 0.0 {
-                            egui::Color32::RED
-                        } else {
-                            Self::hex_to_color(&self.config.ui.input_text_color)
-                        };
-
-                        let response = ui.add(
-                            egui::TextEdit::singleline(&mut self.input_buffer)
-                                .char_limit(self.config.ui.input_max_length)
-                                .desired_width(self.config.ui.input_field_width)
-                                .text_color(text_color)
-                                .frame(false),
-                        );
+                    // Left: Input field
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new(&self.config.ui.input_label).color(Self::hex_to_color(&self.config.ui.label_color)));
+                        let mut input_text = self.input_buffer.clone();
+                        let response = ui.add(egui::TextEdit::singleline(&mut input_text)
+                            .desired_width(self.config.ui.input_field_width)
+                            .font(egui::TextStyle::Body.resolve(ui.style()))
+                            .text_color(if self.invalid_input_timer > 0.0 {
+                                egui::Color32::RED
+                            } else {
+                                Self::hex_to_color(&self.config.ui.input_text_color)
+                            })
+                            .frame(false));
+                        self.input_buffer = input_text.chars().filter(|c| c.is_digit(10)).take(self.config.ui.input_max_length).collect();
 
                         let stroke_color = if self.invalid_input_timer > 0.0 {
                             egui::Color32::RED
                         } else {
                             Self::hex_to_color(&self.config.ui.input_stroke_color)
                         };
-
                         ui.painter().rect_stroke(
-                            response.rect,
-                            self.config.ui.stroke_width,
+                            response.rect.expand(self.config.ui.stroke_width / 2.0),
+                            0.0,
                             egui::Stroke::new(self.config.ui.stroke_width, stroke_color),
                         );
                     });
 
-                    ui.with_layout(
-                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                        |ui| {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{} {}",
-                                    self.config.ui.now_playing_label,
-                                    self.current_file_name
-                                ))
-                                .color(Self::hex_to_color(&self.config.ui.label_color)),
-                            );
-                        },
-                    );
+                    ui.add_space(self.config.ui.ui_spacing); // Spacing between elements
 
+                    // Center: Now playing
+                    ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
+                        ui.label(egui::RichText::new(format!("{} {}", self.config.ui.now_playing_label, self.current_file_name))
+                            .color(Self::hex_to_color(&self.config.ui.label_color))
+                            .size(self.config.ui.placeholder_font_size));
+                    });
+
+                    ui.add_space(self.config.ui.ui_spacing); // Spacing
+
+                    // Right: Company label
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // For now, use text label - SVG loading needs more work with current egui API
-                        ui.label(
-                            egui::RichText::new(&self.config.ui.company_label)
-                                .color(Self::hex_to_color(&self.config.ui.label_color)),
-                        );
+                        ui.add_space(self.config.ui.ui_spacing);
+                        ui.label(egui::RichText::new(&self.config.ui.company_label)
+                            .color(Self::hex_to_color(&self.config.ui.label_color)));
                     });
                 });
             });
