@@ -162,7 +162,7 @@ no_video_popup_timeout = 3.0
 now_playing_label = "now playing"
 
 # Company/branding text displayed in the status bar
-company_label = "SUMMIT PROFESSIONAL Solutions"
+company_label = "Summit Professional Solutions"
 
 # -----------------------------------------------------------------------------
 # COLOR SETTINGS (Hex Format)

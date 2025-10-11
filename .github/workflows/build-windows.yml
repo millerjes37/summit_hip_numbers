@@ -63,6 +63,18 @@ jobs:
         chmod +x scripts/build_windows_msys2.sh
         ./scripts/build_windows_msys2.sh ${{ matrix.variant }}
 
+    - name: Debug Build Artifacts
+      if: always()
+      shell: pwsh
+      run: |
+        if (Test-Path dist/full) {
+          Write-Host "dist/full contents:"
+          Get-ChildItem -Path dist/full -Recurse | Select-Object FullName, Length | Format-List
+        } else {
+          Write-Error "dist/full directory missing!"
+        }
+        Get-ChildItem -Path scripts | Format-List
+
     - name: Download and Install Inno Setup
       if: matrix.variant == 'full'
       shell: pwsh
