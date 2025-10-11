@@ -1,4 +1,5 @@
 mod file_scanner;
+#[cfg(feature = "gstreamer")]
 mod video_player;
 
 use clap::Parser;
@@ -972,6 +973,24 @@ impl MediaPlayerApp {
         }
     }
 
+    fn navigate_forward(&mut self) {
+        if self.current_index < self.video_files.len().saturating_sub(1) {
+            self.current_index += 1;
+            self.load_video_index = Some(self.current_index);
+            self.current_file_name = self.video_files[self.current_index].name.clone();
+            info!("Navigated forward to index {}: {}", self.current_index, self.current_file_name);
+        }
+    }
+
+    fn navigate_backward(&mut self) {
+        if self.current_index > 0 {
+            self.current_index -= 1;
+            self.load_video_index = Some(self.current_index);
+            self.current_file_name = self.video_files[self.current_index].name.clone();
+            info!("Navigated backward to index {}: {}", self.current_index, self.current_file_name);
+        }
+    }
+
     fn hex_to_color(hex: &str) -> egui::Color32 {
         let hex = hex.trim_start_matches('#');
         if hex.len() == 6 {
@@ -1109,23 +1128,13 @@ impl eframe::App for MediaPlayerApp {
 
         // Arrow key navigation
         if self.config.ui.enable_arrow_nav && self.input_buffer.is_empty() {
-            ctx.input(|i| {
-                if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::ArrowRight) {
-                    if self.current_index < self.video_files.len().saturating_sub(1) {
-                        self.current_index += 1;
-                        self.load_video_index = Some(self.current_index);
-                        self.current_file_name = self.video_files[self.current_index].name.clone();
-                        info!("Navigated forward to index {}: {}", self.current_index, self.current_file_name);
-                    }
-                } else if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::ArrowLeft) {
-                    if self.current_index > 0 {
-                        self.current_index -= 1;
-                        self.load_video_index = Some(self.current_index);
-                        self.current_file_name = self.video_files[self.current_index].name.clone();
-                        info!("Navigated backward to index {}: {}", self.current_index, self.current_file_name);
-                    }
-                }
-            });
+            if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::ArrowRight)) {
+                log::info!("Navigated forward");
+                self.navigate_forward();
+            } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::ArrowLeft)) {
+                log::info!("Navigated backward");
+                self.navigate_backward();
+            }
         }
 
         if let Some(index) = self.load_video_index.take() {
