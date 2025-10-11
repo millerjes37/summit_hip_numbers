@@ -36,6 +36,7 @@ struct Config {
     splash: SplashConfig,
     logging: LoggingConfig,
     ui: UiConfig,
+    demo: DemoConfig,
 }
 
 #[derive(Debug, Deserialize, serde::Serialize)]
@@ -61,6 +62,13 @@ struct LoggingConfig {
 }
 
 #[derive(Debug, Deserialize, serde::Serialize)]
+struct DemoConfig {
+    timeout_seconds: u64,
+    max_videos: usize,
+    hip_number_limit: u32,
+}
+
+#[derive(Debug, Deserialize, serde::Serialize)]
 struct UiConfig {
     input_label: String,
     now_playing_label: String,
@@ -71,6 +79,23 @@ struct UiConfig {
     background_color: String,
     kiosk_mode: bool,
     enable_arrow_nav: bool,
+    window_width: f32,
+    window_height: f32,
+    video_height_ratio: f32,
+    bar_height_ratio: f32,
+    splash_font_size: f32,
+    placeholder_font_size: f32,
+    demo_watermark_font_size: f32,
+    input_field_width: f32,
+    input_max_length: usize,
+    demo_watermark_x_offset: f32,
+    demo_watermark_y_offset: f32,
+    demo_watermark_width: f32,
+    demo_watermark_height: f32,
+    ui_spacing: f32,
+    stroke_width: f32,
+    invalid_input_timeout: f64,
+    no_video_popup_timeout: f64,
 }
 
 struct ConfigApp {
@@ -92,6 +117,26 @@ struct ConfigApp {
     background_color: String,
     kiosk_mode: bool,
     enable_arrow_nav: bool,
+    window_width: String,
+    window_height: String,
+    video_height_ratio: String,
+    bar_height_ratio: String,
+    splash_font_size: String,
+    placeholder_font_size: String,
+    demo_watermark_font_size: String,
+    input_field_width: String,
+    input_max_length: String,
+    demo_watermark_x_offset: String,
+    demo_watermark_y_offset: String,
+    demo_watermark_width: String,
+    demo_watermark_height: String,
+    ui_spacing: String,
+    stroke_width: String,
+    invalid_input_timeout: String,
+    no_video_popup_timeout: String,
+    demo_timeout_seconds: String,
+    demo_max_videos: String,
+    demo_hip_number_limit: String,
     message: Option<String>,
 }
 
@@ -115,6 +160,26 @@ impl ConfigApp {
         app.background_color = app.config.ui.background_color.clone();
         app.kiosk_mode = app.config.ui.kiosk_mode;
         app.enable_arrow_nav = app.config.ui.enable_arrow_nav;
+        app.window_width = app.config.ui.window_width.to_string();
+        app.window_height = app.config.ui.window_height.to_string();
+        app.video_height_ratio = app.config.ui.video_height_ratio.to_string();
+        app.bar_height_ratio = app.config.ui.bar_height_ratio.to_string();
+        app.splash_font_size = app.config.ui.splash_font_size.to_string();
+        app.placeholder_font_size = app.config.ui.placeholder_font_size.to_string();
+        app.demo_watermark_font_size = app.config.ui.demo_watermark_font_size.to_string();
+        app.input_field_width = app.config.ui.input_field_width.to_string();
+        app.input_max_length = app.config.ui.input_max_length.to_string();
+        app.demo_watermark_x_offset = app.config.ui.demo_watermark_x_offset.to_string();
+        app.demo_watermark_y_offset = app.config.ui.demo_watermark_y_offset.to_string();
+        app.demo_watermark_width = app.config.ui.demo_watermark_width.to_string();
+        app.demo_watermark_height = app.config.ui.demo_watermark_height.to_string();
+        app.ui_spacing = app.config.ui.ui_spacing.to_string();
+        app.stroke_width = app.config.ui.stroke_width.to_string();
+        app.invalid_input_timeout = app.config.ui.invalid_input_timeout.to_string();
+        app.no_video_popup_timeout = app.config.ui.no_video_popup_timeout.to_string();
+        app.demo_timeout_seconds = app.config.demo.timeout_seconds.to_string();
+        app.demo_max_videos = app.config.demo.max_videos.to_string();
+        app.demo_hip_number_limit = app.config.demo.hip_number_limit.to_string();
         app
     }
 
@@ -148,6 +213,28 @@ impl ConfigApp {
             background_color: "#000000".to_string(),
             kiosk_mode: true,
             enable_arrow_nav: true,
+            window_width: 1920.0,
+            window_height: 1080.0,
+            video_height_ratio: 0.92,
+            bar_height_ratio: 0.08,
+            splash_font_size: 48.0,
+            placeholder_font_size: 48.0,
+            demo_watermark_font_size: 24.0,
+            input_field_width: 45.0,
+            input_max_length: 3,
+            demo_watermark_x_offset: 200.0,
+            demo_watermark_y_offset: 10.0,
+            demo_watermark_width: 180.0,
+            demo_watermark_height: 30.0,
+            ui_spacing: 10.0,
+            stroke_width: 1.0,
+            invalid_input_timeout: 0.5,
+            no_video_popup_timeout: 3.0,
+        },
+        demo: DemoConfig {
+            timeout_seconds: 300,
+            max_videos: 5,
+            hip_number_limit: 5,
         },
         };
         if let Ok(config_str) = fs::read_to_string(config_path) {
@@ -174,6 +261,26 @@ impl ConfigApp {
             background_color: String::new(),
             kiosk_mode: false,
             enable_arrow_nav: false,
+            window_width: String::new(),
+            window_height: String::new(),
+            video_height_ratio: String::new(),
+            bar_height_ratio: String::new(),
+            splash_font_size: String::new(),
+            placeholder_font_size: String::new(),
+            demo_watermark_font_size: String::new(),
+            input_field_width: String::new(),
+            input_max_length: String::new(),
+            demo_watermark_x_offset: String::new(),
+            demo_watermark_y_offset: String::new(),
+            demo_watermark_width: String::new(),
+            demo_watermark_height: String::new(),
+            ui_spacing: String::new(),
+            stroke_width: String::new(),
+            invalid_input_timeout: String::new(),
+            no_video_popup_timeout: String::new(),
+            demo_timeout_seconds: String::new(),
+            demo_max_videos: String::new(),
+            demo_hip_number_limit: String::new(),
             message: None,
         }
     }
@@ -198,6 +305,26 @@ impl ConfigApp {
         self.config.ui.background_color = self.background_color.clone();
         self.config.ui.kiosk_mode = self.kiosk_mode;
         self.config.ui.enable_arrow_nav = self.enable_arrow_nav;
+        if let Ok(val) = self.window_width.parse::<f32>() { self.config.ui.window_width = val; }
+        if let Ok(val) = self.window_height.parse::<f32>() { self.config.ui.window_height = val; }
+        if let Ok(val) = self.video_height_ratio.parse::<f32>() { self.config.ui.video_height_ratio = val; }
+        if let Ok(val) = self.bar_height_ratio.parse::<f32>() { self.config.ui.bar_height_ratio = val; }
+        if let Ok(val) = self.splash_font_size.parse::<f32>() { self.config.ui.splash_font_size = val; }
+        if let Ok(val) = self.placeholder_font_size.parse::<f32>() { self.config.ui.placeholder_font_size = val; }
+        if let Ok(val) = self.demo_watermark_font_size.parse::<f32>() { self.config.ui.demo_watermark_font_size = val; }
+        if let Ok(val) = self.input_field_width.parse::<f32>() { self.config.ui.input_field_width = val; }
+        if let Ok(val) = self.input_max_length.parse::<usize>() { self.config.ui.input_max_length = val; }
+        if let Ok(val) = self.demo_watermark_x_offset.parse::<f32>() { self.config.ui.demo_watermark_x_offset = val; }
+        if let Ok(val) = self.demo_watermark_y_offset.parse::<f32>() { self.config.ui.demo_watermark_y_offset = val; }
+        if let Ok(val) = self.demo_watermark_width.parse::<f32>() { self.config.ui.demo_watermark_width = val; }
+        if let Ok(val) = self.demo_watermark_height.parse::<f32>() { self.config.ui.demo_watermark_height = val; }
+        if let Ok(val) = self.ui_spacing.parse::<f32>() { self.config.ui.ui_spacing = val; }
+        if let Ok(val) = self.stroke_width.parse::<f32>() { self.config.ui.stroke_width = val; }
+        if let Ok(val) = self.invalid_input_timeout.parse::<f64>() { self.config.ui.invalid_input_timeout = val; }
+        if let Ok(val) = self.no_video_popup_timeout.parse::<f64>() { self.config.ui.no_video_popup_timeout = val; }
+        if let Ok(val) = self.demo_timeout_seconds.parse::<u64>() { self.config.demo.timeout_seconds = val; }
+        if let Ok(val) = self.demo_max_videos.parse::<usize>() { self.config.demo.max_videos = val; }
+        if let Ok(val) = self.demo_hip_number_limit.parse::<u32>() { self.config.demo.hip_number_limit = val; }
 
         let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
         let config_path = exe_dir.join("config.toml");
@@ -274,12 +401,92 @@ impl eframe::App for ConfigApp {
             ui.text_edit_singleline(&mut self.input_stroke_color);
             ui.label("Label Color:");
             ui.text_edit_singleline(&mut self.label_color);
-            ui.label("Background Color:");
-            ui.text_edit_singleline(&mut self.background_color);
+             ui.label("Background Color:");
+             ui.text_edit_singleline(&mut self.background_color);
 
-            ui.separator();
+             ui.separator();
 
-            if ui.button("Save Configuration").clicked() {
+             ui.heading("Advanced UI Settings");
+             ui.label("Window Size:");
+             ui.horizontal(|ui| {
+                 ui.label("Width:");
+                 ui.text_edit_singleline(&mut self.window_width);
+                 ui.label("Height:");
+                 ui.text_edit_singleline(&mut self.window_height);
+             });
+
+             ui.label("Layout Ratios (0.0-1.0):");
+             ui.horizontal(|ui| {
+                 ui.label("Video Height:");
+                 ui.text_edit_singleline(&mut self.video_height_ratio);
+                 ui.label("Bar Height:");
+                 ui.text_edit_singleline(&mut self.bar_height_ratio);
+             });
+
+             ui.label("Font Sizes:");
+             ui.horizontal(|ui| {
+                 ui.label("Splash:");
+                 ui.text_edit_singleline(&mut self.splash_font_size);
+                 ui.label("Placeholder:");
+                 ui.text_edit_singleline(&mut self.placeholder_font_size);
+                 ui.label("Demo Watermark:");
+                 ui.text_edit_singleline(&mut self.demo_watermark_font_size);
+             });
+
+             ui.label("Input Field:");
+             ui.horizontal(|ui| {
+                 ui.label("Width:");
+                 ui.text_edit_singleline(&mut self.input_field_width);
+                 ui.label("Max Length:");
+                 ui.text_edit_singleline(&mut self.input_max_length);
+             });
+
+             ui.label("Demo Watermark Position/Size:");
+             ui.horizontal(|ui| {
+                 ui.label("X Offset:");
+                 ui.text_edit_singleline(&mut self.demo_watermark_x_offset);
+                 ui.label("Y Offset:");
+                 ui.text_edit_singleline(&mut self.demo_watermark_y_offset);
+             });
+             ui.horizontal(|ui| {
+                 ui.label("Width:");
+                 ui.text_edit_singleline(&mut self.demo_watermark_width);
+                 ui.label("Height:");
+                 ui.text_edit_singleline(&mut self.demo_watermark_height);
+             });
+
+             ui.label("UI Spacing & Stroke:");
+             ui.horizontal(|ui| {
+                 ui.label("Spacing:");
+                 ui.text_edit_singleline(&mut self.ui_spacing);
+                 ui.label("Stroke Width:");
+                 ui.text_edit_singleline(&mut self.stroke_width);
+             });
+
+             ui.label("Timeouts (seconds):");
+             ui.horizontal(|ui| {
+                 ui.label("Invalid Input:");
+                 ui.text_edit_singleline(&mut self.invalid_input_timeout);
+                 ui.label("No Video Popup:");
+                 ui.text_edit_singleline(&mut self.no_video_popup_timeout);
+             });
+
+             ui.separator();
+
+             ui.heading("Demo Settings");
+             ui.label("Demo Configuration:");
+             ui.horizontal(|ui| {
+                 ui.label("Timeout (seconds):");
+                 ui.text_edit_singleline(&mut self.demo_timeout_seconds);
+                 ui.label("Max Videos:");
+                 ui.text_edit_singleline(&mut self.demo_max_videos);
+                 ui.label("Hip Number Limit:");
+                 ui.text_edit_singleline(&mut self.demo_hip_number_limit);
+             });
+
+             ui.separator();
+
+             if ui.button("Save Configuration").clicked() {
                 self.save_config();
             }
 
@@ -357,6 +564,28 @@ impl Default for MediaPlayerApp {
                        background_color: "#000000".to_string(),
                        kiosk_mode: true,
                        enable_arrow_nav: true,
+                       window_width: 1920.0,
+                       window_height: 1080.0,
+                       video_height_ratio: 0.92,
+                       bar_height_ratio: 0.08,
+                       splash_font_size: 48.0,
+                       placeholder_font_size: 48.0,
+                       demo_watermark_font_size: 24.0,
+                       input_field_width: 45.0,
+                       input_max_length: 3,
+                       demo_watermark_x_offset: 200.0,
+                       demo_watermark_y_offset: 10.0,
+                       demo_watermark_width: 180.0,
+                       demo_watermark_height: 30.0,
+                       ui_spacing: 10.0,
+                       stroke_width: 1.0,
+                       invalid_input_timeout: 0.5,
+                       no_video_popup_timeout: 3.0,
+                   },
+                   demo: DemoConfig {
+                       timeout_seconds: 300,
+                       max_videos: 5,
+                       hip_number_limit: 5,
                    },
               },
             video_files: Vec::new(),
@@ -440,10 +669,9 @@ impl MediaPlayerApp {
                 #[allow(unused_mut)]
                 #[cfg(feature = "demo")]
                 {
-                    const MAX_VIDEOS: usize = 5;
-                    if files.len() > MAX_VIDEOS {
-                        files.truncate(MAX_VIDEOS);
-                        info!("Demo mode: Limited to first {} videos", MAX_VIDEOS);
+                    if files.len() > self.config.demo.max_videos {
+                        files.truncate(self.config.demo.max_videos);
+                        info!("Demo mode: Limited to first {} videos", self.config.demo.max_videos);
                     }
                 }
 
@@ -630,9 +858,9 @@ impl MediaPlayerApp {
     fn validate_and_switch(&mut self, input: &str) -> bool {
         if input.len() == 3 && input.chars().all(|c| c.is_ascii_digit()) {
             #[cfg(feature = "demo")]
-            if input.parse::<u32>().unwrap_or(0) > 5 {
+            if input.parse::<u32>().unwrap_or(0) > self.config.demo.hip_number_limit {
                 self.show_no_video_popup = true;
-                self.no_video_popup_timer = 3.0;
+                self.no_video_popup_timer = self.config.ui.no_video_popup_timeout;
                 self.no_video_hip = input.to_string();
                 warn!("Demo mode: Hip number {} not available", input);
                 return false;
@@ -647,7 +875,7 @@ impl MediaPlayerApp {
             } else {
                 // No video found
                 self.show_no_video_popup = true;
-                self.no_video_popup_timer = 3.0;
+                self.no_video_popup_timer = self.config.ui.no_video_popup_timeout;
                 self.no_video_hip = input.to_string();
             }
         }
@@ -736,7 +964,7 @@ impl eframe::App for MediaPlayerApp {
                         ui.centered_and_justified(|ui| {
                             ui.label(
                                 egui::RichText::new(&self.config.splash.text)
-                                    .size(48.0)
+                                    .size(self.config.ui.splash_font_size)
                                     .color(text_color),
                             );
                         });
@@ -749,19 +977,22 @@ impl eframe::App for MediaPlayerApp {
 
         // Demo mode timeout check
         #[cfg(feature = "demo")]
-        if self.start_time.elapsed() > std::time::Duration::from_secs(300) {
+        if self.start_time.elapsed() > std::time::Duration::from_secs(self.config.demo.timeout_seconds) {
             warn!("Demo mode timeout reached - exiting");
             std::process::exit(0);
         }
 
         if self.invalid_input_timer > 0.0 {
             self.invalid_input_timer -= ctx.input(|i| i.unstable_dt) as f64;
+        } else if self.invalid_input_timer < 0.0 {
+            self.invalid_input_timer = 0.0;
         }
 
         if self.show_no_video_popup {
             self.no_video_popup_timer -= ctx.input(|i| i.unstable_dt) as f64;
             if self.no_video_popup_timer <= 0.0 {
                 self.show_no_video_popup = false;
+                self.no_video_popup_timer = 0.0;
             }
         }
 
@@ -777,7 +1008,7 @@ impl eframe::App for MediaPlayerApp {
         ctx.input_mut(|i| {
             for event in &i.events {
                 if let egui::Event::Text(text) = event {
-                    if self.input_buffer.len() < 3 && text.chars().all(|c| c.is_ascii_digit()) {
+                    if self.input_buffer.len() < self.config.ui.input_max_length && text.chars().all(|c| c.is_ascii_digit()) {
                         self.input_buffer.push_str(text);
                     }
                 }
@@ -788,7 +1019,7 @@ impl eframe::App for MediaPlayerApp {
             if !self.input_buffer.is_empty() {
                 let input = self.input_buffer.clone();
                 if !self.validate_and_switch(&input) {
-                    self.invalid_input_timer = 0.5;
+                    self.invalid_input_timer = self.config.ui.invalid_input_timeout;
                 }
                 self.input_buffer.clear();
             }
@@ -832,7 +1063,7 @@ impl eframe::App for MediaPlayerApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let available_rect = ui.max_rect();
-            let video_height = available_rect.height() * 0.92;
+            let video_height = available_rect.height() * self.config.ui.video_height_ratio;
             let video_rect = egui::Rect::from_min_size(
                 available_rect.min,
                 egui::vec2(available_rect.width(), video_height),
@@ -847,7 +1078,7 @@ impl eframe::App for MediaPlayerApp {
                     ui.centered_and_justified(|ui| {
                         ui.label(
                             egui::RichText::new("🎬 VIDEO DISPLAY AREA")
-                                .size(48.0)
+                                .size(self.config.ui.placeholder_font_size)
                                 .color(Self::hex_to_color(&self.config.ui.label_color)),
                         );
                     });
@@ -858,14 +1089,14 @@ impl eframe::App for MediaPlayerApp {
                 ui.allocate_new_ui(
                     egui::UiBuilder::new().max_rect(
                         egui::Rect::from_min_size(
-                            egui::pos2(video_rect.right() - 200.0, video_rect.top() + 10.0),
-                            egui::vec2(180.0, 30.0)
+                            egui::pos2(video_rect.right() - self.config.ui.demo_watermark_x_offset, video_rect.top() + self.config.ui.demo_watermark_y_offset),
+                            egui::vec2(self.config.ui.demo_watermark_width, self.config.ui.demo_watermark_height)
                         )
                     ),
                     |ui| {
                         ui.label(
                             egui::RichText::new("DEMO ONLY")
-                                .size(24.0)
+                                .size(self.config.ui.demo_watermark_font_size)
                                 .color(egui::Color32::from_rgb(255, 0, 0))
                                 .strong()
                         );
@@ -873,7 +1104,7 @@ impl eframe::App for MediaPlayerApp {
                 );
             });
 
-            let bar_height = available_rect.height() * 0.08;
+            let bar_height = available_rect.height() * self.config.ui.bar_height_ratio;
             let bar_rect = egui::Rect::from_min_size(
                 egui::pos2(available_rect.min.x, available_rect.min.y + video_height),
                 egui::vec2(available_rect.width(), bar_height),
@@ -888,7 +1119,7 @@ impl eframe::App for MediaPlayerApp {
                         ui.label(
                             egui::RichText::new(&self.config.ui.input_label).color(Self::hex_to_color(&self.config.ui.label_color)),
                         );
-                        ui.add_space(10.0);
+                        ui.add_space(self.config.ui.ui_spacing);
 
                         let text_color = if self.invalid_input_timer > 0.0 {
                             egui::Color32::RED
@@ -898,8 +1129,8 @@ impl eframe::App for MediaPlayerApp {
 
                         let response = ui.add(
                             egui::TextEdit::singleline(&mut self.input_buffer)
-                                .char_limit(3)
-                                .desired_width(45.0)
+                                .char_limit(self.config.ui.input_max_length)
+                                .desired_width(self.config.ui.input_field_width)
                                 .text_color(text_color)
                                 .frame(false),
                         );
@@ -912,8 +1143,8 @@ impl eframe::App for MediaPlayerApp {
 
                         ui.painter().rect_stroke(
                             response.rect,
-                            1.0,
-                            egui::Stroke::new(1.0, stroke_color),
+                            self.config.ui.stroke_width,
+                            egui::Stroke::new(self.config.ui.stroke_width, stroke_color),
                         );
                     });
 
@@ -981,17 +1212,39 @@ fn load_config_for_kiosk() -> Config {
             file: "summit_hip_numbers.log".to_string(),
             max_lines: 10000,
         },
-                  ui: UiConfig {
-                      input_label: "3-digit hip number:".to_string(),
-                      now_playing_label: "now playing".to_string(),
-                      company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
-                      input_text_color: "#FFFFFF".to_string(),
-                      input_stroke_color: "#FFFFFF".to_string(),
-                      label_color: "#FFFFFF".to_string(),
-                      background_color: "#000000".to_string(),
-                      kiosk_mode: true,
-                      enable_arrow_nav: true,
-                  },
+                    ui: UiConfig {
+                        input_label: "3-digit hip number:".to_string(),
+                        now_playing_label: "now playing".to_string(),
+                        company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+                        input_text_color: "#FFFFFF".to_string(),
+                        input_stroke_color: "#FFFFFF".to_string(),
+                        label_color: "#FFFFFF".to_string(),
+                        background_color: "#000000".to_string(),
+                        kiosk_mode: true,
+                        enable_arrow_nav: true,
+                        window_width: 1920.0,
+                        window_height: 1080.0,
+                        video_height_ratio: 0.92,
+                        bar_height_ratio: 0.08,
+                        splash_font_size: 48.0,
+                        placeholder_font_size: 48.0,
+                        demo_watermark_font_size: 24.0,
+                        input_field_width: 45.0,
+                        input_max_length: 3,
+                        demo_watermark_x_offset: 200.0,
+                        demo_watermark_y_offset: 10.0,
+                        demo_watermark_width: 180.0,
+                        demo_watermark_height: 30.0,
+                        ui_spacing: 10.0,
+                        stroke_width: 1.0,
+                        invalid_input_timeout: 0.5,
+                        no_video_popup_timeout: 3.0,
+                    },
+                    demo: DemoConfig {
+                        timeout_seconds: 300,
+                        max_videos: 5,
+                        hip_number_limit: 5,
+                    },
     }
 }
 
@@ -1072,6 +1325,28 @@ mod tests {
                 background_color: "#0000FF".to_string(),
                 kiosk_mode: false,
                 enable_arrow_nav: true,
+                window_width: 1920.0,
+                window_height: 1080.0,
+                video_height_ratio: 0.92,
+                bar_height_ratio: 0.08,
+                splash_font_size: 48.0,
+                placeholder_font_size: 48.0,
+                demo_watermark_font_size: 24.0,
+                input_field_width: 45.0,
+                input_max_length: 3,
+                demo_watermark_x_offset: 200.0,
+                demo_watermark_y_offset: 10.0,
+                demo_watermark_width: 180.0,
+                demo_watermark_height: 30.0,
+                ui_spacing: 10.0,
+                stroke_width: 1.0,
+                invalid_input_timeout: 0.5,
+                no_video_popup_timeout: 3.0,
+            },
+            demo: DemoConfig {
+                timeout_seconds: 300,
+                max_videos: 5,
+                hip_number_limit: 5,
             },
         }
     }
@@ -1557,7 +1832,7 @@ fn main() -> eframe::Result<()> {
         #[cfg(feature = "gstreamer")]
         gstreamer::init().expect("Failed to initialize GStreamer");
 
-        let mut viewport = egui::ViewportBuilder::default().with_inner_size([1920.0, 1080.0]);
+        let mut viewport = egui::ViewportBuilder::default().with_inner_size([config.ui.window_width, config.ui.window_height]);
         if config.ui.kiosk_mode {
             viewport = viewport.with_fullscreen(true).with_decorations(false);
             info!("Kiosk mode enabled: fullscreen with no decorations");
