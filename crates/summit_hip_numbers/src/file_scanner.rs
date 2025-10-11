@@ -12,7 +12,10 @@ pub fn scan_video_files(video_dir: &std::path::Path) -> Result<Vec<VideoFile>, S
     let path = Path::new(video_dir);
 
     if !path.exists() {
-        return Err(format!("Video directory does not exist: {}", video_dir.display()));
+        return Err(format!(
+            "Video directory does not exist: {}",
+            video_dir.display()
+        ));
     }
 
     let mut files = Vec::new();
@@ -22,10 +25,14 @@ pub fn scan_video_files(video_dir: &std::path::Path) -> Result<Vec<VideoFile>, S
         let path_buf = entry.path();
         if path_buf.is_file() {
             if let Some(file_name) = path_buf.file_name().and_then(|n| n.to_str()) {
-                if file_name.ends_with(".png") || file_name.ends_with(".jpg") ||
-                   file_name.ends_with(".jpeg") || file_name.ends_with(".mp4") {
+                if file_name.ends_with(".png")
+                    || file_name.ends_with(".jpg")
+                    || file_name.ends_with(".jpeg")
+                    || file_name.ends_with(".mp4")
+                {
                     // Parse hip number from filename prefix
-                    let hip_number: String = file_name.chars()
+                    let hip_number: String = file_name
+                        .chars()
                         .take_while(|c| c.is_ascii_digit())
                         .collect();
                     if hip_number.len() == 3 {
@@ -57,7 +64,11 @@ mod tests {
     fn test_scan_video_files_nonexistent_dir() {
         let result = scan_video_files(std::path::Path::new("/nonexistent"));
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Video directory does not exist"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Video directory does not exist")
+        );
     }
 
     #[test]

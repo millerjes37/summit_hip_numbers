@@ -5,7 +5,13 @@
       "Bash(ls:*)",
       "Bash(chmod:*)",
       "Bash(mv:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run watch:*)",
+      "Bash(gh run view:*)",
+      "Bash(cargo fmt:*)"
     ],
     "deny": []
   }

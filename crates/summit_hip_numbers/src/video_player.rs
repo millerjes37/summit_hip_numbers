@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use eframe::epaint::ColorImage;
 use gstreamer::prelude::*;
 use gstreamer::{Bin, Element, ElementFactory, MessageView, State};
@@ -43,9 +43,12 @@ impl VideoPlayer {
         let capsfilter = ElementFactory::make("capsfilter")
             .build()
             .map_err(|e| anyhow!("Failed to create capsfilter: {:?}", e))?;
-        capsfilter.set_property("caps", &gstreamer::Caps::builder("video/x-raw")
-            .field("format", "RGBA")
-            .build());
+        capsfilter.set_property(
+            "caps",
+            &gstreamer::Caps::builder("video/x-raw")
+                .field("format", "RGBA")
+                .build(),
+        );
 
         // Create appsink for video
         let appsink = gstreamer_app::AppSink::builder().build();
@@ -53,19 +56,40 @@ impl VideoPlayer {
         appsink.set_drop(true);
 
         // Add elements to bin
-        video_bin.add(&videoconvert).map_err(|e| anyhow!("Failed to add videoconvert: {:?}", e))?;
-        video_bin.add(&videoscale).map_err(|e| anyhow!("Failed to add videoscale: {:?}", e))?;
-        video_bin.add(&capsfilter).map_err(|e| anyhow!("Failed to add capsfilter: {:?}", e))?;
-        video_bin.add(&appsink.clone().upcast::<Element>()).map_err(|e| anyhow!("Failed to add appsink: {:?}", e))?;
+        video_bin
+            .add(&videoconvert)
+            .map_err(|e| anyhow!("Failed to add videoconvert: {:?}", e))?;
+        video_bin
+            .add(&videoscale)
+            .map_err(|e| anyhow!("Failed to add videoscale: {:?}", e))?;
+        video_bin
+            .add(&capsfilter)
+            .map_err(|e| anyhow!("Failed to add capsfilter: {:?}", e))?;
+        video_bin
+            .add(&appsink.clone().upcast::<Element>())
+            .map_err(|e| anyhow!("Failed to add appsink: {:?}", e))?;
 
         // Link elements
-        videoconvert.link(&videoscale).map_err(|e| anyhow!("Failed to link videoconvert to videoscale: {:?}", e))?;
-        videoscale.link(&capsfilter).map_err(|e| anyhow!("Failed to link videoscale to capsfilter: {:?}", e))?;
-        capsfilter.link(&appsink.clone().upcast::<Element>()).map_err(|e| anyhow!("Failed to link capsfilter to appsink: {:?}", e))?;
+        videoconvert
+            .link(&videoscale)
+            .map_err(|e| anyhow!("Failed to link videoconvert to videoscale: {:?}", e))?;
+        videoscale
+            .link(&capsfilter)
+            .map_err(|e| anyhow!("Failed to link videoscale to capsfilter: {:?}", e))?;
+        capsfilter
+            .link(&appsink.clone().upcast::<Element>())
+            .map_err(|e| anyhow!("Failed to link capsfilter to appsink: {:?}", e))?;
 
         // Set ghost pad
-        let pad = videoconvert.static_pad("sink").ok_or_else(|| anyhow!("Failed to get sink pad"))?;
-        video_bin.add_pad(&gstreamer::GhostPad::with_target(&pad).map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?).map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?;
+        let pad = videoconvert
+            .static_pad("sink")
+            .ok_or_else(|| anyhow!("Failed to get sink pad"))?;
+        video_bin
+            .add_pad(
+                &gstreamer::GhostPad::with_target(&pad)
+                    .map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?,
+            )
+            .map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?;
 
         // Set video sink
         pipeline.set_property("video-sink", &video_bin);
@@ -143,11 +167,7 @@ impl VideoPlayer {
         });
     }
 
-    fn start_frame_extraction(
-        &self,
-        appsink: AppSink,
-        sender: watch::Sender<Option<ColorImage>>,
-    ) {
+    fn start_frame_extraction(&self, appsink: AppSink, sender: watch::Sender<Option<ColorImage>>) {
         appsink.set_callbacks(
             gstreamer_app::AppSinkCallbacks::builder()
                 .new_sample(move |appsink| {
@@ -241,10 +261,6 @@ mod tests {
         // Try to create a playbin to check if GStreamer is properly installed
         gstreamer::ElementFactory::make("playbin").build().is_ok()
     }
-
-
-
-
 
     #[test]
     fn test_play_success() {

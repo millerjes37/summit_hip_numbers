@@ -3,11 +3,10 @@ mod file_scanner;
 mod video_player;
 
 use clap::Parser;
-use eframe::egui;
 use dunce;
+use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
-
 
 use file_scanner::{VideoFile, scan_video_files};
 
@@ -21,16 +20,15 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+#[cfg(feature = "demo")]
+use std::time::Instant;
 use tokio::sync::watch;
 #[cfg(feature = "gstreamer")]
 use video_player::VideoPlayer;
-#[cfg(feature = "demo")]
-use std::time::Instant;
 
-use log::{info, error, warn};
-use fern;
 use chrono;
-
+use fern;
+use log::{error, info, warn};
 
 #[derive(Debug, Deserialize, serde::Serialize)]
 struct Config {
@@ -186,7 +184,11 @@ impl ConfigApp {
     }
 
     fn load_config() -> Self {
-        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
         let config_path = exe_dir.join("config.toml");
         let mut config = Config {
             video: VideoConfig {
@@ -205,39 +207,39 @@ impl ConfigApp {
                 file: "summit_hip_numbers.log".to_string(),
                 max_lines: 10000,
             },
-        ui: UiConfig {
-            input_label: "3-digit hip number:".to_string(),
-            now_playing_label: "now playing".to_string(),
-            company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
-            input_text_color: "#FFFFFF".to_string(),
-            input_stroke_color: "#FFFFFF".to_string(),
-            label_color: "#FFFFFF".to_string(),
-            background_color: "#000000".to_string(),
-            kiosk_mode: true,
-            enable_arrow_nav: true,
-            window_width: 1920.0,
-            window_height: 1080.0,
-            video_height_ratio: 0.92,
-            bar_height_ratio: 0.08,
-            splash_font_size: 48.0,
-            placeholder_font_size: 48.0,
-            demo_watermark_font_size: 24.0,
-            input_field_width: 45.0,
-            input_max_length: 3,
-            demo_watermark_x_offset: 200.0,
-            demo_watermark_y_offset: 10.0,
-            demo_watermark_width: 180.0,
-            demo_watermark_height: 30.0,
-            ui_spacing: 10.0,
-            stroke_width: 1.0,
-            invalid_input_timeout: 0.5,
-            no_video_popup_timeout: 3.0,
-        },
-        demo: DemoConfig {
-            timeout_seconds: 300,
-            max_videos: 5,
-            hip_number_limit: 5,
-        },
+            ui: UiConfig {
+                input_label: "3-digit hip number:".to_string(),
+                now_playing_label: "now playing".to_string(),
+                company_label: "SUMMIT PROFESSIONAL Solutions".to_string(),
+                input_text_color: "#FFFFFF".to_string(),
+                input_stroke_color: "#FFFFFF".to_string(),
+                label_color: "#FFFFFF".to_string(),
+                background_color: "#000000".to_string(),
+                kiosk_mode: true,
+                enable_arrow_nav: true,
+                window_width: 1920.0,
+                window_height: 1080.0,
+                video_height_ratio: 0.92,
+                bar_height_ratio: 0.08,
+                splash_font_size: 48.0,
+                placeholder_font_size: 48.0,
+                demo_watermark_font_size: 24.0,
+                input_field_width: 45.0,
+                input_max_length: 3,
+                demo_watermark_x_offset: 200.0,
+                demo_watermark_y_offset: 10.0,
+                demo_watermark_width: 180.0,
+                demo_watermark_height: 30.0,
+                ui_spacing: 10.0,
+                stroke_width: 1.0,
+                invalid_input_timeout: 0.5,
+                no_video_popup_timeout: 3.0,
+            },
+            demo: DemoConfig {
+                timeout_seconds: 300,
+                max_videos: 5,
+                hip_number_limit: 5,
+            },
         };
         if let Ok(config_str) = fs::read_to_string(config_path) {
             if let Ok(loaded_config) = toml::from_str(&config_str) {
@@ -307,28 +309,72 @@ impl ConfigApp {
         self.config.ui.background_color = self.background_color.clone();
         self.config.ui.kiosk_mode = self.kiosk_mode;
         self.config.ui.enable_arrow_nav = self.enable_arrow_nav;
-        if let Ok(val) = self.window_width.parse::<f32>() { self.config.ui.window_width = val; }
-        if let Ok(val) = self.window_height.parse::<f32>() { self.config.ui.window_height = val; }
-        if let Ok(val) = self.video_height_ratio.parse::<f32>() { self.config.ui.video_height_ratio = val; }
-        if let Ok(val) = self.bar_height_ratio.parse::<f32>() { self.config.ui.bar_height_ratio = val; }
-        if let Ok(val) = self.splash_font_size.parse::<f32>() { self.config.ui.splash_font_size = val; }
-        if let Ok(val) = self.placeholder_font_size.parse::<f32>() { self.config.ui.placeholder_font_size = val; }
-        if let Ok(val) = self.demo_watermark_font_size.parse::<f32>() { self.config.ui.demo_watermark_font_size = val; }
-        if let Ok(val) = self.input_field_width.parse::<f32>() { self.config.ui.input_field_width = val; }
-        if let Ok(val) = self.input_max_length.parse::<usize>() { self.config.ui.input_max_length = val; }
-        if let Ok(val) = self.demo_watermark_x_offset.parse::<f32>() { self.config.ui.demo_watermark_x_offset = val; }
-        if let Ok(val) = self.demo_watermark_y_offset.parse::<f32>() { self.config.ui.demo_watermark_y_offset = val; }
-        if let Ok(val) = self.demo_watermark_width.parse::<f32>() { self.config.ui.demo_watermark_width = val; }
-        if let Ok(val) = self.demo_watermark_height.parse::<f32>() { self.config.ui.demo_watermark_height = val; }
-        if let Ok(val) = self.ui_spacing.parse::<f32>() { self.config.ui.ui_spacing = val; }
-        if let Ok(val) = self.stroke_width.parse::<f32>() { self.config.ui.stroke_width = val; }
-        if let Ok(val) = self.invalid_input_timeout.parse::<f64>() { self.config.ui.invalid_input_timeout = val; }
-        if let Ok(val) = self.no_video_popup_timeout.parse::<f64>() { self.config.ui.no_video_popup_timeout = val; }
-        if let Ok(val) = self.demo_timeout_seconds.parse::<u64>() { self.config.demo.timeout_seconds = val; }
-        if let Ok(val) = self.demo_max_videos.parse::<usize>() { self.config.demo.max_videos = val; }
-        if let Ok(val) = self.demo_hip_number_limit.parse::<u32>() { self.config.demo.hip_number_limit = val; }
+        if let Ok(val) = self.window_width.parse::<f32>() {
+            self.config.ui.window_width = val;
+        }
+        if let Ok(val) = self.window_height.parse::<f32>() {
+            self.config.ui.window_height = val;
+        }
+        if let Ok(val) = self.video_height_ratio.parse::<f32>() {
+            self.config.ui.video_height_ratio = val;
+        }
+        if let Ok(val) = self.bar_height_ratio.parse::<f32>() {
+            self.config.ui.bar_height_ratio = val;
+        }
+        if let Ok(val) = self.splash_font_size.parse::<f32>() {
+            self.config.ui.splash_font_size = val;
+        }
+        if let Ok(val) = self.placeholder_font_size.parse::<f32>() {
+            self.config.ui.placeholder_font_size = val;
+        }
+        if let Ok(val) = self.demo_watermark_font_size.parse::<f32>() {
+            self.config.ui.demo_watermark_font_size = val;
+        }
+        if let Ok(val) = self.input_field_width.parse::<f32>() {
+            self.config.ui.input_field_width = val;
+        }
+        if let Ok(val) = self.input_max_length.parse::<usize>() {
+            self.config.ui.input_max_length = val;
+        }
+        if let Ok(val) = self.demo_watermark_x_offset.parse::<f32>() {
+            self.config.ui.demo_watermark_x_offset = val;
+        }
+        if let Ok(val) = self.demo_watermark_y_offset.parse::<f32>() {
+            self.config.ui.demo_watermark_y_offset = val;
+        }
+        if let Ok(val) = self.demo_watermark_width.parse::<f32>() {
+            self.config.ui.demo_watermark_width = val;
+        }
+        if let Ok(val) = self.demo_watermark_height.parse::<f32>() {
+            self.config.ui.demo_watermark_height = val;
+        }
+        if let Ok(val) = self.ui_spacing.parse::<f32>() {
+            self.config.ui.ui_spacing = val;
+        }
+        if let Ok(val) = self.stroke_width.parse::<f32>() {
+            self.config.ui.stroke_width = val;
+        }
+        if let Ok(val) = self.invalid_input_timeout.parse::<f64>() {
+            self.config.ui.invalid_input_timeout = val;
+        }
+        if let Ok(val) = self.no_video_popup_timeout.parse::<f64>() {
+            self.config.ui.no_video_popup_timeout = val;
+        }
+        if let Ok(val) = self.demo_timeout_seconds.parse::<u64>() {
+            self.config.demo.timeout_seconds = val;
+        }
+        if let Ok(val) = self.demo_max_videos.parse::<usize>() {
+            self.config.demo.max_videos = val;
+        }
+        if let Ok(val) = self.demo_hip_number_limit.parse::<u32>() {
+            self.config.demo.hip_number_limit = val;
+        }
 
-        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
         let config_path = exe_dir.join("config.toml");
         if let Ok(toml_str) = toml::to_string(&self.config) {
             if fs::write(&config_path, toml_str).is_ok() {
@@ -373,10 +419,26 @@ impl eframe::App for ConfigApp {
                 egui::ComboBox::from_label("Select interval")
                     .selected_text(&self.splash_interval)
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.splash_interval, "once".to_string(), "Once at start");
-                        ui.selectable_value(&mut self.splash_interval, "every".to_string(), "Every video");
-                        ui.selectable_value(&mut self.splash_interval, "every_other".to_string(), "Every other video");
-                        ui.selectable_value(&mut self.splash_interval, "every_third".to_string(), "Every third video");
+                        ui.selectable_value(
+                            &mut self.splash_interval,
+                            "once".to_string(),
+                            "Once at start",
+                        );
+                        ui.selectable_value(
+                            &mut self.splash_interval,
+                            "every".to_string(),
+                            "Every video",
+                        );
+                        ui.selectable_value(
+                            &mut self.splash_interval,
+                            "every_other".to_string(),
+                            "Every other video",
+                        );
+                        ui.selectable_value(
+                            &mut self.splash_interval,
+                            "every_third".to_string(),
+                            "Every third video",
+                        );
                     });
 
                 ui.label("Splash Directory:");
@@ -393,8 +455,11 @@ impl eframe::App for ConfigApp {
             ui.label("Company Label:");
             ui.text_edit_singleline(&mut self.company_label);
 
-             ui.checkbox(&mut self.kiosk_mode, "Enable Kiosk Mode (fullscreen, no decorations)");
-             ui.checkbox(&mut self.enable_arrow_nav, "Enable Arrow Key Navigation");
+            ui.checkbox(
+                &mut self.kiosk_mode,
+                "Enable Kiosk Mode (fullscreen, no decorations)",
+            );
+            ui.checkbox(&mut self.enable_arrow_nav, "Enable Arrow Key Navigation");
 
             ui.label("UI Colors (hex):");
             ui.label("Input Text Color:");
@@ -403,92 +468,92 @@ impl eframe::App for ConfigApp {
             ui.text_edit_singleline(&mut self.input_stroke_color);
             ui.label("Label Color:");
             ui.text_edit_singleline(&mut self.label_color);
-             ui.label("Background Color:");
-             ui.text_edit_singleline(&mut self.background_color);
+            ui.label("Background Color:");
+            ui.text_edit_singleline(&mut self.background_color);
 
-             ui.separator();
+            ui.separator();
 
-             ui.heading("Advanced UI Settings");
-             ui.label("Window Size:");
-             ui.horizontal(|ui| {
-                 ui.label("Width:");
-                 ui.text_edit_singleline(&mut self.window_width);
-                 ui.label("Height:");
-                 ui.text_edit_singleline(&mut self.window_height);
-             });
+            ui.heading("Advanced UI Settings");
+            ui.label("Window Size:");
+            ui.horizontal(|ui| {
+                ui.label("Width:");
+                ui.text_edit_singleline(&mut self.window_width);
+                ui.label("Height:");
+                ui.text_edit_singleline(&mut self.window_height);
+            });
 
-             ui.label("Layout Ratios (0.0-1.0):");
-             ui.horizontal(|ui| {
-                 ui.label("Video Height:");
-                 ui.text_edit_singleline(&mut self.video_height_ratio);
-                 ui.label("Bar Height:");
-                 ui.text_edit_singleline(&mut self.bar_height_ratio);
-             });
+            ui.label("Layout Ratios (0.0-1.0):");
+            ui.horizontal(|ui| {
+                ui.label("Video Height:");
+                ui.text_edit_singleline(&mut self.video_height_ratio);
+                ui.label("Bar Height:");
+                ui.text_edit_singleline(&mut self.bar_height_ratio);
+            });
 
-             ui.label("Font Sizes:");
-             ui.horizontal(|ui| {
-                 ui.label("Splash:");
-                 ui.text_edit_singleline(&mut self.splash_font_size);
-                 ui.label("Placeholder:");
-                 ui.text_edit_singleline(&mut self.placeholder_font_size);
-                 ui.label("Demo Watermark:");
-                 ui.text_edit_singleline(&mut self.demo_watermark_font_size);
-             });
+            ui.label("Font Sizes:");
+            ui.horizontal(|ui| {
+                ui.label("Splash:");
+                ui.text_edit_singleline(&mut self.splash_font_size);
+                ui.label("Placeholder:");
+                ui.text_edit_singleline(&mut self.placeholder_font_size);
+                ui.label("Demo Watermark:");
+                ui.text_edit_singleline(&mut self.demo_watermark_font_size);
+            });
 
-             ui.label("Input Field:");
-             ui.horizontal(|ui| {
-                 ui.label("Width:");
-                 ui.text_edit_singleline(&mut self.input_field_width);
-                 ui.label("Max Length:");
-                 ui.text_edit_singleline(&mut self.input_max_length);
-             });
+            ui.label("Input Field:");
+            ui.horizontal(|ui| {
+                ui.label("Width:");
+                ui.text_edit_singleline(&mut self.input_field_width);
+                ui.label("Max Length:");
+                ui.text_edit_singleline(&mut self.input_max_length);
+            });
 
-             ui.label("Demo Watermark Position/Size:");
-             ui.horizontal(|ui| {
-                 ui.label("X Offset:");
-                 ui.text_edit_singleline(&mut self.demo_watermark_x_offset);
-                 ui.label("Y Offset:");
-                 ui.text_edit_singleline(&mut self.demo_watermark_y_offset);
-             });
-             ui.horizontal(|ui| {
-                 ui.label("Width:");
-                 ui.text_edit_singleline(&mut self.demo_watermark_width);
-                 ui.label("Height:");
-                 ui.text_edit_singleline(&mut self.demo_watermark_height);
-             });
+            ui.label("Demo Watermark Position/Size:");
+            ui.horizontal(|ui| {
+                ui.label("X Offset:");
+                ui.text_edit_singleline(&mut self.demo_watermark_x_offset);
+                ui.label("Y Offset:");
+                ui.text_edit_singleline(&mut self.demo_watermark_y_offset);
+            });
+            ui.horizontal(|ui| {
+                ui.label("Width:");
+                ui.text_edit_singleline(&mut self.demo_watermark_width);
+                ui.label("Height:");
+                ui.text_edit_singleline(&mut self.demo_watermark_height);
+            });
 
-             ui.label("UI Spacing & Stroke:");
-             ui.horizontal(|ui| {
-                 ui.label("Spacing:");
-                 ui.text_edit_singleline(&mut self.ui_spacing);
-                 ui.label("Stroke Width:");
-                 ui.text_edit_singleline(&mut self.stroke_width);
-             });
+            ui.label("UI Spacing & Stroke:");
+            ui.horizontal(|ui| {
+                ui.label("Spacing:");
+                ui.text_edit_singleline(&mut self.ui_spacing);
+                ui.label("Stroke Width:");
+                ui.text_edit_singleline(&mut self.stroke_width);
+            });
 
-             ui.label("Timeouts (seconds):");
-             ui.horizontal(|ui| {
-                 ui.label("Invalid Input:");
-                 ui.text_edit_singleline(&mut self.invalid_input_timeout);
-                 ui.label("No Video Popup:");
-                 ui.text_edit_singleline(&mut self.no_video_popup_timeout);
-             });
+            ui.label("Timeouts (seconds):");
+            ui.horizontal(|ui| {
+                ui.label("Invalid Input:");
+                ui.text_edit_singleline(&mut self.invalid_input_timeout);
+                ui.label("No Video Popup:");
+                ui.text_edit_singleline(&mut self.no_video_popup_timeout);
+            });
 
-             ui.separator();
+            ui.separator();
 
-             ui.heading("Demo Settings");
-             ui.label("Demo Configuration:");
-             ui.horizontal(|ui| {
-                 ui.label("Timeout (seconds):");
-                 ui.text_edit_singleline(&mut self.demo_timeout_seconds);
-                 ui.label("Max Videos:");
-                 ui.text_edit_singleline(&mut self.demo_max_videos);
-                 ui.label("Hip Number Limit:");
-                 ui.text_edit_singleline(&mut self.demo_hip_number_limit);
-             });
+            ui.heading("Demo Settings");
+            ui.label("Demo Configuration:");
+            ui.horizontal(|ui| {
+                ui.label("Timeout (seconds):");
+                ui.text_edit_singleline(&mut self.demo_timeout_seconds);
+                ui.label("Max Videos:");
+                ui.text_edit_singleline(&mut self.demo_max_videos);
+                ui.label("Hip Number Limit:");
+                ui.text_edit_singleline(&mut self.demo_hip_number_limit);
+            });
 
-             ui.separator();
+            ui.separator();
 
-             if ui.button("Save Configuration").clicked() {
+            if ui.button("Save Configuration").clicked() {
                 self.save_config();
             }
 
@@ -703,7 +768,11 @@ impl MediaPlayerApp {
 
     fn load_config() -> Self {
         let mut app = Self::default();
-        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
         let config_path = exe_dir.join("config.toml");
         info!("Loading config from {}", config_path.display());
         if let Ok(config_str) = fs::read_to_string(&config_path) {
@@ -746,14 +815,21 @@ impl MediaPlayerApp {
     fn load_video_files(&mut self) {
         self.video_files.clear();
         self.hip_to_index.clear();
-        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
         let video_dir_path = std::path::Path::new(&self.config.video.directory);
         let video_dir = if video_dir_path.is_absolute() {
             // Absolute path (e.g., from tests)
             video_dir_path.to_path_buf()
         } else if exe_dir.to_str().unwrap().contains("target") {
             // Development: use repo assets
-            std::env::current_dir().unwrap().join("assets").join(&self.config.video.directory)
+            std::env::current_dir()
+                .unwrap()
+                .join("assets")
+                .join(&self.config.video.directory)
         } else {
             // Production: use exe dir
             exe_dir.join(&self.config.video.directory)
@@ -767,7 +843,10 @@ impl MediaPlayerApp {
                 {
                     if files.len() > self.config.demo.max_videos {
                         files.truncate(self.config.demo.max_videos);
-                        info!("Demo mode: Limited to first {} videos", self.config.demo.max_videos);
+                        info!(
+                            "Demo mode: Limited to first {} videos",
+                            self.config.demo.max_videos
+                        );
                     }
                 }
 
@@ -798,14 +877,21 @@ impl MediaPlayerApp {
 
     fn load_splash_images(&mut self) {
         self.splash_images.clear();
-        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
         let splash_dir_path = std::path::Path::new(&self.config.splash.directory);
         let splash_dir = if splash_dir_path.is_absolute() {
             // Absolute path (e.g., from tests)
             splash_dir_path.to_path_buf()
         } else if exe_dir.to_str().unwrap().contains("target") {
             // Development: use repo assets
-            std::env::current_dir().unwrap().join("assets").join(&self.config.splash.directory)
+            std::env::current_dir()
+                .unwrap()
+                .join("assets")
+                .join(&self.config.splash.directory)
         } else {
             // Production: use exe dir
             exe_dir.join(&self.config.splash.directory)
@@ -816,23 +902,32 @@ impl MediaPlayerApp {
                     let path = entry.path();
                     if path.is_file() {
                         if let Some(ext) = path.extension() {
-                            if matches!(ext.to_str(), Some("png") | Some("jpg") | Some("jpeg") | Some("bmp")) {
+                            if matches!(
+                                ext.to_str(),
+                                Some("png") | Some("jpg") | Some("jpeg") | Some("bmp")
+                            ) {
                                 self.splash_images.push(path);
                             }
                         }
                     }
                 }
             }
-            info!("Loaded {} splash images from {}", self.splash_images.len(), splash_dir.display());
+            info!(
+                "Loaded {} splash images from {}",
+                self.splash_images.len(),
+                splash_dir.display()
+            );
         } else {
             warn!("Splash directory {} does not exist", splash_dir.display());
         }
     }
 
-
-
     fn check_asset_integrity(&self) {
-        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
 
         let required_dirs = ["videos", "splash", "logo"];
         let mut missing_dirs = Vec::new();
@@ -852,10 +947,16 @@ impl MediaPlayerApp {
         let videos_dir = exe_dir.join("videos");
         if videos_dir.exists() {
             if let Ok(entries) = fs::read_dir(&videos_dir) {
-                let video_count = entries.filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension()
-                        .map(|ext| matches!(ext.to_str(), Some("mp4") | Some("avi") | Some("mkv")))
-                        .unwrap_or(false))
+                let video_count = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .map(|ext| {
+                                matches!(ext.to_str(), Some("mp4") | Some("avi") | Some("mkv"))
+                            })
+                            .unwrap_or(false)
+                    })
                     .count();
                 if video_count == 0 {
                     warn!("No video files found in videos directory");
@@ -887,7 +988,10 @@ impl MediaPlayerApp {
                 let start = lines.len() - self.config.logging.max_lines;
                 let trimmed = lines[start..].join("\n");
                 if fs::write(&log_path, trimmed + "\n").is_ok() {
-                    info!("Trimmed log file to {} lines", self.config.logging.max_lines);
+                    info!(
+                        "Trimmed log file to {} lines",
+                        self.config.logging.max_lines
+                    );
                 } else {
                     error!("Failed to trim log file");
                 }
@@ -911,7 +1015,10 @@ impl MediaPlayerApp {
         if let Some(video_file) = self.video_files.get(index) {
             self.current_index = index;
             self.current_file_name = video_file.name.clone();
-            info!("Loading video: {}", std::path::Path::new(&video_file.path).display());
+            info!(
+                "Loading video: {}",
+                std::path::Path::new(&video_file.path).display()
+            );
 
             let abs_path = match dunce::canonicalize(&video_file.path) {
                 Ok(path) => path,
@@ -924,7 +1031,11 @@ impl MediaPlayerApp {
             let uri = match glib::filename_to_uri(&abs_path, None) {
                 Ok(uri) => uri.to_string(),
                 Err(e) => {
-                    error!("Failed to convert path to URI {}: {}", abs_path.display(), e);
+                    error!(
+                        "Failed to convert path to URI {}: {}",
+                        abs_path.display(),
+                        e
+                    );
                     self.current_file_name = format!("Error: {}", e);
                     return;
                 }
@@ -999,7 +1110,10 @@ impl MediaPlayerApp {
             self.current_index += 1;
             self.load_video_index = Some(self.current_index);
             self.current_file_name = self.video_files[self.current_index].name.clone();
-            info!("Navigated forward to index {}: {}", self.current_index, self.current_file_name);
+            info!(
+                "Navigated forward to index {}: {}",
+                self.current_index, self.current_file_name
+            );
         }
     }
 
@@ -1008,7 +1122,10 @@ impl MediaPlayerApp {
             self.current_index -= 1;
             self.load_video_index = Some(self.current_index);
             self.current_file_name = self.video_files[self.current_index].name.clone();
-            info!("Navigated backward to index {}: {}", self.current_index, self.current_file_name);
+            info!(
+                "Navigated backward to index {}: {}",
+                self.current_index, self.current_file_name
+            );
         }
     }
 
@@ -1063,8 +1180,13 @@ impl eframe::App for MediaPlayerApp {
                                 let rgba = img.to_rgba8();
                                 let size = [rgba.width() as usize, rgba.height() as usize];
                                 let pixels = rgba.into_raw();
-                                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
-                                self.splash_texture = Some(ctx.load_texture("splash", color_image, Default::default()));
+                                let color_image =
+                                    egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
+                                self.splash_texture = Some(ctx.load_texture(
+                                    "splash",
+                                    color_image,
+                                    Default::default(),
+                                ));
                                 info!("Loaded splash image {}", path.display());
                             }
                             Err(e) => {
@@ -1078,7 +1200,9 @@ impl eframe::App for MediaPlayerApp {
 
         // Demo mode timeout check
         #[cfg(feature = "demo")]
-        if self.start_time.elapsed() > std::time::Duration::from_secs(self.config.demo.timeout_seconds) {
+        if self.start_time.elapsed()
+            > std::time::Duration::from_secs(self.config.demo.timeout_seconds)
+        {
             warn!("Demo mode timeout reached - exiting");
             std::process::exit(0);
         }
@@ -1101,7 +1225,8 @@ impl eframe::App for MediaPlayerApp {
         if self.should_show_splash() && !self.show_splash {
             self.show_splash = true;
             self.splash_timer = 0.0;
-            self.current_splash_index = (self.current_splash_index + 1) % self.splash_images.len().max(1);
+            self.current_splash_index =
+                (self.current_splash_index + 1) % self.splash_images.len().max(1);
             self.splash_texture = None; // Reset to load new
             info!("Showing splash screen, index {}", self.current_splash_index);
         }
@@ -1109,7 +1234,9 @@ impl eframe::App for MediaPlayerApp {
         ctx.input_mut(|i| {
             for event in &i.events {
                 if let egui::Event::Text(text) = event {
-                    if self.input_buffer.len() < self.config.ui.input_max_length && text.chars().all(|c| c.is_ascii_digit()) {
+                    if self.input_buffer.len() < self.config.ui.input_max_length
+                        && text.chars().all(|c| c.is_ascii_digit())
+                    {
                         self.input_buffer.push_str(text);
                     }
                 }
@@ -1128,10 +1255,14 @@ impl eframe::App for MediaPlayerApp {
 
         // Arrow key navigation
         if self.config.ui.enable_arrow_nav && self.input_buffer.is_empty() {
-            if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::ArrowRight)) {
+            if ctx.input(|i| {
+                i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::ArrowRight)
+            }) {
                 log::info!("Navigated forward");
                 self.navigate_forward();
-            } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::ArrowLeft)) {
+            } else if ctx.input(|i| {
+                i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::ArrowLeft)
+            }) {
                 log::info!("Navigated backward");
                 self.navigate_backward();
             }
@@ -1179,8 +1310,11 @@ impl eframe::App for MediaPlayerApp {
                         });
                     }
                 } else {
-                    ui.painter()
-                        .rect_filled(ui.max_rect(), 0.0, Self::hex_to_color(&self.config.ui.background_color));
+                    ui.painter().rect_filled(
+                        ui.max_rect(),
+                        0.0,
+                        Self::hex_to_color(&self.config.ui.background_color),
+                    );
                     if let Some(texture) = &self.current_texture {
                         ui.image((texture.id(), ui.available_size()));
                     } else {
@@ -1196,20 +1330,24 @@ impl eframe::App for MediaPlayerApp {
                     // Demo mode watermark
                     #[cfg(feature = "demo")]
                     ui.allocate_new_ui(
-                        egui::UiBuilder::new().max_rect(
-                            egui::Rect::from_min_size(
-                                egui::pos2(video_rect.right() - self.config.ui.demo_watermark_x_offset, video_rect.top() + self.config.ui.demo_watermark_y_offset),
-                                egui::vec2(self.config.ui.demo_watermark_width, self.config.ui.demo_watermark_height)
-                            )
-                        ),
+                        egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
+                            egui::pos2(
+                                video_rect.right() - self.config.ui.demo_watermark_x_offset,
+                                video_rect.top() + self.config.ui.demo_watermark_y_offset,
+                            ),
+                            egui::vec2(
+                                self.config.ui.demo_watermark_width,
+                                self.config.ui.demo_watermark_height,
+                            ),
+                        )),
                         |ui| {
                             ui.label(
                                 egui::RichText::new("DEMO ONLY")
                                     .size(self.config.ui.demo_watermark_font_size)
                                     .color(egui::Color32::from_rgb(255, 0, 0))
-                                    .strong()
+                                    .strong(),
                             );
-                        }
+                        },
                     );
                 }
             });
@@ -1220,8 +1358,11 @@ impl eframe::App for MediaPlayerApp {
                 egui::vec2(available_rect.width(), bar_height),
             );
 
-            ui.painter()
-                .rect_filled(bar_rect, 0.0, Self::hex_to_color(&self.config.ui.background_color));
+            ui.painter().rect_filled(
+                bar_rect,
+                0.0,
+                Self::hex_to_color(&self.config.ui.background_color),
+            );
 
             ui.allocate_new_ui(egui::UiBuilder::new().max_rect(bar_rect), |ui| {
                 ui.horizontal(|ui| {
@@ -1229,18 +1370,27 @@ impl eframe::App for MediaPlayerApp {
 
                     // Left: Input field
                     ui.vertical(|ui| {
-                        ui.label(egui::RichText::new(&self.config.ui.input_label).color(Self::hex_to_color(&self.config.ui.label_color)));
+                        ui.label(
+                            egui::RichText::new(&self.config.ui.input_label)
+                                .color(Self::hex_to_color(&self.config.ui.label_color)),
+                        );
                         let mut input_text = self.input_buffer.clone();
-                        let response = ui.add(egui::TextEdit::singleline(&mut input_text)
-                            .desired_width(self.config.ui.input_field_width)
-                            .font(egui::TextStyle::Body.resolve(ui.style()))
-                            .text_color(if self.invalid_input_timer > 0.0 {
-                                egui::Color32::RED
-                            } else {
-                                Self::hex_to_color(&self.config.ui.input_text_color)
-                            })
-                            .frame(false));
-                        self.input_buffer = input_text.chars().filter(|c| c.is_digit(10)).take(self.config.ui.input_max_length).collect();
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut input_text)
+                                .desired_width(self.config.ui.input_field_width)
+                                .font(egui::TextStyle::Body.resolve(ui.style()))
+                                .text_color(if self.invalid_input_timer > 0.0 {
+                                    egui::Color32::RED
+                                } else {
+                                    Self::hex_to_color(&self.config.ui.input_text_color)
+                                })
+                                .frame(false),
+                        );
+                        self.input_buffer = input_text
+                            .chars()
+                            .filter(|c| c.is_digit(10))
+                            .take(self.config.ui.input_max_length)
+                            .collect();
 
                         let stroke_color = if self.invalid_input_timer > 0.0 {
                             egui::Color32::RED
@@ -1257,19 +1407,29 @@ impl eframe::App for MediaPlayerApp {
                     ui.add_space(self.config.ui.ui_spacing); // Spacing between elements
 
                     // Center: Now playing
-                    ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
-                        ui.label(egui::RichText::new(format!("{} {}", self.config.ui.now_playing_label, self.current_file_name))
-                            .color(Self::hex_to_color(&self.config.ui.label_color))
-                            .size(self.config.ui.placeholder_font_size));
-                    });
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                        |ui| {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} {}",
+                                    self.config.ui.now_playing_label, self.current_file_name
+                                ))
+                                .color(Self::hex_to_color(&self.config.ui.label_color))
+                                .size(self.config.ui.placeholder_font_size),
+                            );
+                        },
+                    );
 
                     ui.add_space(self.config.ui.ui_spacing); // Spacing
 
                     // Right: Company label
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add_space(self.config.ui.ui_spacing);
-                        ui.label(egui::RichText::new(&self.config.ui.company_label)
-                            .color(Self::hex_to_color(&self.config.ui.label_color)));
+                        ui.label(
+                            egui::RichText::new(&self.config.ui.company_label)
+                                .color(Self::hex_to_color(&self.config.ui.label_color)),
+                        );
                     });
                 });
             });
@@ -1281,7 +1441,10 @@ impl eframe::App for MediaPlayerApp {
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
                 .show(ctx, |ui| {
-                    ui.label(format!("No video available for hip number {}.", self.no_video_hip));
+                    ui.label(format!(
+                        "No video available for hip number {}.",
+                        self.no_video_hip
+                    ));
                     ui.label("Please try another number.");
                 });
         }
@@ -1289,7 +1452,11 @@ impl eframe::App for MediaPlayerApp {
 }
 
 fn load_config_for_kiosk() -> Config {
-    let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let exe_dir = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
     let config_path = exe_dir.join("config.toml");
     if let Ok(config_str) = fs::read_to_string(&config_path) {
         if let Ok(config) = toml::from_str::<Config>(&config_str) {
@@ -1422,7 +1589,11 @@ fn load_config_for_kiosk() -> Config {
 }
 
 fn load_config_for_logging() -> LoggingConfig {
-    let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let exe_dir = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
     let config_path = exe_dir.join("config.toml");
     if let Ok(config_str) = fs::read_to_string(&config_path) {
         if let Ok(config) = toml::from_str::<Config>(&config_str) {
@@ -1448,7 +1619,10 @@ mod tests {
 
     #[cfg(test)]
     impl MockVideoPlayer {
-        fn new(_uri: &str, _sender: watch::Sender<Option<egui::ColorImage>>) -> Result<Self, String> {
+        fn new(
+            _uri: &str,
+            _sender: watch::Sender<Option<egui::ColorImage>>,
+        ) -> Result<Self, String> {
             Ok(MockVideoPlayer)
         }
 
@@ -2040,7 +2214,7 @@ fn main() -> eframe::Result<()> {
             "Summit Hip Numbers Config",
             options,
             Box::new(|_cc| Ok(Box::new(ConfigApp::new()))),
-        )
+        );
     } else {
         // Load config to check kiosk mode
         let config = load_config_for_kiosk();
@@ -2048,21 +2222,27 @@ fn main() -> eframe::Result<()> {
         // Set GStreamer plugin path for bundled plugins
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                  // For portable distribution, check for gstreamer directory
+                // For portable distribution, check for gstreamer directory
                 let gstreamer_plugin_path = exe_dir.join("lib").join("gstreamer-1.0");
-                  if gstreamer_plugin_path.exists() {
-                    info!("Found bundled GStreamer plugins at: {}", gstreamer_plugin_path.display());
+                if gstreamer_plugin_path.exists() {
+                    info!(
+                        "Found bundled GStreamer plugins at: {}",
+                        gstreamer_plugin_path.display()
+                    );
                     std::env::set_var("GST_PLUGIN_PATH", gstreamer_plugin_path);
-                  } else {
-                    warn!("Bundled GStreamer plugin directory not found. Relying on system-wide installation.");
-                  }
+                } else {
+                    warn!(
+                        "Bundled GStreamer plugin directory not found. Relying on system-wide installation."
+                    );
+                }
             }
         }
 
         #[cfg(feature = "gstreamer")]
         gstreamer::init().expect("Failed to initialize GStreamer");
 
-        let mut viewport = egui::ViewportBuilder::default().with_inner_size([config.ui.window_width, config.ui.window_height]);
+        let mut viewport = egui::ViewportBuilder::default()
+            .with_inner_size([config.ui.window_width, config.ui.window_height]);
         if config.ui.kiosk_mode {
             viewport = viewport.with_fullscreen(true).with_decorations(false);
             info!("Kiosk mode enabled: fullscreen with no decorations");
@@ -2077,6 +2257,6 @@ fn main() -> eframe::Result<()> {
             "Summit Hip Numbers Media Player",
             options,
             Box::new(|_cc| Ok(Box::new(MediaPlayerApp::new()))),
-        )
+        );
     }
 }

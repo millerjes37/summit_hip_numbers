@@ -1,19 +1,19 @@
 use anyhow::{Context, Result};
 use eframe::egui;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use rfd;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use walkdir::WalkDir;
-use rfd;
 
 #[derive(Default)]
 struct UsbPrepApp {
-    drives: Arc<Mutex<HashSet<PathBuf>>>,  // Detected USB drives
+    drives: Arc<Mutex<HashSet<PathBuf>>>, // Detected USB drives
     selected_drive: Option<PathBuf>,
-    source_folder: Option<PathBuf>,  // dist folder
-    status: String,  // "Ready", "Copying...", errors
-    watcher: Option<RecommendedWatcher>,  // For drive detection
+    source_folder: Option<PathBuf>,      // dist folder
+    status: String,                      // "Ready", "Copying...", errors
+    watcher: Option<RecommendedWatcher>, // For drive detection
     is_copying: bool,
     total_files: usize,
     copied_files: usize,
@@ -22,8 +22,8 @@ struct UsbPrepApp {
 impl UsbPrepApp {
     fn new() -> Self {
         let mut app = Self::default();
-        app.scan_drives();  // Initial scan
-        app.start_watcher();  // Watch for changes
+        app.scan_drives(); // Initial scan
+        app.start_watcher(); // Watch for changes
         app.status = "Ready - Select source folder and USB drive".to_string();
         app
     }
@@ -63,7 +63,10 @@ impl UsbPrepApp {
         let drives = self.drives.clone();
         let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
             if let Ok(event) = res {
-                if matches!(event.kind, notify::EventKind::Create(_) | notify::EventKind::Remove(_)) {
+                if matches!(
+                    event.kind,
+                    notify::EventKind::Create(_) | notify::EventKind::Remove(_)
+                ) {
                     // Rescan drives on any change
                     let mut current = drives.lock().unwrap();
                     current.clear();
@@ -77,7 +80,8 @@ impl UsbPrepApp {
                     }
                 }
             }
-        }).unwrap();
+        })
+        .unwrap();
 
         if let Err(e) = watcher.watch(Path::new("/Volumes/"), RecursiveMode::NonRecursive) {
             eprintln!("Failed to watch /Volumes/: {}", e);
@@ -86,7 +90,10 @@ impl UsbPrepApp {
     }
 
     fn copy_to_drive(&mut self, ctx: &egui::Context) -> Result<()> {
-        let source = self.source_folder.as_ref().context("No source folder selected")?;
+        let source = self
+            .source_folder
+            .as_ref()
+            .context("No source folder selected")?;
         let dest = self.selected_drive.as_ref().context("No drive selected")?;
 
         // Check if destination is writable
@@ -130,11 +137,18 @@ impl UsbPrepApp {
             self.copied_files += 1;
 
             // Update progress
-            self.status = format!("Copying... {}/{} files", self.copied_files, self.total_files);
+            self.status = format!(
+                "Copying... {}/{} files",
+                self.copied_files, self.total_files
+            );
             ctx.request_repaint();
         }
 
-        self.status = format!("Copy complete! {} files copied to {}", self.total_files, dest_subdir.display());
+        self.status = format!(
+            "Copy complete! {} files copied to {}",
+            self.total_files,
+            dest_subdir.display()
+        );
         self.is_copying = false;
 
         Ok(())
@@ -173,12 +187,16 @@ impl eframe::App for UsbPrepApp {
                     ui.label("No USB drives detected. Please insert a USB drive.");
                 } else {
                     for drive in drives.iter() {
-                        let drive_name = drive.file_name()
+                        let drive_name = drive
+                            .file_name()
                             .map(|n| n.to_string_lossy().to_string())
                             .unwrap_or_else(|| "Unknown".to_string());
 
                         let selected = self.selected_drive.as_ref() == Some(drive);
-                        if ui.radio(selected, format!("{} ({})", drive_name, drive.display())).clicked() {
+                        if ui
+                            .radio(selected, format!("{} ({})", drive_name, drive.display()))
+                            .clicked()
+                        {
                             self.selected_drive = Some(drive.clone());
                             self.status = format!("Selected drive: {}", drive_name);
                         }
@@ -189,11 +207,13 @@ impl eframe::App for UsbPrepApp {
             ui.separator();
 
             // Copy button
-            let can_copy = !self.is_copying &&
-                           self.source_folder.is_some() &&
-                           self.selected_drive.is_some();
+            let can_copy =
+                !self.is_copying && self.source_folder.is_some() && self.selected_drive.is_some();
 
-            if ui.add_enabled(can_copy, egui::Button::new("🚀 Copy to Selected Drive")).clicked() {
+            if ui
+                .add_enabled(can_copy, egui::Button::new("🚀 Copy to Selected Drive"))
+                .clicked()
+            {
                 if let Err(e) = self.copy_to_drive(ctx) {
                     self.status = format!("❌ Error: {}", e);
                     self.is_copying = false;
