@@ -20,6 +20,8 @@ use std::path::PathBuf;
 
 use tokio::sync::watch;
 use video_player::VideoPlayer;
+#[cfg(feature = "demo")]
+use std::time::Instant;
 
 use log::{info, error, warn};
 use fern;
@@ -301,6 +303,8 @@ struct MediaPlayerApp {
     current_splash_index: usize,
     videos_played: usize,
     splash_texture: Option<egui::TextureHandle>,
+    #[cfg(feature = "demo")]
+    start_time: Instant,
 }
 
 impl Default for MediaPlayerApp {
@@ -354,6 +358,8 @@ impl Default for MediaPlayerApp {
             current_splash_index: 0,
             videos_played: 0,
             splash_texture: None,
+            #[cfg(feature = "demo")]
+            start_time: Instant::now(),
         }
     }
 }
@@ -388,6 +394,13 @@ impl MediaPlayerApp {
         } else {
             warn!("Config file not found, using defaults");
         }
+
+        // Demo mode: Force default video directory to ensure only bundled samples are used
+        #[cfg(feature = "demo")]
+        {
+            app.config.video.directory = exe_dir.join("videos").to_string_lossy().to_string();
+        }
+
         // Set default video directory relative to exe
         if app.config.video.directory == "./videos" {
             app.config.video.directory = exe_dir.join("videos").to_string_lossy().to_string();
@@ -400,7 +413,17 @@ impl MediaPlayerApp {
         info!("Loading video files from {}", video_dir);
 
         match scan_video_files(&video_dir) {
-            Ok(files) => {
+            Ok(mut files) => {
+                #[allow(unused_mut)]
+                #[cfg(feature = "demo")]
+                {
+                    const MAX_VIDEOS: usize = 5;
+                    if files.len() > MAX_VIDEOS {
+                        files.truncate(MAX_VIDEOS);
+                        info!("Demo mode: Limited to first {} videos", MAX_VIDEOS);
+                    }
+                }
+
                 self.video_files = files;
                 info!("Scanned {} video files", self.video_files.len());
 
@@ -541,6 +564,15 @@ impl MediaPlayerApp {
 
     fn validate_and_switch(&mut self, input: &str) -> bool {
         if input.len() == 3 && input.chars().all(|c| c.is_ascii_digit()) {
+            #[cfg(feature = "demo")]
+            if input.parse::<u32>().unwrap_or(0) > 5 {
+                self.show_no_video_popup = true;
+                self.no_video_popup_timer = 3.0;
+                self.no_video_hip = input.to_string();
+                warn!("Demo mode: Hip number {} not available", input);
+                return false;
+            }
+
             if let Some(&index) = self.hip_to_index.get(input) {
                 self.load_video_index = Some(index);
                 self.videos_played += 1;
@@ -647,6 +679,13 @@ impl eframe::App for MediaPlayerApp {
             }
         }
 
+        // Demo mode timeout check
+        #[cfg(feature = "demo")]
+        if self.start_time.elapsed() > std::time::Duration::from_secs(300) {
+            warn!("Demo mode timeout reached - exiting");
+            std::process::exit(0);
+        }
+
         if self.invalid_input_timer > 0.0 {
             self.invalid_input_timer -= ctx.input(|i| i.unstable_dt) as f64;
         }
@@ -724,6 +763,25 @@ impl eframe::App for MediaPlayerApp {
                         );
                     });
                 }
+
+                // Demo mode watermark
+                #[cfg(feature = "demo")]
+                ui.allocate_new_ui(
+                    egui::UiBuilder::new().max_rect(
+                        egui::Rect::from_min_size(
+                            egui::pos2(video_rect.right() - 200.0, video_rect.top() + 10.0),
+                            egui::vec2(180.0, 30.0)
+                        )
+                    ),
+                    |ui| {
+                        ui.label(
+                            egui::RichText::new("DEMO MODE")
+                                .size(24.0)
+                                .color(egui::Color32::from_rgb(255, 0, 0))
+                                .strong()
+                        );
+                    }
+                );
             });
 
             let bar_height = available_rect.height() * 0.08;

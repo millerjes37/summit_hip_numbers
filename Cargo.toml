@@ -3,6 +3,9 @@ name = "summit_hip_numbers"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+demo = []
+
 [package.metadata.bundle]
 name = "Summit Hip Numbers"
 identifier = "com.summit.hipnumbers"

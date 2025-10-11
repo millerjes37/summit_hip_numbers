@@ -9,10 +9,20 @@ echo "Current directory: $(pwd)"
 echo ""
 
 # Configuration
-DIST_DIR="dist"
+VARIANT="${1:-full}"  # Default to full if no argument provided
+DIST_DIR="dist/$VARIANT"
 EXE_NAME="summit_hip_numbers.exe"
 TARGET_DIR="target/release"
-ZIP_NAME="summit_hip_numbers_portable.zip"
+ZIP_NAME="summit_hip_numbers_${VARIANT}_portable.zip"
+
+# Set build flags based on variant
+if [ "$VARIANT" = "demo" ]; then
+    CARGO_FLAGS="--features demo"
+    EXE_OUTPUT_NAME="summit_hip_numbers_demo.exe"
+else
+    CARGO_FLAGS=""
+    EXE_OUTPUT_NAME="$EXE_NAME"
+fi
 
 # Step 1: Create clean dist directory
 echo "=== Creating distribution directory ==="
@@ -20,13 +30,29 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 echo "✓ Created $DIST_DIR"
 
-# Step 2: Copy executable
+# Step 2: Build application
+echo ""
+echo "=== Building application ($VARIANT) ==="
+if [ "$VARIANT" = "demo" ]; then
+    echo "Building with demo features..."
+    cargo build --release --features demo --verbose
+else
+    echo "Building full version..."
+    cargo build --release --verbose
+fi
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Build failed"
+    exit 1
+fi
+
+# Step 3: Copy executable
 echo ""
 echo "=== Copying executable ==="
 if [ -f "$TARGET_DIR/$EXE_NAME" ]; then
-    cp "$TARGET_DIR/$EXE_NAME" "$DIST_DIR/"
-    exe_size=$(du -h "$DIST_DIR/$EXE_NAME" | cut -f1)
-    echo "✓ Copied $EXE_NAME ($exe_size)"
+    cp "$TARGET_DIR/$EXE_NAME" "$DIST_DIR/$EXE_OUTPUT_NAME"
+    exe_size=$(du -h "$DIST_DIR/$EXE_OUTPUT_NAME" | cut -f1)
+    echo "✓ Copied $EXE_OUTPUT_NAME ($exe_size)"
 else
     echo "ERROR: Executable not found at $TARGET_DIR/$EXE_NAME"
     exit 1
