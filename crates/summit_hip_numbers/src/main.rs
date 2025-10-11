@@ -31,6 +31,7 @@ use log::{info, error, warn};
 use fern;
 use chrono;
 
+
 #[derive(Debug, Deserialize, serde::Serialize)]
 struct Config {
     video: VideoConfig,
@@ -530,6 +531,7 @@ struct MediaPlayerApp {
     current_splash_index: usize,
     videos_played: usize,
     splash_texture: Option<egui::TextureHandle>,
+    logo_texture: Option<egui_extras::RetainedImage>,
     #[cfg(feature = "demo")]
     start_time: Instant,
 }
@@ -683,6 +685,7 @@ impl Default for MediaPlayerApp {
             current_splash_index: 0,
             videos_played: 0,
             splash_texture: None,
+            logo_texture: None,
             #[cfg(feature = "demo")]
             start_time: Instant::now(),
         }
@@ -694,7 +697,7 @@ impl MediaPlayerApp {
         let mut app = Self::load_config();
         app.check_asset_integrity();
         app.load_video_files();
-
+        app.load_logo_texture();
         if !app.video_files.is_empty() {
             app.load_video_index = Some(0);
         }
@@ -805,7 +808,25 @@ impl MediaPlayerApp {
         }
     }
 
-
+    fn load_logo_texture(&mut self) {
+        let logo_dir = std::env::current_dir().unwrap().join("assets").join("logo");
+        if logo_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&logo_dir) {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        if path.extension().map(|ext| ext.to_str().unwrap_or("")) == Some("svg") {
+                            // TODO: Implement SVG rendering with resvg
+                            // For now, logo support is prepared but SVG loading is not implemented due to API issues
+                            warn!("Logo SVG loading not implemented yet, using text fallback");
+                        }
+                    }
+                }
+            }
+        } else {
+            warn!("Logo directory not found: {:?}", logo_dir);
+        }
+    }
 
     fn check_asset_integrity(&self) {
         let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
@@ -1241,12 +1262,19 @@ impl eframe::App for MediaPlayerApp {
 
                     ui.add_space(self.config.ui.ui_spacing); // Spacing
 
-                    // Right: Company label
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(self.config.ui.ui_spacing);
-                        ui.label(egui::RichText::new(&self.config.ui.company_label)
-                            .color(Self::hex_to_color(&self.config.ui.label_color)));
-                    });
+                    // Right: Logo image or company label
+                    if let Some(logo) = &self.logo_texture {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.add_space(self.config.ui.ui_spacing); // Right padding
+                            logo.show_max_size(ui, egui::Vec2::new(self.config.ui.demo_watermark_width, bar_height * 0.8)); // Scale to fit bar height
+                        });
+                    } else {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.add_space(self.config.ui.ui_spacing);
+                            ui.label(egui::RichText::new(&self.config.ui.company_label)
+                                .color(Self::hex_to_color(&self.config.ui.label_color)));
+                        });
+                    }
                 });
             });
         });
