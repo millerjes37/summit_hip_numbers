@@ -8,7 +8,7 @@ use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
 
-use file_scanner::{scan_video_files, VideoFile};
+use file_scanner::{VideoFile, scan_video_files};
 
 #[derive(Parser)]
 struct Cli {
@@ -1225,9 +1225,13 @@ impl eframe::App for MediaPlayerApp {
                     // Reset timer and move to next splash (if multiple)
                     self.splash_timer = 0.0;
                     if self.splash_images.len() > 1 {
-                        self.current_splash_index = (self.current_splash_index + 1) % self.splash_images.len();
+                        self.current_splash_index =
+                            (self.current_splash_index + 1) % self.splash_images.len();
                         self.splash_texture = None; // Reset to load new image
-                        info!("No videos loaded - cycling to next splash screen {}", self.current_splash_index);
+                        info!(
+                            "No videos loaded - cycling to next splash screen {}",
+                            self.current_splash_index
+                        );
                     }
                     // If only one splash, just reset timer to keep showing it
                 } else {
