@@ -1,0 +1,15 @@
+# Project-specific Clippy configuration
+# This overrides any global clippy settings
+
+# Allow large function bodies for UI code
+too-many-lines-threshold = 200
+
+# Allow complex types in egui applications  
+type-complexity-threshold = 500
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 50
+
+# Avoid conflicts with global config
+avoid-breaking-exported-api = false
+msrv = "1.70.0"

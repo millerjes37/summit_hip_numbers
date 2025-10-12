@@ -7,7 +7,7 @@ use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
 
-use file_scanner::{scan_video_files, VideoFile};
+use file_scanner::{VideoFile, scan_video_files};
 
 #[derive(Parser)]
 struct Cli {
@@ -565,6 +565,7 @@ struct MediaPlayerApp {
     video_player: Option<VideoPlayer>,
     load_video_index: Option<usize>,
     invalid_input_timer: f64,
+    #[cfg(feature = "gstreamer")]
     texture_sender: watch::Sender<Option<egui::ColorImage>>,
     texture_receiver: watch::Receiver<Option<egui::ColorImage>>,
     current_texture: Option<egui::TextureHandle>,
@@ -1015,10 +1016,7 @@ impl MediaPlayerApp {
         }
 
         // Show splash every N videos
-        #[allow(clippy::manual_is_multiple_of)]
-        {
-            self.videos_played % self.config.splash.interval == 0
-        }
+        self.videos_played % self.config.splash.interval == 0
     }
 
     fn trim_log(&self) {
@@ -1222,6 +1220,7 @@ impl MediaPlayerApp {
         egui::Color32::WHITE
     }
 
+    #[cfg(feature = "gstreamer")]
     fn update_playback(&mut self, _current_time: f64) {
         #[cfg(feature = "gstreamer")]
         if let Some(player) = &self.video_player {

@@ -1,11 +1,14 @@
-[[advisories.ignore]]
-id = "RUSTSEC-2020-0071"
-reason = "chrono time zone vulnerability - low impact for kiosk application"
+# Cargo audit configuration
+# This file configures which security advisories to ignore
 
-[[advisories.ignore]]
-id = "RUSTSEC-2020-0159"
-reason = "tokio async task vulnerability - low impact for sync-only usage"
+[advisories]
+ignore = [
+    "RUSTSEC-2020-0071",  # chrono time zone vulnerability - low impact for kiosk application
+    "RUSTSEC-2020-0159",  # tokio async task vulnerability - low impact for sync-only usage  
+    "RUSTSEC-2021-0139",  # ansi_term color vulnerability - not used in this application
+]
 
-[[advisories.ignore]]
-id = "RUSTSEC-2021-0139"
-reason = "ansi_term color vulnerability - not used in this application"
+# You can also use this format with reasons:
+# ignore = [
+#     { id = "RUSTSEC-2020-0071", reason = "chrono time zone vulnerability - low impact for kiosk application" },
+# ]
