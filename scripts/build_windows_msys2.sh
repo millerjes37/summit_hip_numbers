@@ -387,9 +387,12 @@ log "  Plugins bundled: $PLUGIN_COUNT"
 # List contents
 log ""
 log "Distribution contents:"
-ls -la "$DIST_DIR" | tail -n +2 | head -20 | while read line; do
+# Avoid subshell issues with while loop
+ls -la "$DIST_DIR" | tail -n +2 | head -20 > "${DIST_DIR}_contents.tmp"
+while IFS= read -r line; do
     log "  $line"
-done
+done < "${DIST_DIR}_contents.tmp"
+rm -f "${DIST_DIR}_contents.tmp"
 
 if [ $TOTAL_FILES -gt 20 ]; then
     log "  ... and $((TOTAL_FILES - 20)) more files"

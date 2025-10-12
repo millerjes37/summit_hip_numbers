@@ -253,8 +253,9 @@ jobs:
       - name: Cache Nix Store
         uses: nix-community/cache-nix-action@v6
         with:
-          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ matrix.variant }}
-          purge-older-than: 7
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ matrix.variant }}
+          purge-primary-key: nix-${{ runner.os }}-
+          purge-last-accessed: 7d
       
       - name: Install Nix
         uses: cachix/install-nix-action@v25
