@@ -128,25 +128,433 @@ jobs:
         with:
           toolchain: stable-x86_64-pc-windows-gnu
       
-      - name: Build Application and Create Distribution
+      - name: Comprehensive GStreamer Verification
         shell: msys2 {0}
-        env:
-          # Explicitly tell pkg-config and the Rust linker where to find the GStreamer files
-          PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
-          RUSTFLAGS: -L native=/mingw64/lib
         run: |
+          echo "============================================"
+          echo "  COMPREHENSIVE GSTREAMER VERIFICATION"
+          echo "============================================"
+          
           # Set up environment
           export MSYSTEM=MINGW64
           export MSYSTEM_PREFIX=/mingw64
           export PATH="$MSYSTEM_PREFIX/bin:$PATH"
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
           
-          # Verify GStreamer installation
-          echo "Verifying GStreamer installation..."
-          which gst-inspect-1.0 || echo "WARNING: gst-inspect-1.0 not found in PATH"
+          # Function to check if a command exists
+          command_exists() {
+            command -v "$1" >/dev/null 2>&1
+          }
           
-          # Run the complete build script which handles both building and packaging
-          chmod +x scripts/build_windows_msys2.sh
-          ./scripts/build_windows_msys2.sh ${{ matrix.variant }}
+          # Function to check if a file exists
+          file_exists() {
+            test -f "$1"
+          }
+          
+          # Function to check if a directory exists
+          dir_exists() {
+            test -d "$1"
+          }
+          
+          echo "1. Checking GStreamer executables..."
+          GSTREAMER_TOOLS=(
+            "gst-inspect-1.0"
+            "gst-launch-1.0"
+            "gst-discoverer-1.0"
+            "gst-typefind-1.0"
+          )
+          
+          for tool in "${GSTREAMER_TOOLS[@]}"; do
+            if command_exists "$tool"; then
+              echo "  ✓ $tool: $(which $tool)"
+            else
+              echo "  ✗ $tool: NOT FOUND"
+              exit 1
+            fi
+          done
+          
+          echo -e "\n2. Checking core GStreamer libraries..."
+          CORE_LIBS=(
+            "/mingw64/lib/libgstreamer-1.0.dll.a"
+            "/mingw64/lib/libgstbase-1.0.dll.a"
+            "/mingw64/lib/libgstapp-1.0.dll.a"
+            "/mingw64/lib/libgstvideo-1.0.dll.a"
+            "/mingw64/lib/libgstaudio-1.0.dll.a"
+          )
+          
+          for lib in "${CORE_LIBS[@]}"; do
+            if file_exists "$lib"; then
+              echo "  ✓ $(basename $lib): $(ls -lh $lib | awk '{print $5}')"
+            else
+              echo "  ✗ $(basename $lib): NOT FOUND"
+              exit 1
+            fi
+          done
+          
+          echo -e "\n3. Checking runtime DLLs..."
+          RUNTIME_DLLS=(
+            "/mingw64/bin/libgstreamer-1.0-0.dll"
+            "/mingw64/bin/libgstbase-1.0-0.dll"
+            "/mingw64/bin/libgstapp-1.0-0.dll"
+            "/mingw64/bin/libgstvideo-1.0-0.dll"
+            "/mingw64/bin/libgstaudio-1.0-0.dll"
+            "/mingw64/bin/libglib-2.0-0.dll"
+            "/mingw64/bin/libgobject-2.0-0.dll"
+            "/mingw64/bin/libgio-2.0-0.dll"
+          )
+          
+          for dll in "${RUNTIME_DLLS[@]}"; do
+            if file_exists "$dll"; then
+              echo "  ✓ $(basename $dll): $(ls -lh $dll | awk '{print $5}')"
+            else
+              echo "  ✗ $(basename $dll): NOT FOUND"
+              exit 1
+            fi
+          done
+          
+          echo -e "\n4. Checking GStreamer plugin directories..."
+          PLUGIN_DIRS=(
+            "/mingw64/lib/gstreamer-1.0"
+            "/mingw64/bin/gstreamer-1.0"
+          )
+          
+          for plugin_dir in "${PLUGIN_DIRS[@]}"; do
+            if dir_exists "$plugin_dir"; then
+              plugin_count=$(find "$plugin_dir" -name "*.dll" | wc -l)
+              echo "  ✓ $plugin_dir: $plugin_count plugins"
+              if [ $plugin_count -lt 10 ]; then
+                echo "    WARNING: Low plugin count, checking specific plugins..."
+              fi
+            else
+              echo "  ✗ $plugin_dir: NOT FOUND"
+            fi
+          done
+          
+          echo -e "\n5. Verifying essential plugins..."
+          ESSENTIAL_PLUGINS=(
+            "coreelements"
+            "playback"
+            "typefindfunctions"
+            "app"
+            "videoconvert"
+            "videoscale"
+            "autodetect"
+            "directsound"
+            "wasapi"
+          )
+          
+          for plugin in "${ESSENTIAL_PLUGINS[@]}"; do
+            if gst-inspect-1.0 "$plugin" >/dev/null 2>&1; then
+              echo "  ✓ $plugin"
+            else
+              echo "  ✗ $plugin: NOT AVAILABLE"
+              exit 1
+            fi
+          done
+          
+          echo -e "\n6. Testing pkg-config integration..."
+          if pkg-config --exists gstreamer-1.0; then
+            GST_VERSION=$(pkg-config --modversion gstreamer-1.0)
+            GST_CFLAGS=$(pkg-config --cflags gstreamer-1.0)
+            GST_LIBS=$(pkg-config --libs gstreamer-1.0)
+            echo "  ✓ GStreamer version: $GST_VERSION"
+            echo "  ✓ CFLAGS: $GST_CFLAGS"
+            echo "  ✓ LIBS: $GST_LIBS"
+          else
+            echo "  ✗ pkg-config cannot find gstreamer-1.0"
+            exit 1
+          fi
+          
+          echo -e "\n7. Testing basic GStreamer functionality..."
+          if echo "videotestsrc num-buffers=1 ! fakesink" | gst-launch-1.0 >/dev/null 2>&1; then
+            echo "  ✓ Basic pipeline test passed"
+          else
+            echo "  ✗ Basic pipeline test failed"
+            exit 1
+          fi
+          
+          echo -e "\n8. Environment summary..."
+          echo "  PATH: $PATH"
+          echo "  PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+          echo "  MSYSTEM: $MSYSTEM"
+          echo "  MSYSTEM_PREFIX: $MSYSTEM_PREFIX"
+          
+          echo -e "\n============================================"
+          echo "  ✅ ALL GSTREAMER CHECKS PASSED"
+          echo "============================================"
+      
+      - name: Create Enhanced Build Script
+        shell: msys2 {0}
+        run: |
+          cat > enhanced_build.sh << 'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          
+          VARIANT="$1"
+          BUILD_LOG="build_${VARIANT}.log"
+          ERROR_LOG="build_${VARIANT}_errors.log"
+          
+          # Comprehensive logging function
+          log() {
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$BUILD_LOG"
+          }
+          
+          error_exit() {
+            echo "[ERROR] $*" | tee -a "$ERROR_LOG"
+            exit 1
+          }
+          
+          log "Starting enhanced Windows build for variant: $VARIANT"
+          
+          # Environment setup
+          export MSYSTEM=MINGW64
+          export MSYSTEM_PREFIX=/mingw64
+          export PATH="$MSYSTEM_PREFIX/bin:$PATH"
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export RUSTFLAGS="-L native=/mingw64/lib"
+          
+          # Create dist directory
+          DIST_DIR="dist/$VARIANT"
+          mkdir -p "$DIST_DIR"
+          
+          log "Building application..."
+          if [ "$VARIANT" = "demo" ]; then
+            cargo build --release --package summit_hip_numbers --features demo 2>&1 | tee -a "$BUILD_LOG"
+          else
+            cargo build --release --package summit_hip_numbers 2>&1 | tee -a "$BUILD_LOG"
+          fi
+          
+          # Check if build succeeded
+          if [ "$VARIANT" = "demo" ]; then
+            BINARY_NAME="summit_hip_numbers_demo.exe"
+            SOURCE_BINARY="target/release/summit_hip_numbers.exe"
+          else
+            BINARY_NAME="summit_hip_numbers.exe"
+            SOURCE_BINARY="target/release/summit_hip_numbers.exe"
+          fi
+          
+          if [ ! -f "$SOURCE_BINARY" ]; then
+            error_exit "Build failed: $SOURCE_BINARY not found"
+          fi
+          
+          log "Copying binary to distribution directory..."
+          cp "$SOURCE_BINARY" "$DIST_DIR/$BINARY_NAME"
+          
+          # Function to safely copy DLL with verification
+          copy_dll_safe() {
+            local dll_name="$1"
+            local source_path="/mingw64/bin/$dll_name"
+            local dest_path="$DIST_DIR/$dll_name"
+            
+            if [ -f "$source_path" ]; then
+              cp "$source_path" "$dest_path"
+              log "  ✓ Copied: $dll_name ($(stat -c%s "$source_path") bytes)"
+            else
+              error_exit "Required DLL not found: $source_path"
+            fi
+          }
+          
+          log "Copying GStreamer runtime dependencies..."
+          
+          # Core GLib/GObject DLLs
+          GLIB_DLLS=(
+            "libglib-2.0-0.dll"
+            "libgmodule-2.0-0.dll"
+            "libgobject-2.0-0.dll"
+            "libgio-2.0-0.dll"
+            "libgthread-2.0-0.dll"
+            "libffi-8.dll"
+            "libintl-8.dll"
+            "libiconv-2.dll"
+            "libpcre2-8-0.dll"
+            "libwinpthread-1.dll"
+            "zlib1.dll"
+          )
+          
+          # Core GStreamer DLLs
+          GSTREAMER_DLLS=(
+            "libgstreamer-1.0-0.dll"
+            "libgstbase-1.0-0.dll"
+            "libgstcontroller-1.0-0.dll"
+            "libgstnet-1.0-0.dll"
+            "libgstapp-1.0-0.dll"
+            "libgstvideo-1.0-0.dll"
+            "libgstaudio-1.0-0.dll"
+            "libgstpbutils-1.0-0.dll"
+            "libgsttag-1.0-0.dll"
+            "libgstriff-1.0-0.dll"
+            "libgstfft-1.0-0.dll"
+            "libgstrtp-1.0-0.dll"
+            "libgstrtsp-1.0-0.dll"
+            "libgstsdp-1.0-0.dll"
+          )
+          
+          # Additional system DLLs
+          SYSTEM_DLLS=(
+            "libgcc_s_seh-1.dll"
+            "libstdc++-6.dll"
+            "liborc-0.4-0.dll"
+          )
+          
+          # Copy all DLLs with verification
+          for dll in "${GLIB_DLLS[@]}" "${GSTREAMER_DLLS[@]}" "${SYSTEM_DLLS[@]}"; do
+            copy_dll_safe "$dll"
+          done
+          
+          log "Copying GStreamer plugins..."
+          
+          # Create plugin directory
+          PLUGIN_DIR="$DIST_DIR/lib/gstreamer-1.0"
+          mkdir -p "$PLUGIN_DIR"
+          
+          # Essential plugins for video playback
+          ESSENTIAL_PLUGIN_DLLS=(
+            "libgstcoreelements.dll"
+            "libgstplayback.dll"
+            "libgsttypefindfunctions.dll"
+            "libgstapp.dll"
+            "libgstvideoconvert.dll"
+            "libgstvideoscale.dll"
+            "libgstvideofilter.dll"
+            "libgstautodetect.dll"
+            "libgstdirectsound.dll"
+            "libgstwasapi.dll"
+            "libgstdeinterlace.dll"
+            "libgstinterleave.dll"
+            "libgstaudioconvert.dll"
+            "libgstaudioresample.dll"
+            "libgstvolume.dll"
+          )
+          
+          # MP4/H.264 plugins
+          MP4_PLUGIN_DLLS=(
+            "libgstisomp4.dll"
+            "libgstlibav.dll"
+            "libgstmatroska.dll"
+            "libgstavi.dll"
+            "libgstqtdemux.dll"
+          )
+          
+          # Copy plugins with fallback handling
+          SOURCE_PLUGIN_DIR="/mingw64/lib/gstreamer-1.0"
+          COPIED_PLUGINS=0
+          
+          for plugin in "${ESSENTIAL_PLUGIN_DLLS[@]}" "${MP4_PLUGIN_DLLS[@]}"; do
+            source_plugin="$SOURCE_PLUGIN_DIR/$plugin"
+            if [ -f "$source_plugin" ]; then
+              cp "$source_plugin" "$PLUGIN_DIR/"
+              log "  ✓ Plugin: $plugin"
+              ((COPIED_PLUGINS++))
+            else
+              log "  ⚠ Plugin not found: $plugin"
+            fi
+          done
+          
+          if [ $COPIED_PLUGINS -lt 10 ]; then
+            error_exit "Too few plugins copied ($COPIED_PLUGINS). Build may not work correctly."
+          fi
+          
+          log "Copied $COPIED_PLUGINS GStreamer plugins"
+          
+          # Copy additional assets if they exist
+          log "Copying additional assets..."
+          
+          if [ -f "config.toml" ]; then
+            cp "config.toml" "$DIST_DIR/"
+            log "  ✓ Copied config.toml"
+          fi
+          
+          if [ -d "assets" ]; then
+            cp -r "assets" "$DIST_DIR/"
+            log "  ✓ Copied assets directory"
+          fi
+          
+          if [ -d "videos" ] && [ "$VARIANT" = "demo" ]; then
+            cp -r "videos" "$DIST_DIR/"
+            log "  ✓ Copied videos directory (demo)"
+          fi
+          
+          # Set environment for GStreamer
+          cat > "$DIST_DIR/gstreamer_env.bat" << 'BATCH_EOF'
+          @echo off
+          REM Set GStreamer environment for Summit HIP Numbers
+          set GST_PLUGIN_PATH=%~dp0lib\gstreamer-1.0
+          set GST_PLUGIN_SYSTEM_PATH=%~dp0lib\gstreamer-1.0
+          set GST_DEBUG=2
+          echo GStreamer environment configured
+          echo Plugin path: %GST_PLUGIN_PATH%
+          BATCH_EOF
+          
+          # Create launcher script
+          cat > "$DIST_DIR/launch.bat" << BATCH_EOF
+          @echo off
+          call "%~dp0gstreamer_env.bat"
+          "%~dp0$BINARY_NAME" %*
+          BATCH_EOF
+          
+          # Verify the build
+          log "Verifying build integrity..."
+          
+          if [ ! -f "$DIST_DIR/$BINARY_NAME" ]; then
+            error_exit "Main executable missing: $BINARY_NAME"
+          fi
+          
+          # Count and verify DLLs
+          DLL_COUNT=$(find "$DIST_DIR" -name "*.dll" | wc -l)
+          if [ $DLL_COUNT -lt 20 ]; then
+            error_exit "Too few DLLs found ($DLL_COUNT). Build incomplete."
+          fi
+          
+          log "Build verification passed: $DLL_COUNT DLLs, $COPIED_PLUGINS plugins"
+          
+          # Create portable ZIP
+          log "Creating portable ZIP archive..."
+          cd "$DIST_DIR"
+          zip -r "../summit_hip_numbers_${VARIANT}_portable.zip" ./* >/dev/null 2>&1
+          cd - >/dev/null
+          
+          if [ -f "dist/summit_hip_numbers_${VARIANT}_portable.zip" ]; then
+            ZIP_SIZE=$(stat -c%s "dist/summit_hip_numbers_${VARIANT}_portable.zip")
+            log "✓ Created portable ZIP: summit_hip_numbers_${VARIANT}_portable.zip ($(($ZIP_SIZE / 1024 / 1024)) MB)"
+          else
+            error_exit "Failed to create portable ZIP"
+          fi
+          
+          log "Enhanced Windows build completed successfully!"
+          
+          EOF
+          
+          chmod +x enhanced_build.sh
+      
+      - name: Execute Enhanced Build
+        shell: msys2 {0}
+        run: |
+          # Run the enhanced build script
+          ./enhanced_build.sh ${{ matrix.variant }}
+          
+          # Display build logs
+          echo "============================================"
+          echo "  BUILD LOG SUMMARY"
+          echo "============================================"
+          
+          if [ -f "build_${{ matrix.variant }}.log" ]; then
+            tail -20 "build_${{ matrix.variant }}.log"
+          fi
+          
+          if [ -f "build_${{ matrix.variant }}_errors.log" ]; then
+            echo -e "\nERROR LOG:"
+            cat "build_${{ matrix.variant }}_errors.log"
+          fi
+      
+      - name: Upload Build Logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-${{ matrix.variant }}-build-logs
+          path: |
+            build_${{ matrix.variant }}.log
+            build_${{ matrix.variant }}_errors.log
+          retention-days: 7
           
       
       - name: Generate Build Manifest
