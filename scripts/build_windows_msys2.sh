@@ -3,6 +3,7 @@
 # This script runs entirely within MSYS2 environment where all paths work correctly
 
 set -e  # Exit on error
+set +o pipefail  # Don't fail on pipe errors (for grep)
 
 # Color output
 RED='\033[0;31m'
@@ -136,7 +137,23 @@ done
 
 # Use pacman to find where GStreamer DLLs are installed
 log "Debug: Files installed by gstreamer package:"
-pacman -Ql mingw-w64-x86_64-gstreamer 2>/dev/null | grep "\.dll$" | head -10 || log "  Could not query package files"
+if command -v pacman >/dev/null 2>&1; then
+    # Temporarily disable exit on error for this command
+    set +e
+    pacman_output=$(pacman -Ql mingw-w64-x86_64-gstreamer 2>/dev/null | grep "\.dll$" | head -10)
+    pacman_exit_code=$?
+    set -e
+    
+    if [ $pacman_exit_code -eq 0 ] && [ -n "$pacman_output" ]; then
+        echo "$pacman_output" | while IFS= read -r line; do
+            log "  $line"
+        done
+    else
+        log "  Could not query package files (exit code: $pacman_exit_code)"
+    fi
+else
+    log "  pacman command not found, skipping package query"
+fi
 
 # Define essential DLLs
 ESSENTIAL_DLLS=(
