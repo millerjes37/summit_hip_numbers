@@ -134,22 +134,60 @@ copy_dll() {
 log "Copying essential DLLs..."
 dll_count=0
 
-# Use a more comprehensive approach - copy all potentially needed DLLs
-for dll in "$MSYSTEM_PREFIX/bin/"*.dll; do
-    if [ -f "$dll" ]; then
-        filename=$(basename "$dll")
-        # Filter for essential DLLs
-        case "$filename" in
-            libgst*.dll|libglib*.dll|libgobject*.dll|libgio*.dll|libgmodule*.dll|\
-            libwinpthread*.dll|libgcc*.dll|libstdc++*.dll|libiconv*.dll|libintl*.dll|\
-            zlib*.dll|libffi*.dll|libpcre*.dll|libbz2*.dll|libfreetype*.dll|\
-            libharfbuzz*.dll|libpng*.dll|liborc*.dll|libopus*.dll|libvorbis*.dll|\
-            libogg*.dll)
-                if copy_dll "$dll" "$DIST_DIR/bin"; then
-                    ((dll_count++))
-                fi
-                ;;
-        esac
+# Ensure the bin directory exists
+mkdir -p "$DIST_DIR/bin" || {
+    log "${RED}ERROR: Failed to create bin directory${NC}"
+    exit 1
+}
+
+# Check if the source directory exists
+if [ ! -d "$MSYSTEM_PREFIX/bin" ]; then
+    log "${RED}ERROR: Directory $MSYSTEM_PREFIX/bin does not exist${NC}"
+    exit 1
+fi
+
+log "Looking for DLLs in: $MSYSTEM_PREFIX/bin"
+
+# List of essential DLL patterns
+essential_patterns=(
+    "libgst*.dll"
+    "libglib*.dll"
+    "libgobject*.dll"
+    "libgio*.dll"
+    "libgmodule*.dll"
+    "libwinpthread*.dll"
+    "libgcc*.dll"
+    "libstdc++*.dll"
+    "libiconv*.dll"
+    "libintl*.dll"
+    "zlib*.dll"
+    "libffi*.dll"
+    "libpcre*.dll"
+    "libbz2*.dll"
+    "libfreetype*.dll"
+    "libharfbuzz*.dll"
+    "libpng*.dll"
+    "liborc*.dll"
+    "libopus*.dll"
+    "libvorbis*.dll"
+    "libogg*.dll"
+)
+
+# Copy DLLs using a more robust approach
+for pattern in "${essential_patterns[@]}"; do
+    found_any=false
+    # Use find to handle the pattern matching more robustly
+    while IFS= read -r dll_file; do
+        if [ -f "$dll_file" ]; then
+            if cp "$dll_file" "$DIST_DIR/bin/" 2>/dev/null; then
+                ((dll_count++))
+                found_any=true
+            fi
+        fi
+    done < <(find "$MSYSTEM_PREFIX/bin" -maxdepth 1 -name "$pattern" -type f 2>/dev/null)
+    
+    if [ "$found_any" = false ] && [ "$pattern" != "libbz2*.dll" ] && [ "$pattern" != "libfreetype*.dll" ] && [ "$pattern" != "libharfbuzz*.dll" ] && [ "$pattern" != "libpng*.dll" ] && [ "$pattern" != "liborc*.dll" ] && [ "$pattern" != "libopus*.dll" ] && [ "$pattern" != "libvorbis*.dll" ] && [ "$pattern" != "libogg*.dll" ]; then
+        log "  ${YELLOW}Warning: No DLLs found for pattern: $pattern${NC}"
     fi
 done
 
@@ -166,13 +204,21 @@ PLUGIN_COUNT=0
 PLUGIN_SRC="$MSYSTEM_PREFIX/lib/gstreamer-1.0"
 
 if [ -d "$PLUGIN_SRC" ]; then
-    for plugin in "$PLUGIN_SRC/"*.dll; do
-        if [ -f "$plugin" ]; then
-            cp "$plugin" "$PLUGIN_DIR/" 2>/dev/null || true
-            ((PLUGIN_COUNT++))
+    log "Looking for plugins in: $PLUGIN_SRC"
+    # Use find for more robust file handling
+    while IFS= read -r plugin_file; do
+        if [ -f "$plugin_file" ]; then
+            if cp "$plugin_file" "$PLUGIN_DIR/" 2>/dev/null; then
+                ((PLUGIN_COUNT++))
+            fi
         fi
-    done
-    log "${GREEN}✓ Copied $PLUGIN_COUNT GStreamer plugins${NC}"
+    done < <(find "$PLUGIN_SRC" -maxdepth 1 -name "*.dll" -type f 2>/dev/null)
+    
+    if [ $PLUGIN_COUNT -gt 0 ]; then
+        log "${GREEN}✓ Copied $PLUGIN_COUNT GStreamer plugins${NC}"
+    else
+        log "${YELLOW}Warning: No plugins found in $PLUGIN_SRC${NC}"
+    fi
 else
     log "${YELLOW}Warning: GStreamer plugin directory not found at $PLUGIN_SRC${NC}"
 fi
