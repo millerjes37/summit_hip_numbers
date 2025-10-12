@@ -1,9 +1,8 @@
 #!/bin/bash
-# Build script for Windows using MSYS2
+# Build script for Windows using MSYS2 - FIXED VERSION
 # This script runs entirely within MSYS2 environment where all paths work correctly
 
 set -e  # Exit on error
-set +o pipefail  # Don't fail on pipe errors (for grep)
 
 # Color output
 RED='\033[0;31m'
@@ -12,7 +11,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== Summit Hip Numbers Windows Build (MSYS2) ===${NC}"
+echo -e "${BLUE}=== Summit Hip Numbers Windows Build (MSYS2 - Fixed) ===${NC}"
 echo "Current directory: $(pwd)"
 echo ""
 
@@ -51,7 +50,26 @@ log() {
 
 log "${YELLOW}Build log: $LOG_FILE${NC}"
 
+# Step 0: Set up MSYS2 environment properly
+log ""
+log "${YELLOW}=== Setting up MSYS2 environment ===${NC}"
+
+# Ensure we're using the right MSYS2 environment
+if [ -z "$MSYSTEM" ]; then
+    export MSYSTEM=MINGW64
+fi
+
+# Set proper paths
+export MSYSTEM_PREFIX="/mingw64"
+export PATH="$MSYSTEM_PREFIX/bin:$PATH"
+export PKG_CONFIG_PATH="$MSYSTEM_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
+
+log "MSYSTEM: $MSYSTEM"
+log "MSYSTEM_PREFIX: $MSYSTEM_PREFIX"
+log "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+
 # Step 1: Create clean dist directory
+log ""
 log "${YELLOW}=== Creating distribution directory ===${NC}"
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
@@ -94,288 +112,72 @@ else
     exit 1
 fi
 
-# Step 4: Copy GStreamer DLLs (selective)
+# Step 4: Copy GStreamer DLLs (comprehensive)
 log ""
-log "${YELLOW}=== Copying essential DLLs ===${NC}"
+log "${YELLOW}=== Copying GStreamer DLLs ===${NC}"
 
-# Debug: Show environment
-log "Debug: MSYSTEM=$MSYSTEM"
-log "Debug: MSYSTEM_PREFIX=$MSYSTEM_PREFIX"
-log "Debug: PATH=$PATH"
-log "Debug: Current directory: $(pwd)"
+# Create bin directory for DLLs
+mkdir -p "$DIST_DIR/bin"
 
-# Workaround for GStreamer PATH regression in MSYS2
-export PYTHONLEGACYWINDOWSDLLLOADING=1
-
-# Verify GStreamer packages are installed
-log "Debug: Verifying GStreamer packages:"
-pacman -Qs mingw-w64-x86_64-gstreamer | head -10 || true
-
-# List available GStreamer DLLs for debugging
-log "Debug: Available DLL files:"
-for search_path in "/mingw64/bin" "$MSYSTEM_PREFIX/bin" "/c/msys64/mingw64/bin" "/usr/bin"; do
-    if [ -d "$search_path" ]; then
-        log "  Checking $search_path:"
-        # First show GStreamer executables
-        log "    GStreamer executables:"
-        ls -la "$search_path"/gst-*.exe 2>/dev/null | head -5 || log "      No gst-*.exe found"
-        
-        # Show all libgst* DLLs (this catches libgstreamer-1.0-0.dll)
-        log "    GStreamer DLLs (libgst*):"
-        ls -la "$search_path"/libgst*.dll 2>/dev/null | head -10 || log "      No libgst*.dll found"
-        
-        # Show GLib DLLs
-        log "    GLib DLLs:"
-        ls -la "$search_path"/libglib*.dll 2>/dev/null | head -5 || log "      No libglib*.dll found"
-        ls -la "$search_path"/libgobject*.dll 2>/dev/null | head -5 || log "      No libgobject*.dll found"
-        
-        # Count total DLLs in directory
-        dll_count=$(ls "$search_path"/*.dll 2>/dev/null | wc -l)
-        log "    Total DLLs in directory: $dll_count"
+# Function to copy DLL if it exists
+copy_dll() {
+    local dll_path="$1"
+    local dest_dir="$2"
+    if [ -f "$dll_path" ]; then
+        cp "$dll_path" "$dest_dir/" 2>/dev/null || true
+        return 0
     fi
-done
+    return 1
+}
 
-# Use pacman to find where GStreamer DLLs are installed
-log "Debug: Files installed by gstreamer package:"
-if command -v pacman >/dev/null 2>&1; then
-    # Temporarily disable exit on error for this command
-    set +e
-    pacman_output=$(pacman -Ql mingw-w64-x86_64-gstreamer 2>/dev/null | grep "\.dll$" | head -10)
-    pacman_exit_code=$?
-    set -e
-    
-    if [ $pacman_exit_code -eq 0 ] && [ -n "$pacman_output" ]; then
-        # Use here-string instead of pipe to avoid subshell issues
-        while IFS= read -r line; do
-            log "  $line"
-        done <<< "$pacman_output"
-    else
-        log "  Could not query package files (exit code: $pacman_exit_code)"
-    fi
-else
-    log "  pacman command not found, skipping package query"
-fi
-
-# Define essential DLLs
-ESSENTIAL_DLLS=(
-    # GLib/GObject
-    "libglib-2.0-0.dll"
-    "libgobject-2.0-0.dll"
-    "libgio-2.0-0.dll"
-    "libgmodule-2.0-0.dll"
-    
-    # GStreamer core
-    "libgstreamer-1.0-0.dll"
-    "libgstbase-1.0-0.dll"
-    "libgstapp-1.0-0.dll"
-    "libgstvideo-1.0-0.dll"
-    "libgstaudio-1.0-0.dll"
-    "libgsttag-1.0-0.dll"
-    "libgstpbutils-1.0-0.dll"
-    "libgstrtp-1.0-0.dll"
-    "libgstrtsp-1.0-0.dll"
-    "libgstsdp-1.0-0.dll"
-    "libgstnet-1.0-0.dll"
-    "libgstcontroller-1.0-0.dll"
-    
-    # System dependencies
-    "libintl-8.dll"
-    "libwinpthread-1.dll"
-    "libiconv-2.dll"
-    "libffi-*.dll"
-    "libpcre2-8-0.dll"
-    "zlib1.dll"
-    
-    # C++ runtime
-    "libgcc_s_seh-1.dll"
-    "libstdc++-6.dll"
-    
-    # Additional media libraries
-    "liborc-0.4-0.dll"
-    "libopus-0.dll"
-    "libvorbis-0.dll"
-    "libvorbisenc-2.dll"
-    "libogg-0.dll"
-)
-
-# Copy essential DLLs
+# Copy all DLLs from mingw64/bin that we need
+log "Copying essential DLLs..."
 dll_count=0
-# Search in multiple locations
-DLL_SEARCH_PATHS=(
-    "/mingw64/bin"
-    "$MSYSTEM_PREFIX/bin"
-    "/c/msys64/mingw64/bin"
-    "/usr/bin"
-)
 
-for dll in "${ESSENTIAL_DLLS[@]}"; do
-    dll_found=false
-    for search_path in "${DLL_SEARCH_PATHS[@]}"; do
-        if [ -d "$search_path" ]; then
-            # Handle wildcards properly - use find for better wildcard support
-            if [[ "$dll" == *"*"* ]]; then
-                # Contains wildcard
-                while IFS= read -r file; do
-                    if [ -f "$file" ]; then
-                        cp "$file" "$DIST_DIR/" 2>/dev/null || true
-                        ((dll_count++))
-                        log "  Copied: $(basename "$file") from $search_path"
-                        dll_found=true
-                        break
-                    fi
-                done < <(find "$search_path" -maxdepth 1 -name "$dll" -type f 2>/dev/null)
-                if [ "$dll_found" = true ]; then
-                    break
-                fi
-            else
-                # No wildcard - direct check
-                if [ -f "$search_path/$dll" ]; then
-                    cp "$search_path/$dll" "$DIST_DIR/" 2>/dev/null || true
+# Use a more comprehensive approach - copy all potentially needed DLLs
+for dll in "$MSYSTEM_PREFIX/bin/"*.dll; do
+    if [ -f "$dll" ]; then
+        filename=$(basename "$dll")
+        # Filter for essential DLLs
+        case "$filename" in
+            libgst*.dll|libglib*.dll|libgobject*.dll|libgio*.dll|libgmodule*.dll|\
+            libwinpthread*.dll|libgcc*.dll|libstdc++*.dll|libiconv*.dll|libintl*.dll|\
+            zlib*.dll|libffi*.dll|libpcre*.dll|libbz2*.dll|libfreetype*.dll|\
+            libharfbuzz*.dll|libpng*.dll|liborc*.dll|libopus*.dll|libvorbis*.dll|\
+            libogg*.dll)
+                if copy_dll "$dll" "$DIST_DIR/bin"; then
                     ((dll_count++))
-                    log "  Copied: $dll from $search_path"
-                    dll_found=true
-                    break
                 fi
-            fi
-        fi
-    done
-    if [ "$dll_found" = false ]; then
-        log "  ${YELLOW}Warning: $dll not found in any search path${NC}"
+                ;;
+        esac
     fi
 done
 
 log "${GREEN}✓ Copied $dll_count essential DLLs${NC}"
 
-# Step 5: Verify critical DLLs
-log ""
-log "${YELLOW}=== Verifying critical DLLs ===${NC}"
-critical_dlls=(
-    "libglib-2.0-0.dll"
-    "libgobject-2.0-0.dll"
-    "libgio-2.0-0.dll"
-    "libgstapp-1.0-0.dll"
-    "libgstreamer-1.0-0.dll"
-    "libgstvideo-1.0-0.dll"
-    "libgstbase-1.0-0.dll"
-    "libgstaudio-1.0-0.dll"
-)
-
-missing_dlls=()
-for dll in "${critical_dlls[@]}"; do
-    if [ -f "$DIST_DIR/$dll" ]; then
-        log "  ${GREEN}✓ $dll${NC}"
-    else
-        log "  ${RED}✗ $dll MISSING${NC}"
-        missing_dlls+=("$dll")
-    fi
-done
-
-if [ ${#missing_dlls[@]} -gt 0 ]; then
-    log "${YELLOW}WARNING: Missing critical DLLs: ${missing_dlls[*]}${NC}"
-    log "${YELLOW}Attempting fallback: copying all DLLs from /mingw64/bin${NC}"
-    
-    # Fallback: If critical DLLs are missing, copy ALL DLLs from mingw64/bin
-    # This is more aggressive but ensures we don't miss renamed or version-specific DLLs
-    fallback_dll_count=0
-    if [ -d "/mingw64/bin" ]; then
-        for dll_file in /mingw64/bin/*.dll; do
-            if [ -f "$dll_file" ]; then
-                filename=$(basename "$dll_file")
-                # Skip if already exists
-                if [ ! -f "$DIST_DIR/$filename" ]; then
-                    cp "$dll_file" "$DIST_DIR/" 2>/dev/null || true
-                    ((fallback_dll_count++))
-                fi
-            fi
-        done
-        log "  Copied $fallback_dll_count additional DLLs as fallback"
-        
-        # Re-check critical DLLs after fallback
-        log "  Re-checking critical DLLs after fallback..."
-        still_missing=()
-        for dll in "${critical_dlls[@]}"; do
-            if [ ! -f "$DIST_DIR/$dll" ]; then
-                still_missing+=("$dll")
-            fi
-        done
-        
-        if [ ${#still_missing[@]} -eq 0 ]; then
-            log "${GREEN}✓ All critical DLLs found after fallback${NC}"
-        else
-            log "${YELLOW}Still missing after fallback: ${still_missing[*]}${NC}"
-            log "${YELLOW}The application may not run properly without these DLLs.${NC}"
-        fi
-    fi
-    # Don't exit - continue with the build
-fi
-
-# Step 6: Copy GStreamer plugins (selective)
+# Step 5: Copy GStreamer plugins
 log ""
 log "${YELLOW}=== Copying GStreamer plugins ===${NC}"
 
 PLUGIN_DIR="$DIST_DIR/lib/gstreamer-1.0"
 mkdir -p "$PLUGIN_DIR"
 
-# Essential plugins
-ESSENTIAL_PLUGINS=(
-    # Core elements
-    "libgstcoreelements.dll"
-    "libgsttypefindfunctions.dll"
-    
-    # Playback
-    "libgstplayback.dll"
-    "libgstautodetect.dll"
-    
-    # Video
-    "libgstvideoconvert.dll"
-    "libgstvideoscale.dll"
-    "libgstvideorate.dll"
-    "libgstvideoparsersbad.dll"
-    
-    # Audio
-    "libgstaudioconvert.dll"
-    "libgstaudioresample.dll"
-    "libgstvolume.dll"
-    
-    # Containers & Codecs
-    "libgstmatroska.dll"
-    "libgstisomp4.dll"
-    "libgstavi.dll"
-    "libgstlibav.dll"
-    
-    # Windows specific
-    "libgstd3d.dll"
-    "libgstd3d11.dll"
-    "libgstwasapi.dll"
-)
-
 PLUGIN_COUNT=0
-PLUGIN_SEARCH_PATHS=(
-    "/mingw64/lib/gstreamer-1.0"
-    "/usr/lib/gstreamer-1.0"
-    "/c/msys64/mingw64/lib/gstreamer-1.0"
-    "$MSYSTEM_PREFIX/lib/gstreamer-1.0"
-)
+PLUGIN_SRC="$MSYSTEM_PREFIX/lib/gstreamer-1.0"
 
-for plugin in "${ESSENTIAL_PLUGINS[@]}"; do
-    plugin_found=false
-    for search_path in "${PLUGIN_SEARCH_PATHS[@]}"; do
-        if [ -f "$search_path/$plugin" ]; then
-            cp "$search_path/$plugin" "$PLUGIN_DIR/"
+if [ -d "$PLUGIN_SRC" ]; then
+    for plugin in "$PLUGIN_SRC/"*.dll; do
+        if [ -f "$plugin" ]; then
+            cp "$plugin" "$PLUGIN_DIR/" 2>/dev/null || true
             ((PLUGIN_COUNT++))
-            log "  Plugin: $plugin from $search_path"
-            plugin_found=true
-            break
         fi
     done
-    if [ "$plugin_found" = false ]; then
-        log "  ${YELLOW}Warning: Plugin not found: $plugin${NC}"
-    fi
-done
+    log "${GREEN}✓ Copied $PLUGIN_COUNT GStreamer plugins${NC}"
+else
+    log "${YELLOW}Warning: GStreamer plugin directory not found at $PLUGIN_SRC${NC}"
+fi
 
-log "${GREEN}✓ Copied $PLUGIN_COUNT GStreamer plugins${NC}"
-
-# Step 7: Copy config and assets
+# Step 6: Copy config and assets
 log ""
 log "${YELLOW}=== Copying configuration and assets ===${NC}"
 
@@ -389,30 +191,31 @@ elif [ -f "assets/config.toml" ]; then
 fi
 
 # Copy asset directories
-for dir in videos splash logo assets; do
+for dir in videos splash logo; do
     if [ -d "assets/$dir" ]; then
-        cp -r "assets/$dir" "$DIST_DIR/"
+        mkdir -p "$DIST_DIR/$dir"
+        cp -r "assets/$dir"/* "$DIST_DIR/$dir/" 2>/dev/null || true
         log "  ✓ $dir/"
     elif [ -d "$dir" ]; then
-        cp -r "$dir" "$DIST_DIR/"
+        mkdir -p "$DIST_DIR/$dir"
+        cp -r "$dir"/* "$DIST_DIR/$dir/" 2>/dev/null || true
         log "  ✓ $dir/"
     fi
 done
 
-# Step 8: Create launcher script
+# Step 7: Create launcher script
 log ""
 log "${YELLOW}=== Creating launcher script ===${NC}"
 cat > "$DIST_DIR/run.bat" << EOF
 @echo off
 REM Summit Hip Numbers Media Player Launcher
-REM This script sets up the environment for the portable version
 
 echo Starting Summit Hip Numbers Media Player...
 
 REM Set GStreamer environment variables for portable version
-set GST_PLUGIN_PATH=%~dp0lib\gstreamer-1.0
-set GST_PLUGIN_SYSTEM_PATH=%~dp0lib\gstreamer-1.0
-set PATH=%~dp0;%PATH%
+set GST_PLUGIN_PATH=%~dp0lib\\gstreamer-1.0
+set GST_PLUGIN_SYSTEM_PATH=%~dp0lib\\gstreamer-1.0
+set PATH=%~dp0bin;%~dp0;%PATH%
 
 REM Change to the application directory
 cd /d "%~dp0"
@@ -420,11 +223,15 @@ cd /d "%~dp0"
 REM Run the application
 "%~dp0$EXE_OUTPUT_NAME"
 
-pause
+if errorlevel 1 (
+    echo.
+    echo Application exited with error code %errorlevel%
+    pause
+)
 EOF
 log "${GREEN}✓ Created run.bat${NC}"
 
-# Step 9: Create README
+# Step 8: Create README
 log ""
 log "${YELLOW}=== Creating README ===${NC}"
 cat > "$DIST_DIR/README.txt" << EOF
@@ -443,7 +250,8 @@ Files:
 - config.toml: Configuration file
 - videos/: Directory for your video files
 - splash/: Directory for splash images
-- lib/, share/, and *.dll files: GStreamer runtime
+- bin/: GStreamer runtime DLLs
+- lib/gstreamer-1.0/: GStreamer plugins
 - run.bat: Launcher script
 
 Configuration:
@@ -451,7 +259,7 @@ Edit config.toml to customize settings like video directory path and splash scre
 Run with --config flag to open configuration GUI.
 
 Adding Videos:
-Place your MP4 video files in the "videos" directory. Files will be automatically sorted alphabetically and assigned hip numbers (001, 002, etc.).
+Place your MP4 video files in the "videos" directory. Files will be automatically sorted alphabetically and assigned hip numbers (001, 002, 003...).
 
 System Requirements:
 - Windows 10 or later (64-bit)
@@ -463,7 +271,7 @@ For more information: https://github.com/millerjes37/summit_hip_numbers
 EOF
 log "${GREEN}✓ Created README.txt${NC}"
 
-# Step 10: Summary and verification
+# Step 9: Summary and verification
 log ""
 log "${YELLOW}=== Build Summary ===${NC}"
 
@@ -481,22 +289,13 @@ log "  Plugins bundled: $PLUGIN_COUNT"
 # List contents
 log ""
 log "Distribution contents:"
-# Avoid subshell issues with while loop
-ls -la "$DIST_DIR" | tail -n +2 | head -20 > "${DIST_DIR}_contents.tmp"
-while IFS= read -r line; do
-    log "  $line"
-done < "${DIST_DIR}_contents.tmp"
-rm -f "${DIST_DIR}_contents.tmp"
-
-if [ $TOTAL_FILES -gt 20 ]; then
-    log "  ... and $((TOTAL_FILES - 20)) more files"
-fi
+ls -la "$DIST_DIR" | head -20
 
 log ""
 log "${GREEN}================================${NC}"
 log "${GREEN}  Build Complete!${NC}"
 log "${GREEN}================================${NC}"
 log "Distribution ready at: $DIST_DIR"
-log "To create ZIP: cd dist && zip -r summit_hip_numbers_${VARIANT}_portable_\$(git describe --tags --always).zip $VARIANT"
+log "To create ZIP: cd dist && zip -r summit_hip_numbers_${VARIANT}_portable.zip $VARIANT"
 
 exit 0
