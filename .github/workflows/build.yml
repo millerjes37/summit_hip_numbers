@@ -128,7 +128,7 @@ jobs:
         with:
           toolchain: stable-x86_64-pc-windows-gnu
       
-      - name: Build Application
+      - name: Build Application and Create Distribution
         shell: msys2 {0}
         env:
           # Explicitly tell pkg-config and the Rust linker where to find the GStreamer files
@@ -144,32 +144,15 @@ jobs:
           echo "Verifying GStreamer installation..."
           which gst-inspect-1.0 || echo "WARNING: gst-inspect-1.0 not found in PATH"
           
-          # Build with cargo
-          if [ "${{ matrix.variant }}" = "demo" ]; then
-            echo "Building demo variant..."
-            cargo build --release --features demo --verbose
-          else
-            echo "Building full variant..."
-            cargo build --release --verbose
-          fi
-      
-      - name: Create Distribution Package
-        shell: pwsh
-        run: |
-          # Run PowerShell build script to create distribution
-          ./scripts/build_windows.ps1 -SkipBuild -GStreamerPath "C:\msys64\mingw64"
+          # Run the complete build script which handles both building and packaging
+          chmod +x scripts/build_windows_msys2.sh
+          ./scripts/build_windows_msys2.sh ${{ matrix.variant }}
           
-          # Rename dist folder to include variant
-          if (Test-Path "dist") {
-            $variantDist = "dist-${{ matrix.variant }}"
-            if (Test-Path $variantDist) { Remove-Item $variantDist -Recurse -Force }
-            Rename-Item -Path "dist" -NewName $variantDist
-          }
       
       - name: Generate Build Manifest
         shell: pwsh
         run: |
-          $distPath = "dist-${{ matrix.variant }}"
+          $distPath = "dist/${{ matrix.variant }}"
           $manifestPath = "$distPath/BUILD_MANIFEST.txt"
           
           @"
@@ -215,13 +198,13 @@ jobs:
         run: |
           $zipName = "summit_hip_numbers_${{ matrix.variant }}_portable_${{ steps.setup.outputs.VERSION }}.zip"
           
-          # The PowerShell script already creates summit_hip_numbers_portable.zip
-          # Just rename it to include variant and version
-          if (Test-Path "summit_hip_numbers_portable.zip") {
-            Rename-Item -Path "summit_hip_numbers_portable.zip" -NewName $zipName
+          # Check if the build script created a zip in dist folder
+          $distZip = "dist/${{ matrix.variant }}/summit_hip_numbers_${{ matrix.variant }}_portable.zip"
+          if (Test-Path $distZip) {
+            Move-Item -Path $distZip -Destination $zipName -Force
           } else {
-            # Fallback: create from dist folder
-            Compress-Archive -Path "dist-${{ matrix.variant }}/*" -DestinationPath $zipName
+            # Create from dist folder contents
+            Compress-Archive -Path "dist/${{ matrix.variant }}/*" -DestinationPath $zipName -Force
           }
           
           # Verify ZIP integrity
@@ -244,11 +227,11 @@ jobs:
           Start-Process -FilePath $innoPath -ArgumentList "/SP- /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS" -Wait
           
           # Build installer (if installer.iss exists)
-          if (Test-Path "installer.iss") {
-            & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /Q "installer.iss"
+          if (Test-Path "scripts/installer.iss") {
+            & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /Q "scripts/installer.iss"
             
             # Rename with version
-            $installerOld = "dist-${{ matrix.variant }}/summit_hip_numbers_installer.exe"
+            $installerOld = "dist/summit_hip_numbers_installer.exe"
             if (Test-Path $installerOld) {
               $installerNew = "summit_hip_numbers_installer_${{ steps.setup.outputs.VERSION }}.exe"
               Move-Item -Path $installerOld -Destination $installerNew -Force
