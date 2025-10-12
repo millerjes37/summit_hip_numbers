@@ -64,11 +64,9 @@ mod tests {
     fn test_scan_video_files_nonexistent_dir() {
         let result = scan_video_files(std::path::Path::new("/nonexistent"));
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .contains("Video directory does not exist")
-        );
+        assert!(result
+            .unwrap_err()
+            .contains("Video directory does not exist"));
     }
 
     #[test]
