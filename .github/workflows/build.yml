@@ -130,6 +130,10 @@ jobs:
       
       - name: Build Application
         shell: msys2 {0}
+        env:
+          # Explicitly tell pkg-config and the Rust linker where to find the GStreamer files
+          PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
+          RUSTFLAGS: -L native=/mingw64/lib
         run: |
           # Set up environment
           export MSYSTEM=MINGW64
@@ -140,19 +144,32 @@ jobs:
           echo "Verifying GStreamer installation..."
           which gst-inspect-1.0 || echo "WARNING: gst-inspect-1.0 not found in PATH"
           
-          # List some DLLs to verify they exist
-          echo "Checking for GStreamer DLLs in $MSYSTEM_PREFIX/bin..."
-          ls -la $MSYSTEM_PREFIX/bin/libgstreamer*.dll 2>/dev/null | head -5 || echo "No libgstreamer DLLs found"
-          ls -la $MSYSTEM_PREFIX/bin/libgst*.dll 2>/dev/null | head -5 || echo "No libgst DLLs found"
+          # Build with cargo
+          if [ "${{ matrix.variant }}" = "demo" ]; then
+            echo "Building demo variant..."
+            cargo build --release --features demo --verbose
+          else
+            echo "Building full variant..."
+            cargo build --release --verbose
+          fi
+      
+      - name: Create Distribution Package
+        shell: pwsh
+        run: |
+          # Run PowerShell build script to create distribution
+          ./build_windows.ps1 -SkipBuild -GStreamerPath "C:\msys64\mingw64"
           
-          # Run build script
-          chmod +x scripts/build_windows_msys2.sh
-          ./scripts/build_windows_msys2.sh ${{ matrix.variant }}
+          # Rename dist folder to include variant
+          if (Test-Path "dist") {
+            $variantDist = "dist-${{ matrix.variant }}"
+            if (Test-Path $variantDist) { Remove-Item $variantDist -Recurse -Force }
+            Rename-Item -Path "dist" -NewName $variantDist
+          }
       
       - name: Generate Build Manifest
         shell: pwsh
         run: |
-          $distPath = "dist/${{ matrix.variant }}"
+          $distPath = "dist-${{ matrix.variant }}"
           $manifestPath = "$distPath/BUILD_MANIFEST.txt"
           
           @"
@@ -197,7 +214,15 @@ jobs:
         shell: pwsh
         run: |
           $zipName = "summit_hip_numbers_${{ matrix.variant }}_portable_${{ steps.setup.outputs.VERSION }}.zip"
-          Compress-Archive -Path "dist/${{ matrix.variant }}/*" -DestinationPath $zipName
+          
+          # The PowerShell script already creates summit_hip_numbers_portable.zip
+          # Just rename it to include variant and version
+          if (Test-Path "summit_hip_numbers_portable.zip") {
+            Rename-Item -Path "summit_hip_numbers_portable.zip" -NewName $zipName
+          } else {
+            # Fallback: create from dist folder
+            Compress-Archive -Path "dist-${{ matrix.variant }}/*" -DestinationPath $zipName
+          }
           
           # Verify ZIP integrity
           if (Test-Path $zipName) {
@@ -218,13 +243,19 @@ jobs:
           Invoke-WebRequest -Uri $innoUrl -OutFile $innoPath
           Start-Process -FilePath $innoPath -ArgumentList "/SP- /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS" -Wait
           
-          # Build installer
-          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /Q "scripts/installer.iss"
-          
-          # Rename with version
-          $installerOld = "dist/summit_hip_numbers_installer.exe"
-          $installerNew = "summit_hip_numbers_installer_${{ steps.setup.outputs.VERSION }}.exe"
-          Move-Item -Path $installerOld -Destination $installerNew -Force
+          # Build installer (if installer.iss exists)
+          if (Test-Path "installer.iss") {
+            & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /Q "installer.iss"
+            
+            # Rename with version
+            $installerOld = "dist-${{ matrix.variant }}/summit_hip_numbers_installer.exe"
+            if (Test-Path $installerOld) {
+              $installerNew = "summit_hip_numbers_installer_${{ steps.setup.outputs.VERSION }}.exe"
+              Move-Item -Path $installerOld -Destination $installerNew -Force
+            }
+          } else {
+            Write-Host "installer.iss not found, skipping installer creation"
+          }
       
       - name: Upload Portable Artifact
         uses: actions/upload-artifact@v4
@@ -371,18 +402,25 @@ jobs:
       
       - name: Create Portable Distribution
         run: |
-          DIST_DIR="dist/macos-${{ matrix.variant }}"
-          mkdir -p "$DIST_DIR"
+          FINAL_DIST_DIR="dist/macos-final-${{ matrix.variant }}"
+          mkdir -p "$FINAL_DIST_DIR"
           
-          # Copy .app bundle
-          if [ -d "dist/macos/Summit HIP Numbers.app" ]; then
-            cp -R "dist/macos/Summit HIP Numbers.app" "$DIST_DIR/"
-          elif [ -d "dist/macos/Summit HIP Numbers Demo.app" ]; then
-            cp -R "dist/macos/Summit HIP Numbers Demo.app" "$DIST_DIR/"
+          # Copy .app bundle - build script creates it in dist/macos-$variant/
+          BUILD_DIST="dist/macos-${{ matrix.variant }}"
+          if [ -d "$BUILD_DIST/Summit HIP Numbers.app" ]; then
+            cp -R "$BUILD_DIST/Summit HIP Numbers.app" "$FINAL_DIST_DIR/"
+          elif [ -d "$BUILD_DIST/Summit HIP Numbers Demo.app" ]; then
+            cp -R "$BUILD_DIST/Summit HIP Numbers Demo.app" "$FINAL_DIST_DIR/"
+          else
+            echo "Looking for .app bundles..."
+            find dist -name "*.app" -type d
+            echo "Error: No .app bundle found in $BUILD_DIST"
+            ls -la "$BUILD_DIST" || echo "Build directory does not exist"
+            exit 1
           fi
           
           # Generate manifest
-          cat > "$DIST_DIR/BUILD_MANIFEST.txt" << EOF
+          cat > "$FINAL_DIST_DIR/BUILD_MANIFEST.txt" << EOF
           ================================
           Summit HIP Numbers - macOS Build
           ================================
@@ -397,17 +435,17 @@ jobs:
           ================================
           EOF
           
-          find "$DIST_DIR" -type f | while read file; do
+          find "$FINAL_DIST_DIR" -type f | while read file; do
             echo "$(basename "$file") ($(stat -f%z "$file") bytes)"
-          done >> "$DIST_DIR/BUILD_MANIFEST.txt"
+          done >> "$FINAL_DIST_DIR/BUILD_MANIFEST.txt"
           
           # Check library dependencies
-          APP_PATH=$(find "$DIST_DIR" -name "*.app" -type d | head -n 1)
+          APP_PATH=$(find "$FINAL_DIST_DIR" -name "*.app" -type d | head -n 1)
           if [ -n "$APP_PATH" ]; then
             BINARY=$(find "$APP_PATH/Contents/MacOS" -type f -perm +111 | head -n 1)
             if [ -n "$BINARY" ]; then
-              echo -e "\n================================\nLibrary Dependencies\n================================" >> "$DIST_DIR/BUILD_MANIFEST.txt"
-              otool -L "$BINARY" >> "$DIST_DIR/BUILD_MANIFEST.txt" || true
+              echo -e "\n================================\nLibrary Dependencies\n================================" >> "$FINAL_DIST_DIR/BUILD_MANIFEST.txt"
+              otool -L "$BINARY" >> "$FINAL_DIST_DIR/BUILD_MANIFEST.txt" || true
             fi
           fi
       
@@ -416,12 +454,12 @@ jobs:
           cd dist
           
           # Create DMG (if available from build)
-          if [ -f "macos/*.dmg" ]; then
-            cp macos/*.dmg "../summit_hip_numbers_macos_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.dmg"
+          if [ -f "macos-${{ matrix.variant }}/*.dmg" ]; then
+            cp "macos-${{ matrix.variant }}/*.dmg" "../summit_hip_numbers_macos_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.dmg"
           fi
           
-          # Create ZIP of .app bundle
-          zip -r "../summit_hip_numbers_macos_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.zip" "macos-${{ matrix.variant }}"
+          # Create ZIP of .app bundle from final distribution
+          zip -r "../summit_hip_numbers_macos_${{ matrix.variant }}_${{ steps.setup.outputs.VERSION }}.zip" "macos-final-${{ matrix.variant }}"
           
           cd ..
       

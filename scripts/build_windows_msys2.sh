@@ -143,13 +143,23 @@ mkdir -p "$DIST_DIR/bin" || {
 # Check if the source directory exists
 if [ ! -d "$MSYSTEM_PREFIX/bin" ]; then
     log "${RED}ERROR: Directory $MSYSTEM_PREFIX/bin does not exist${NC}"
+    log "This usually means MSYS2 is not properly installed or configured."
+    log "Please ensure you're running this script from within the MSYS2 environment."
+    exit 1
+fi
+
+# Verify we can read the directory
+if [ ! -r "$MSYSTEM_PREFIX/bin" ]; then
+    log "${RED}ERROR: Cannot read directory $MSYSTEM_PREFIX/bin${NC}"
+    log "Permission issue or corrupted MSYS2 installation."
     exit 1
 fi
 
 log "Looking for DLLs in: $MSYSTEM_PREFIX/bin"
+log "$(ls -la "$MSYSTEM_PREFIX/bin" | head -5 | tail -3)" # Show a few files to verify accessibility
 
-# List of essential DLL patterns
-essential_patterns=(
+# Define critical vs optional DLL patterns
+critical_patterns=(
     "libgst*.dll"
     "libglib*.dll"
     "libgobject*.dll"
@@ -160,9 +170,12 @@ essential_patterns=(
     "libstdc++*.dll"
     "libiconv*.dll"
     "libintl*.dll"
-    "zlib*.dll"
     "libffi*.dll"
     "libpcre*.dll"
+)
+
+optional_patterns=(
+    "zlib*.dll"
     "libbz2*.dll"
     "libfreetype*.dll"
     "libharfbuzz*.dll"
@@ -173,25 +186,81 @@ essential_patterns=(
     "libogg*.dll"
 )
 
-# Copy DLLs using a more robust approach
-for pattern in "${essential_patterns[@]}"; do
-    found_any=false
-    # Use find to handle the pattern matching more robustly
-    while IFS= read -r dll_file; do
-        if [ -f "$dll_file" ]; then
-            if cp "$dll_file" "$DIST_DIR/bin/" 2>/dev/null; then
-                ((dll_count++))
-                found_any=true
-            fi
-        fi
-    done < <(find "$MSYSTEM_PREFIX/bin" -maxdepth 1 -name "$pattern" -type f 2>/dev/null)
+# Function to copy DLLs for a given pattern
+copy_pattern_dlls() {
+    local pattern="$1"
+    local is_critical="$2"
+    local found_count=0
     
-    if [ "$found_any" = false ] && [ "$pattern" != "libbz2*.dll" ] && [ "$pattern" != "libfreetype*.dll" ] && [ "$pattern" != "libharfbuzz*.dll" ] && [ "$pattern" != "libpng*.dll" ] && [ "$pattern" != "liborc*.dll" ] && [ "$pattern" != "libopus*.dll" ] && [ "$pattern" != "libvorbis*.dll" ] && [ "$pattern" != "libogg*.dll" ]; then
-        log "  ${YELLOW}Warning: No DLLs found for pattern: $pattern${NC}"
+    # Use find with proper error handling
+    if [ -d "$MSYSTEM_PREFIX/bin" ]; then
+        while IFS= read -r -d $'\0' dll_file; do
+            if [ -f "$dll_file" ]; then
+                local dll_name=$(basename "$dll_file")
+                if cp "$dll_file" "$DIST_DIR/bin/" 2>/dev/null; then
+                    log "    ✓ $dll_name"
+                    ((dll_count++))
+                    ((found_count++))
+                else
+                    log "    ${YELLOW}⚠ Failed to copy $dll_name${NC}"
+                fi
+            fi
+        done < <(find "$MSYSTEM_PREFIX/bin" -maxdepth 1 -name "$pattern" -type f -print0 2>/dev/null || true)
     fi
+    
+    # Report results
+    if [ $found_count -eq 0 ]; then
+        if [ "$is_critical" = "true" ]; then
+            log "    ${YELLOW}⚠ WARNING: No critical DLLs found for pattern: $pattern${NC}"
+        else
+            log "    ${BLUE}ℹ No optional DLLs found for pattern: $pattern${NC}"
+        fi
+    else
+        log "    ${GREEN}✓ Found $found_count DLL(s) for pattern: $pattern${NC}"
+    fi
+    
+    return 0
+}
+
+# Copy critical DLLs first
+log "Copying critical DLLs..."
+for pattern in "${critical_patterns[@]}"; do
+    copy_pattern_dlls "$pattern" "true"
+done
+
+# Copy optional DLLs
+log "Copying optional DLLs..."
+for pattern in "${optional_patterns[@]}"; do
+    copy_pattern_dlls "$pattern" "false"
 done
 
 log "${GREEN}✓ Copied $dll_count essential DLLs${NC}"
+
+# Validate that we have some critical DLLs
+critical_dll_check() {
+    local missing_critical=0
+    local essential_files=("libglib-2.0-0.dll" "libgobject-2.0-0.dll" "libgstreamer-1.0-0.dll")
+    
+    log ""
+    log "Validating critical DLLs..."
+    for dll in "${essential_files[@]}"; do
+        if [ -f "$DIST_DIR/bin/$dll" ]; then
+            log "    ✓ $dll found"
+        else
+            log "    ${YELLOW}⚠ $dll missing (may use different naming)${NC}"
+            ((missing_critical++))
+        fi
+    done
+    
+    if [ $dll_count -lt 10 ]; then
+        log "${YELLOW}WARNING: Only $dll_count DLLs copied. Expected at least 10 for a functional build.${NC}"
+        log "This may indicate missing MSYS2 packages or incorrect paths."
+    fi
+    
+    return 0
+}
+
+critical_dll_check
 
 # Step 5: Copy GStreamer plugins
 log ""
@@ -205,14 +274,18 @@ PLUGIN_SRC="$MSYSTEM_PREFIX/lib/gstreamer-1.0"
 
 if [ -d "$PLUGIN_SRC" ]; then
     log "Looking for plugins in: $PLUGIN_SRC"
-    # Use find for more robust file handling
-    while IFS= read -r plugin_file; do
+    # Use find with proper error handling for plugin files
+    while IFS= read -r -d $'\0' plugin_file; do
         if [ -f "$plugin_file" ]; then
+            local plugin_name=$(basename "$plugin_file")
             if cp "$plugin_file" "$PLUGIN_DIR/" 2>/dev/null; then
+                log "    ✓ $plugin_name"
                 ((PLUGIN_COUNT++))
+            else
+                log "    ${YELLOW}⚠ Failed to copy $plugin_name${NC}"
             fi
         fi
-    done < <(find "$PLUGIN_SRC" -maxdepth 1 -name "*.dll" -type f 2>/dev/null)
+    done < <(find "$PLUGIN_SRC" -maxdepth 1 -name "*.dll" -type f -print0 2>/dev/null || true)
     
     if [ $PLUGIN_COUNT -gt 0 ]; then
         log "${GREEN}✓ Copied $PLUGIN_COUNT GStreamer plugins${NC}"

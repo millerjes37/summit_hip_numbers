@@ -1,5 +1,5 @@
 #!/bin/bash
-# macOS install script for egui-video dependencies
+# macOS install script for Summit HIP Numbers (GStreamer dependencies)
 # Requires: Xcode Command Line Tools, internet connection
 
 set -e
@@ -49,7 +49,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-log_info "Installing dependencies for egui-video on macOS..."
+log_info "Installing dependencies for Summit HIP Numbers on macOS..."
 
 # Check macOS version
 if [[ "$OSTYPE" != "darwin"* ]]; then
@@ -60,7 +60,7 @@ fi
 # Clean previous installations if requested
 if [ "$CLEAN" = true ]; then
     log_info "Cleaning previous installations..."
-    brew uninstall ffmpeg@7 sdl2 2>/dev/null || true
+    brew uninstall pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav 2>/dev/null || true
     rm -rf target Cargo.lock
 fi
 
@@ -87,38 +87,53 @@ fi
 log_info "Updating Homebrew..."
 brew update
 
-# Install ffmpeg 7.x (required version for egui-video)
-log_info "Installing ffmpeg@7..."
-brew install ffmpeg@7
+# Install pkg-config (required for dependency detection)
+log_info "Installing pkg-config..."
+brew install pkg-config
 
-# Install SDL2
-log_info "Installing SDL2..."
-brew install sdl2
+# Install GStreamer (required for video playback)
+log_info "Installing GStreamer..."
+brew install gstreamer
 
-# Set environment variables
-export FFMPEG_DIR="/opt/homebrew/opt/ffmpeg@7"
-export LDFLAGS="-L/opt/homebrew/opt/ffmpeg@7/lib -L/opt/homebrew/lib"
-export CPPFLAGS="-I/opt/homebrew/opt/ffmpeg@7/include -I/opt/homebrew/include"
-export PKG_CONFIG_PATH="/opt/homebrew/opt/ffmpeg@7/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
+log_info "Installing GStreamer plugins..."
+brew install gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly
+
+log_info "Installing additional GStreamer components..."
+brew install gst-libav
+
+# Set environment variables for GStreamer
+export GSTREAMER_ROOT="/opt/homebrew"
+export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig"
+export DYLD_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_LIBRARY_PATH"
 
 # Verify installations
 log_info "Verifying installations..."
 
-if command -v ffmpeg &>/dev/null; then
-    FFMPEG_VERSION=$(ffmpeg -version 2>&1 | head -n 1)
-    log_success "FFmpeg installed: $FFMPEG_VERSION"
+if pkg-config --exists gstreamer-1.0; then
+    GST_VERSION=$(pkg-config --modversion gstreamer-1.0)
+    log_success "GStreamer installed: $GST_VERSION"
 else
-    log_error "FFmpeg installation failed"
+    log_error "GStreamer installation failed"
     exit 1
 fi
 
-if pkg-config --exists sdl2; then
-    SDL2_VERSION=$(pkg-config --modversion sdl2)
-    log_success "SDL2 installed: $SDL2_VERSION"
+if command -v gst-inspect-1.0 &>/dev/null; then
+    log_success "GStreamer tools available"
 else
-    log_error "SDL2 installation failed"
+    log_error "GStreamer tools installation failed"
     exit 1
 fi
+
+# Verify essential GStreamer plugins
+log_info "Verifying GStreamer plugins..."
+REQUIRED_PLUGINS=("coreelements" "playback" "typefindfunctions" "videoconvert" "videoscale" "audioresample" "autodetect")
+for plugin in "${REQUIRED_PLUGINS[@]}"; do
+    if gst-inspect-1.0 "$plugin" &>/dev/null; then
+        log_success "Plugin $plugin: OK"
+    else
+        log_warn "Plugin $plugin: Missing (may affect functionality)"
+    fi
+done
 
 # Build the Rust project if not skipped
 if [ "$SKIP_BUILD" = false ]; then
@@ -134,7 +149,10 @@ fi
 log_success "Installation complete!"
 echo
 echo -e "${BLUE}To run the application:${NC}"
-echo "  cargo run --release"
+echo "  cargo run --release --package summit_hip_numbers"
 echo
-echo -e "${YELLOW}Note: The application uses native video playback via ffmpeg and SDL2.${NC}"
-echo -e "${YELLOW}Make sure you have video files in the 'videos/' directory.${NC}"
+echo -e "${BLUE}To run with demo features:${NC}"
+echo "  cargo run --release --package summit_hip_numbers --features demo"
+echo
+echo -e "${YELLOW}Note: The application uses GStreamer for video playback.${NC}"
+echo -e "${YELLOW}Make sure you have video files in the configured videos directory.${NC}"
