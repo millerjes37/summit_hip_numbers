@@ -1,6 +1,6 @@
 #!/bin/bash
-# scripts/build_all.sh
-# Build all variants for local development
+# Build orchestration script for Summit Hip Numbers
+# Handles both development and distribution builds across platforms
 
 set -e
 
@@ -9,362 +9,283 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Default options
-RUN_TESTS=true
-BUILD_DEMO=true
-BUILD_FULL=true
-ARCHIVE=true
-VERBOSE=false
+# Function to display help
+show_help() {
+    echo "Summit Hip Numbers Build Orchestration Script"
+    echo ""
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  --platform <platform>    Build for specific platform (macos, windows, linux, all)"
+    echo "  --variant <variant>      Build variant (full, demo, all) [default: full]"
+    echo "  --skip-tests            Skip running tests"
+    echo "  --skip-build            Skip cargo build (use existing binaries)"
+    echo "  --dist-only             Only create distribution packages"
+    echo "  --help                  Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0                      # Build full variant for current platform"
+    echo "  $0 --platform all       # Build all platforms"
+    echo "  $0 --variant demo       # Build demo variant"
+    echo "  $0 --dist-only          # Create distribution packages from existing builds"
+}
 
-# Parse command line arguments
+# Parse arguments
+PLATFORM="current"
+VARIANT="full"
+SKIP_TESTS=false
+SKIP_BUILD=false
+DIST_ONLY=false
+
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --no-tests)
-            RUN_TESTS=false
+        --platform)
+            PLATFORM="$2"
+            shift 2
+            ;;
+        --variant)
+            VARIANT="$2"
+            shift 2
+            ;;
+        --skip-tests)
+            SKIP_TESTS=true
             shift
             ;;
-        --demo-only)
-            BUILD_FULL=false
+        --skip-build)
+            SKIP_BUILD=true
             shift
             ;;
-        --full-only)
-            BUILD_DEMO=false
-            shift
-            ;;
-        --no-archives)
-            ARCHIVE=false
-            shift
-            ;;
-        --verbose)
-            VERBOSE=true
+        --dist-only)
+            DIST_ONLY=true
+            SKIP_BUILD=true
+            SKIP_TESTS=true
             shift
             ;;
         --help)
-            echo "Usage: $0 [options]"
-            echo ""
-            echo "Options:"
-            echo "  --no-tests      Skip running tests"
-            echo "  --demo-only     Build only demo variant"
-            echo "  --full-only     Build only full variant"
-            echo "  --no-archives   Skip creating ZIP/TAR archives"
-            echo "  --verbose       Enable verbose output"
-            echo "  --help          Show this help message"
+            show_help
             exit 0
             ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
-            echo "Use --help for usage information"
+            show_help
             exit 1
             ;;
     esac
 done
 
-# Function to print colored output
-log() {
-    echo -e "${BLUE}[BUILD]${NC} $1"
+# Detect current platform if needed
+if [ "$PLATFORM" = "current" ]; then
+    case "$(uname -s)" in
+        Darwin*) PLATFORM="macos" ;;
+        Linux*) PLATFORM="linux" ;;
+        MINGW*|MSYS*|CYGWIN*) PLATFORM="windows" ;;
+        *) 
+            echo -e "${RED}Unknown platform: $(uname -s)${NC}"
+            exit 1
+            ;;
+    esac
+fi
+
+echo -e "${BLUE}=== Summit Hip Numbers Build Orchestration ===${NC}"
+echo "Platform: $PLATFORM"
+echo "Variant: $VARIANT"
+echo "Skip tests: $SKIP_TESTS"
+echo "Skip build: $SKIP_BUILD"
+echo "Distribution only: $DIST_ONLY"
+echo ""
+
+# Function to run tests
+run_tests() {
+    echo -e "${YELLOW}Running tests...${NC}"
+    
+    # Format check
+    echo "Checking code format..."
+    cargo fmt --all -- --check
+    
+    # Lint check
+    echo "Running clippy..."
+    cargo clippy --all-targets -- -D warnings
+    
+    # Run tests
+    echo "Running unit tests..."
+    cargo test --workspace
+    
+    echo -e "${GREEN}✓ All tests passed${NC}"
 }
 
-success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-# Function to detect platform
-detect_platform() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo "linux"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macos"
-    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-        echo "windows"
-    else
-        echo "unknown"
+# Function to ensure config files are correct
+ensure_configs() {
+    echo -e "${YELLOW}Ensuring configuration files...${NC}"
+    
+    # Create config.dist.toml if it doesn't exist
+    if [ ! -f "config.dist.toml" ]; then
+        echo "Creating config.dist.toml from config.toml..."
+        if [ -f "config.toml" ]; then
+            # Copy config.toml and update paths
+            cp config.toml config.dist.toml
+            
+            # Update paths for distribution
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' 's|"./assets/videos"|"./videos"|g' config.dist.toml
+                sed -i '' 's|"./assets/splash"|"./splash"|g' config.dist.toml
+                sed -i '' 's|"./assets/logo"|"./logo"|g' config.dist.toml
+            else
+                sed -i 's|"./assets/videos"|"./videos"|g' config.dist.toml
+                sed -i 's|"./assets/splash"|"./splash"|g' config.dist.toml
+                sed -i 's|"./assets/logo"|"./logo"|g' config.dist.toml
+            fi
+        fi
     fi
+    
+    echo -e "${GREEN}✓ Configuration files ready${NC}"
 }
 
-# Function to build for a variant
-build_variant() {
-    local variant=$1
-    local platform=$2
+# Function to build for a specific platform and variant
+build_platform_variant() {
+    local platform=$1
+    local variant=$2
     
-    log "Building $variant variant for $platform..."
+    echo -e "${BLUE}Building $variant for $platform...${NC}"
     
-    case $platform in
-        "windows")
-            if [ -f "scripts/build_windows_msys2.sh" ]; then
-                ./scripts/build_windows_msys2.sh $variant
-            else
-                error "Windows build script not found"
-                return 1
+    case "$platform" in
+        macos)
+            if [[ "$OSTYPE" != "darwin"* ]]; then
+                echo -e "${YELLOW}Warning: Cross-compiling for macOS from non-macOS platform${NC}"
             fi
-            ;;
-        "macos")
+            
             if [ -f "scripts/build_macos.sh" ]; then
-                ./scripts/build_macos.sh $variant
+                chmod +x scripts/build_macos.sh
+                ./scripts/build_macos.sh "$variant"
             else
-                error "macOS build script not found"
+                echo -e "${RED}macOS build script not found${NC}"
                 return 1
             fi
             ;;
-        "linux")
-            log "Building with Nix..."
-            if command -v nix &> /dev/null; then
-                if [ "$variant" = "demo" ]; then
-                    nix build .#demo --print-build-logs
+            
+        windows)
+            if [ -f "scripts/build_windows.ps1" ]; then
+                if command -v powershell &> /dev/null; then
+                    powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
+                elif command -v pwsh &> /dev/null; then
+                    pwsh -ExecutionPolicy Bypass -File scripts/build_windows.ps1
                 else
-                    nix build . --print-build-logs
-                fi
-                
-                # Create dist directory
-                mkdir -p "dist/linux-$variant"
-                if [ -d "result" ]; then
-                    cp -rL result/* "dist/linux-$variant/"
-                fi
-            else
-                warning "Nix not found, falling back to cargo build"
-                if [ "$variant" = "demo" ]; then
-                    cargo build --release --package summit_hip_numbers --features demo
-                else
+                    echo -e "${YELLOW}PowerShell not found, attempting cargo build only${NC}"
                     cargo build --release --package summit_hip_numbers
                 fi
-                
-                # Create dist directory
-                mkdir -p "dist/linux-$variant/bin"
-                cp "target/release/summit_hip_numbers" "dist/linux-$variant/bin/"
+            else
+                echo -e "${RED}Windows build script not found${NC}"
+                return 1
             fi
             ;;
+            
+        linux)
+            echo -e "${YELLOW}Building for Linux...${NC}"
+            
+            # Linux build steps
+            cargo build --release --package summit_hip_numbers
+            
+            # Create distribution
+            local dist_dir="dist/linux-$variant"
+            rm -rf "$dist_dir"
+            mkdir -p "$dist_dir"
+            
+            # Copy binary
+            cp target/release/summit_hip_numbers "$dist_dir/"
+            chmod +x "$dist_dir/summit_hip_numbers"
+            
+            # Copy resources
+            mkdir -p "$dist_dir/videos" "$dist_dir/splash" "$dist_dir/logo"
+            cp config.dist.toml "$dist_dir/config.toml"
+            
+            # Copy assets
+            [ -d "assets/videos" ] && cp -r assets/videos/* "$dist_dir/videos/" 2>/dev/null || true
+            [ -d "assets/splash" ] && cp -r assets/splash/* "$dist_dir/splash/" 2>/dev/null || true
+            [ -d "assets/logo" ] && cp -r assets/logo/* "$dist_dir/logo/" 2>/dev/null || true
+            
+            # Create launch script
+            cat > "$dist_dir/run.sh" << 'EOF'
+#!/bin/bash
+# Summit Hip Numbers launcher for Linux
+
+# Set GStreamer plugin path if needed
+export GST_PLUGIN_PATH="${GST_PLUGIN_PATH}:/usr/lib/gstreamer-1.0"
+
+# Change to application directory
+cd "$(dirname "$0")"
+
+# Run the application
+./summit_hip_numbers "$@"
+EOF
+            chmod +x "$dist_dir/run.sh"
+            
+            # Create tarball
+            tar -czf "dist/summit_hip_numbers_linux_${variant}.tar.gz" -C dist "linux-$variant"
+            
+            echo -e "${GREEN}✓ Linux build complete${NC}"
+            ;;
+            
         *)
-            error "Unsupported platform: $platform"
+            echo -e "${RED}Unknown platform: $platform${NC}"
             return 1
             ;;
     esac
 }
 
-# Function to run tests
-run_tests() {
-    local variant=$1
-    local platform=$2
+# Main build process
+main() {
+    # Ensure we're in the project root
+    if [ ! -f "Cargo.toml" ]; then
+        echo -e "${RED}Error: Must run from project root directory${NC}"
+        exit 1
+    fi
     
-    log "Running tests for $variant variant on $platform..."
+    # Ensure configs are ready
+    ensure_configs
     
-    case $platform in
-        "windows")
-            if [ -f "scripts/test_portable_comprehensive.ps1" ]; then
-                powershell -ExecutionPolicy Bypass -File "scripts/test_portable_comprehensive.ps1" -DistPath "dist/$variant" -Variant "$variant"
-            else
-                warning "Windows test script not found, skipping tests"
+    # Run tests unless skipped
+    if [ "$SKIP_TESTS" != true ]; then
+        run_tests
+    fi
+    
+    # Build variants
+    local variants=()
+    if [ "$VARIANT" = "all" ]; then
+        variants=("full" "demo")
+    else
+        variants=("$VARIANT")
+    fi
+    
+    # Build platforms
+    local platforms=()
+    if [ "$PLATFORM" = "all" ]; then
+        platforms=("macos" "windows" "linux")
+    else
+        platforms=("$PLATFORM")
+    fi
+    
+    # Build each combination
+    for platform in "${platforms[@]}"; do
+        for variant in "${variants[@]}"; do
+            if [ "$SKIP_BUILD" != true ]; then
+                build_platform_variant "$platform" "$variant"
             fi
-            ;;
-        "macos")
-            if [ -f "scripts/test_portable_comprehensive_macos.sh" ]; then
-                local app_name="Summit HIP Numbers"
-                if [ "$variant" = "demo" ]; then
-                    app_name="Summit HIP Numbers Demo"
-                fi
-                ./scripts/test_portable_comprehensive_macos.sh "dist/macos-$variant/$app_name.app" "$variant"
-            else
-                warning "macOS test script not found, skipping tests"
-            fi
-            ;;
-        "linux")
-            if [ -f "scripts/test_portable_comprehensive.sh" ]; then
-                ./scripts/test_portable_comprehensive.sh "dist/linux-$variant" "$variant"
-            else
-                warning "Linux test script not found, skipping tests"
-            fi
-            ;;
-    esac
+        done
+    done
+    
+    # Create distribution summary
+    if [ -d "dist" ]; then
+        echo -e "${BLUE}=== Distribution Summary ===${NC}"
+        echo "Available distributions:"
+        find dist -name "*.zip" -o -name "*.dmg" -o -name "*.tar.gz" | while read file; do
+            size=$(du -h "$file" | cut -f1)
+            echo "  - $(basename "$file") ($size)"
+        done
+    fi
+    
+    echo -e "${GREEN}=== Build Complete ===${NC}"
 }
 
-# Function to create archives
-create_archives() {
-    local variant=$1
-    local platform=$2
-    
-    log "Creating archives for $variant variant on $platform..."
-    
-    # Get version
-    local version=$(git describe --tags --always 2>/dev/null || echo "dev")
-    
-    case $platform in
-        "windows")
-            if [ -d "dist/$variant" ]; then
-                cd dist
-                local archive_name="summit_hip_numbers_${variant}_portable_${version}.zip"
-                zip -r "$archive_name" "$variant" > /dev/null
-                cd ..
-                success "Created: dist/$archive_name"
-            fi
-            ;;
-        "macos")
-            if [ -d "dist/macos-$variant" ]; then
-                cd dist
-                local archive_name="summit_hip_numbers_macos_${variant}_${version}.zip"
-                zip -r "$archive_name" "macos-$variant" > /dev/null
-                cd ..
-                success "Created: dist/$archive_name"
-            fi
-            ;;
-        "linux")
-            if [ -d "dist/linux-$variant" ]; then
-                cd dist
-                local archive_tar="summit_hip_numbers_linux_${variant}_${version}.tar.gz"
-                local archive_zip="summit_hip_numbers_linux_${variant}_${version}.zip"
-                tar -czf "$archive_tar" "linux-$variant"
-                zip -r "$archive_zip" "linux-$variant" > /dev/null
-                cd ..
-                success "Created: dist/$archive_tar"
-                success "Created: dist/$archive_zip"
-            fi
-            ;;
-    esac
-}
-
-# Main execution
-echo -e "${CYAN}================================${NC}"
-echo -e "${CYAN}  Summit HIP Numbers Build All${NC}"
-echo -e "${CYAN}================================${NC}"
-
-# Detect platform
-PLATFORM=$(detect_platform)
-log "Detected platform: $PLATFORM"
-
-# Check prerequisites
-log "Checking prerequisites..."
-
-if ! command -v cargo &> /dev/null; then
-    error "Rust/Cargo not found. Please install Rust first."
-    exit 1
-fi
-
-if ! command -v git &> /dev/null; then
-    error "Git not found. Please install Git first."
-    exit 1
-fi
-
-# Create build-logs directory
-mkdir -p build-logs
-
-# Start build process
-START_TIME=$(date +%s)
-
-# Track results
-BUILDS_SUCCEEDED=0
-BUILDS_FAILED=0
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-# Build full variant
-if [ "$BUILD_FULL" = true ]; then
-    log ""
-    log "===== Building FULL variant ====="
-    if build_variant "full" "$PLATFORM"; then
-        ((BUILDS_SUCCEEDED++))
-        success "Full variant built successfully"
-        
-        if [ "$RUN_TESTS" = true ]; then
-            if run_tests "full" "$PLATFORM"; then
-                ((TESTS_PASSED++))
-                success "Full variant tests passed"
-            else
-                ((TESTS_FAILED++))
-                warning "Full variant tests failed"
-            fi
-        fi
-        
-        if [ "$ARCHIVE" = true ]; then
-            create_archives "full" "$PLATFORM"
-        fi
-    else
-        ((BUILDS_FAILED++))
-        error "Full variant build failed"
-    fi
-fi
-
-# Build demo variant
-if [ "$BUILD_DEMO" = true ]; then
-    log ""
-    log "===== Building DEMO variant ====="
-    if build_variant "demo" "$PLATFORM"; then
-        ((BUILDS_SUCCEEDED++))
-        success "Demo variant built successfully"
-        
-        if [ "$RUN_TESTS" = true ]; then
-            if run_tests "demo" "$PLATFORM"; then
-                ((TESTS_PASSED++))
-                success "Demo variant tests passed"
-            else
-                ((TESTS_FAILED++))
-                warning "Demo variant tests failed"
-            fi
-        fi
-        
-        if [ "$ARCHIVE" = true ]; then
-            create_archives "demo" "$PLATFORM"
-        fi
-    else
-        ((BUILDS_FAILED++))
-        error "Demo variant build failed"
-    fi
-fi
-
-# Calculate elapsed time
-END_TIME=$(date +%s)
-ELAPSED=$((END_TIME - START_TIME))
-MINUTES=$((ELAPSED / 60))
-SECONDS=$((ELAPSED % 60))
-
-# Summary
-echo ""
-echo -e "${CYAN}================================${NC}"
-echo -e "${CYAN}  Build Summary${NC}"
-echo -e "${CYAN}================================${NC}"
-echo -e "Platform: $PLATFORM"
-echo -e "Time elapsed: ${MINUTES}m ${SECONDS}s"
-echo ""
-echo -e "Builds:"
-echo -e "  Succeeded: ${GREEN}$BUILDS_SUCCEEDED${NC}"
-echo -e "  Failed:    ${RED}$BUILDS_FAILED${NC}"
-
-if [ "$RUN_TESTS" = true ]; then
-    echo ""
-    echo -e "Tests:"
-    echo -e "  Passed:    ${GREEN}$TESTS_PASSED${NC}"
-    echo -e "  Failed:    ${RED}$TESTS_FAILED${NC}"
-fi
-
-# List created files
-echo ""
-echo -e "${CYAN}Created files:${NC}"
-if [ "$ARCHIVE" = true ]; then
-    find dist -name "*.zip" -o -name "*.tar.gz" -o -name "*.dmg" | while read file; do
-        SIZE=$(du -h "$file" | cut -f1)
-        echo -e "  $(basename "$file") ($SIZE)"
-    done
-else
-    find dist -type d -maxdepth 1 -name "*-*" | while read dir; do
-        SIZE=$(du -sh "$dir" | cut -f1)
-        echo -e "  $(basename "$dir")/ ($SIZE)"
-    done
-fi
-
-# Exit with appropriate code
-if [ $BUILDS_FAILED -gt 0 ]; then
-    exit 1
-elif [ "$RUN_TESTS" = true ] && [ $TESTS_FAILED -gt 0 ]; then
-    exit 2
-else
-    echo ""
-    success "All builds completed successfully!"
-    exit 0
-fi
+# Run main function
+main

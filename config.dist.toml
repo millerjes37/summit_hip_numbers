@@ -1,14 +1,23 @@
 # =============================================================================
-# Summit Hip Numbers Media Player Configuration
+# Summit Hip Numbers Media Player Configuration - DISTRIBUTION VERSION
 # =============================================================================
 #
-# This configuration file controls all aspects of the Summit Hip Numbers Media Player.
-# The application supports both a graphical configuration editor (run with --config)
-# and manual editing of this file.
+# This configuration file is for the portable Windows distribution.
+# All paths are relative to the executable location for portability.
 #
-# Configuration changes take effect on next application restart.
-# Colors should be specified in hex format (e.g., #FFFFFF for white).
-# Paths are relative to the executable location unless absolute paths are used.
+# Directory structure for distribution:
+# summit_hip_numbers/
+# ├── summit_hip_numbers.exe
+# ├── config.toml (this file)
+# ├── videos/
+# │   ├── 001_video.mp4
+# │   ├── 002_video.mp4
+# │   └── ...
+# ├── splash/
+# │   ├── splash1.png
+# │   └── ...
+# └── logo/
+#     └── logo.svg
 #
 # =============================================================================
 
@@ -17,9 +26,8 @@
 # =============================================================================
 [video]
 # Directory containing video files to be played
-# Files are sorted alphabetically and assigned hip numbers (001, 002, 003, etc.)
-# Supported formats: MP4, AVI, MKV, and other GStreamer-compatible formats
-directory = "./assets/videos"
+# For distribution, videos are in the 'videos' folder next to the executable
+directory = "./videos"
 
 # =============================================================================
 # SPLASH SCREEN SETTINGS
@@ -29,11 +37,9 @@ directory = "./assets/videos"
 enabled = true
 
 # Duration in seconds to display the splash screen
-# Set to 0.0 to disable timed display (screen remains until user interaction)
 duration_seconds = 3.0
 
 # Text to display on splash screen when no images are available
-# Supports multi-line text using \n
 text = "SUMMIT PROFESSIONAL Solutions\nMedia Player"
 
 # Background color of the splash screen (hex format)
@@ -57,12 +63,11 @@ interval = 0
 # rotation_mode = "cycle"
 
 # When using rotation_mode = "static", specify the path to the splash image
-# static_splash_path = "/path/to/specific/splash.png"
+# static_splash_path = "./splash/specific_splash.png"
 
 # Directory containing splash screen images (PNG, JPG, JPEG, BMP)
-# Images are displayed in alphabetical order
-# If no images are found, the text above is displayed instead
-directory = "./assets/splash"
+# For distribution, splash images are in the 'splash' folder next to the executable
+directory = "./splash"
 
 # =============================================================================
 # LOGGING SETTINGS
@@ -72,8 +77,6 @@ directory = "./assets/splash"
 file = "summit_hip_numbers.log"
 
 # Maximum number of lines to keep in the log file
-# When exceeded, older entries are automatically trimmed
-# Set to 0 to disable log trimming
 max_lines = 10000
 
 # =============================================================================
@@ -81,15 +84,12 @@ max_lines = 10000
 # =============================================================================
 [demo]
 # Timeout in seconds before the demo version automatically exits
-# Set to 0 to disable timeout (demo runs indefinitely)
 timeout_seconds = 300
 
 # Maximum number of videos to load in demo mode
-# Extra videos beyond this limit are ignored
 max_videos = 5
 
 # Maximum hip number allowed in demo mode
-# Users can only access hip numbers from 001 to this value
 hip_number_limit = 5
 
 # =============================================================================
@@ -104,7 +104,6 @@ window_width = 1920
 window_height = 1080
 
 # Layout proportions as decimal values (0.0 to 1.0)
-# video_height_ratio + bar_height_ratio should equal 1.0
 video_height_ratio = 0.92  # 92% of screen height for video display
 bar_height_ratio = 0.08    # 8% of screen height for status bar
 
@@ -114,108 +113,52 @@ kiosk_mode = true
 # -----------------------------------------------------------------------------
 # FONT SIZES
 # -----------------------------------------------------------------------------
-# Font sizes in points for different UI elements
-splash_font_size = 48.0      # Splash screen text
-placeholder_font_size = 48.0 # "VIDEO DISPLAY AREA" placeholder text
-demo_watermark_font_size = 24.0 # Demo mode watermark text
+splash_font_size = 48.0
+placeholder_font_size = 48.0
+demo_watermark_font_size = 24.0
 
 # -----------------------------------------------------------------------------
 # INPUT FIELD SETTINGS
 # -----------------------------------------------------------------------------
-# Text displayed next to the hip number input field
 input_label = "3-digit hip number:"
-
-# Maximum number of characters allowed in the input field
 input_max_length = 3
-
-# Width of the input field in pixels
 input_field_width = 45.0
 
 # -----------------------------------------------------------------------------
 # NAVIGATION SETTINGS
 # -----------------------------------------------------------------------------
-# Enable arrow key navigation (Up/Down arrows to change videos)
 enable_arrow_nav = true
 
 # -----------------------------------------------------------------------------
 # DEMO WATERMARK POSITIONING
 # -----------------------------------------------------------------------------
-# Position and size of the "DEMO ONLY" watermark (in demo mode only)
-# Offsets are from the top-right corner of the video display area
-demo_watermark_x_offset = 200.0  # Pixels from right edge
-demo_watermark_y_offset = 10.0   # Pixels from top edge
-demo_watermark_width = 180.0     # Width in pixels
-demo_watermark_height = 30.0     # Height in pixels
+demo_watermark_x_offset = 200.0
+demo_watermark_y_offset = 10.0
+demo_watermark_width = 180.0
+demo_watermark_height = 30.0
 
 # -----------------------------------------------------------------------------
 # UI SPACING & STYLING
 # -----------------------------------------------------------------------------
-# Spacing between UI elements in pixels
 ui_spacing = 10.0
-
-# Width of borders and outlines in pixels
 stroke_width = 1.0
-
-# -----------------------------------------------------------------------------
-# TIMEOUT SETTINGS
-# -----------------------------------------------------------------------------
-# Duration in seconds to show invalid input feedback (red highlighting)
 invalid_input_timeout = 0.5
-
-# Duration in seconds to show "No Video Available" popup
 no_video_popup_timeout = 2.0
 
 # -----------------------------------------------------------------------------
 # TEXT LABELS
 # -----------------------------------------------------------------------------
-# Label displayed above the currently playing video information
 now_playing_label = "now playing"
-
-# Company/branding text displayed in the status bar
-company_label = "Summit Professional Solutions"
+company_label = "SUMMIT PROFESSIONAL Solutions"
 
 # -----------------------------------------------------------------------------
 # COLOR SETTINGS (Hex Format)
 # -----------------------------------------------------------------------------
-# Input field text color
 input_text_color = "#FFFFFF"
-
-# Input field border color
 input_stroke_color = "#FFFFFF"
-
-# Color for all labels and text
 label_color = "#FFFFFF"
-
-# Background color for video area and status bar
 background_color = "#000000"
 
 # =============================================================================
-# CONFIGURATION NOTES
-# =============================================================================
-#
-# Color Format:
-# - Use hex format: #RRGGBB (e.g., #FF0000 for red, #00FF00 for green)
-# - Case insensitive (#ff0000 is the same as #FF0000)
-#
-# Path Format:
-# - Relative paths are resolved from the executable's directory
-# - Use forward slashes (/) even on Windows
-# - Absolute paths are supported but not recommended for portability
-#
-# Demo Mode Overrides:
-# - When built with --features demo, many settings are hardcoded:
-#   - Window size: 1920x1080 fullscreen
-#   - Kiosk mode: Always enabled
-#   - Arrow navigation: Always enabled
-#   - Timeout: 5 minutes (300 seconds)
-#   - Max videos: 5
-#   - Hip number limit: 5
-#   - Splash screen: Always enabled
-#   - Video directory: Forced to ./videos
-#
-# Performance Tips:
-# - Use --release mode for optimal performance
-# - Keep video files in the same directory structure
-# - Monitor the log file for performance issues
-#
+# END OF CONFIGURATION
 # =============================================================================

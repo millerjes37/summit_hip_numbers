@@ -51,10 +51,17 @@ cargo audit
 
 ### Platform-Specific Build Scripts
 
+**All Platforms:**
+```bash
+./scripts/build_all.sh          # Build for current platform
+./scripts/build_all.sh --platform all  # Build for all platforms
+./scripts/build_all.sh --variant demo  # Build demo version
+```
+
 **Windows:**
 ```powershell
 .\install_windows.ps1  # Install all dependencies and build
-.\build_windows.ps1    # Build only (requires dependencies)
+.\scripts\build_windows.ps1    # Build only (requires dependencies)
 ```
 
 **macOS:**
@@ -93,10 +100,18 @@ cargo audit
 
 ### Configuration System
 
-The application uses a hierarchical configuration system:
+The application uses a dual configuration system for development and distribution:
 
-1. **Default Configuration**: Built-in defaults
-2. **File Configuration**: `config.toml` in executable directory
+1. **Development Configuration** (`config.toml`):
+   - Uses `assets/` directory structure
+   - Example: `directory = "./assets/videos"`
+   - Convenient for organized development
+
+2. **Distribution Configuration** (`config.dist.toml`):
+   - Uses flat directory structure for portability
+   - Example: `directory = "./videos"`
+   - Automatically used by build scripts for distribution
+
 3. **Demo Mode Override**: Hardcoded settings when built with `--features demo`
 
 Key configuration sections:
@@ -105,6 +120,11 @@ Key configuration sections:
 - `splash`: Splash screen settings and image directory
 - `logging`: Log file location and size limits
 - `demo`: Timeout and video count restrictions
+
+**Multiple Videos per Hip Number**: The application supports multiple videos per hip number (horse). Videos with the same 3-digit prefix are grouped together and play sequentially. For example:
+- `001_introduction.mp4`
+- `001_details.mp4`
+- `001_conclusion.mp4`
 
 ### Demo Mode Behavior
 
@@ -180,8 +200,17 @@ When making changes:
 
 ### Important File Locations
 
-- Configuration: `config.toml` (in executable directory)
-- Logs: `application.log` (configurable)
-- Videos: Configured via `video.directory` in config
-- Splash images: Configured via `splash.directory`
-- Logo: `assets/logo/logo.svg` (for branding)
+**Development:**
+- Configuration: `config.toml` (project root)
+- Distribution Template: `config.dist.toml` (project root)
+- Videos: `assets/videos/` (configurable)
+- Splash images: `assets/splash/` (configurable)
+- Logo: `assets/logo/logo.svg`
+- Logs: `summit_hip_numbers.log` (configurable)
+
+**Distribution:**
+- Configuration: `config.toml` (same directory as executable)
+- Videos: `videos/` (next to executable)
+- Splash images: `splash/` (next to executable)
+- Logo: `logo/logo.svg` (next to executable)
+- Logs: `summit_hip_numbers.log` (next to executable)

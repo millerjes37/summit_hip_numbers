@@ -227,8 +227,13 @@ if (!$SkipGStreamer) {
     }
 }
 
-# Copy config.toml if exists
-if (Test-Path "config.toml") {
+# Copy distribution config if exists, otherwise use regular config
+if (Test-Path "config.dist.toml") {
+    Write-Host "Copying distribution config as config.toml..." -ForegroundColor Gray
+    Copy-Item "config.dist.toml" (Join-Path $distDir "config.toml")
+    $configSize = (Get-Item (Join-Path $distDir "config.toml")).Length / 1KB
+    Write-Host "Distribution config file copied ($( [math]::Round($configSize, 2)) KB)" -ForegroundColor Green
+} elseif (Test-Path "config.toml") {
     Write-Host "Copying config.toml..." -ForegroundColor Gray
     Copy-Item "config.toml" $distDir
     $configSize = (Get-Item (Join-Path $distDir "config.toml")).Length / 1KB
@@ -237,24 +242,42 @@ if (Test-Path "config.toml") {
     Write-Host "Config file not found" -ForegroundColor Yellow
 }
 
-# Copy videos directory if it exists
-if (Test-Path "videos") {
-    Write-Host "Copying videos directory..." -ForegroundColor Gray
-    Copy-Item "videos" $distDir -Recurse
-    $videoFilesCount = (Get-ChildItem (Join-Path $distDir "videos") -Recurse).Count
-    Write-Host "Videos directory copied ($videoFilesCount files)" -ForegroundColor Green
+# Create directory structure for distribution
+New-Item -ItemType Directory -Path (Join-Path $distDir "videos") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $distDir "splash") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $distDir "logo") -Force | Out-Null
+
+# Copy videos directory - check both development and production locations
+$videosSource = if (Test-Path "assets\videos") { "assets\videos" } elseif (Test-Path "videos") { "videos" } else { $null }
+if ($videosSource) {
+    Write-Host "Copying videos from $videosSource..." -ForegroundColor Gray
+    Copy-Item "$videosSource\*" (Join-Path $distDir "videos") -Recurse -Force
+    $videoFilesCount = (Get-ChildItem (Join-Path $distDir "videos") -Recurse -File).Count
+    Write-Host "Videos copied ($videoFilesCount files)" -ForegroundColor Green
 } else {
-    Write-Host "Videos directory not found" -ForegroundColor Yellow
+    Write-Host "Videos directory not found (checked assets\videos and videos)" -ForegroundColor Yellow
 }
 
-# Copy splash directory if it exists
-if (Test-Path "splash") {
-    Write-Host "Copying splash directory..." -ForegroundColor Gray
-    Copy-Item "splash" $distDir -Recurse
-    $splashFilesCount = (Get-ChildItem (Join-Path $distDir "splash") -Recurse).Count
-    Write-Host "Splash directory copied ($splashFilesCount files)" -ForegroundColor Green
+# Copy splash directory - check both development and production locations
+$splashSource = if (Test-Path "assets\splash") { "assets\splash" } elseif (Test-Path "splash") { "splash" } else { $null }
+if ($splashSource) {
+    Write-Host "Copying splash images from $splashSource..." -ForegroundColor Gray
+    Copy-Item "$splashSource\*" (Join-Path $distDir "splash") -Recurse -Force
+    $splashFilesCount = (Get-ChildItem (Join-Path $distDir "splash") -Recurse -File).Count
+    Write-Host "Splash images copied ($splashFilesCount files)" -ForegroundColor Green
 } else {
-    Write-Host "Splash directory not found" -ForegroundColor Yellow
+    Write-Host "Splash directory not found (checked assets\splash and splash)" -ForegroundColor Yellow
+}
+
+# Copy logo directory - check both development and production locations
+$logoSource = if (Test-Path "assets\logo") { "assets\logo" } elseif (Test-Path "logo") { "logo" } else { $null }
+if ($logoSource) {
+    Write-Host "Copying logo from $logoSource..." -ForegroundColor Gray
+    Copy-Item "$logoSource\*" (Join-Path $distDir "logo") -Recurse -Force
+    $logoFilesCount = (Get-ChildItem (Join-Path $distDir "logo") -Recurse -File).Count
+    Write-Host "Logo copied ($logoFilesCount files)" -ForegroundColor Green
+} else {
+    Write-Host "Logo directory not found (checked assets\logo and logo)" -ForegroundColor Yellow
 }
 
 # Create a launcher script for better compatibility
