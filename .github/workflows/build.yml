@@ -157,7 +157,7 @@ jobs:
         shell: pwsh
         run: |
           # Run PowerShell build script to create distribution
-          ./build_windows.ps1 -SkipBuild -GStreamerPath "C:\msys64\mingw64"
+          ./scripts/build_windows.ps1 -SkipBuild -GStreamerPath "C:\msys64\mingw64"
           
           # Rename dist folder to include variant
           if (Test-Path "dist") {
