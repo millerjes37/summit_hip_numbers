@@ -7,7 +7,7 @@ use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
 
-use file_scanner::{scan_video_files, VideoFile};
+use file_scanner::{VideoFile, scan_video_files};
 
 #[derive(Parser)]
 struct Cli {
@@ -885,7 +885,7 @@ impl MediaPlayerApp {
                 for (index, video) in self.video_files.iter().enumerate() {
                     self.hip_to_index
                         .entry(video.hip_number.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(index);
                 }
 
@@ -1015,8 +1015,7 @@ impl MediaPlayerApp {
         }
 
         // Show splash every N videos
-        self.videos_played
-            .is_multiple_of(self.config.splash.interval)
+        self.videos_played % self.config.splash.interval == 0
     }
 
     fn trim_log(&self) {
@@ -2375,7 +2374,7 @@ fn main() -> eframe::Result<()> {
             viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
             ..Default::default()
         };
-        eframe::run_native(
+        return eframe::run_native(
             "Summit Hip Numbers Config",
             options,
             Box::new(|cc| {
@@ -2383,7 +2382,7 @@ fn main() -> eframe::Result<()> {
                 egui_extras::install_image_loaders(&cc.egui_ctx);
                 Ok(Box::new(ConfigApp::new()))
             }),
-        )
+        );
     } else {
         // Load config to check kiosk mode
         let config = load_config_for_kiosk();

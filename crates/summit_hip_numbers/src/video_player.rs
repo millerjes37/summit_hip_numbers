@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use eframe::epaint::ColorImage;
 use gstreamer::prelude::*;
 use gstreamer::{Bin, Element, ElementFactory, MessageView, State};
@@ -388,8 +388,6 @@ mod tests {
             assert!(player.is_eos());
             *player.error.lock().unwrap() = Some("test error".to_string());
             assert_eq!(player.get_error(), Some("test error".to_string()));
-        } else {
-            return;
         }
     }
 
@@ -403,8 +401,6 @@ mod tests {
         let uri = format!("file://{}", temp_file.path().to_str().unwrap());
         if let Ok(player) = VideoPlayer::new(&uri, tx) {
             assert!(player.get_error().is_none());
-        } else {
-            return;
         }
     }
 }
