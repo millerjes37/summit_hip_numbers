@@ -145,9 +145,10 @@ if command -v pacman >/dev/null 2>&1; then
     set -e
     
     if [ $pacman_exit_code -eq 0 ] && [ -n "$pacman_output" ]; then
-        echo "$pacman_output" | while IFS= read -r line; do
+        # Use here-string instead of pipe to avoid subshell issues
+        while IFS= read -r line; do
             log "  $line"
-        done
+        done <<< "$pacman_output"
     else
         log "  Could not query package files (exit code: $pacman_exit_code)"
     fi
