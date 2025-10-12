@@ -131,6 +131,21 @@ jobs:
       - name: Build Application
         shell: msys2 {0}
         run: |
+          # Set up environment
+          export MSYSTEM=MINGW64
+          export MSYSTEM_PREFIX=/mingw64
+          export PATH="$MSYSTEM_PREFIX/bin:$PATH"
+          
+          # Verify GStreamer installation
+          echo "Verifying GStreamer installation..."
+          which gst-inspect-1.0 || echo "WARNING: gst-inspect-1.0 not found in PATH"
+          
+          # List some DLLs to verify they exist
+          echo "Checking for GStreamer DLLs in $MSYSTEM_PREFIX/bin..."
+          ls -la $MSYSTEM_PREFIX/bin/libgstreamer*.dll 2>/dev/null | head -5 || echo "No libgstreamer DLLs found"
+          ls -la $MSYSTEM_PREFIX/bin/libgst*.dll 2>/dev/null | head -5 || echo "No libgst DLLs found"
+          
+          # Run build script
           chmod +x scripts/build_windows_msys2.sh
           ./scripts/build_windows_msys2.sh ${{ matrix.variant }}
       

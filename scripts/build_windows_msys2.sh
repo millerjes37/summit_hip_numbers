@@ -103,14 +103,40 @@ log "Debug: MSYSTEM_PREFIX=$MSYSTEM_PREFIX"
 log "Debug: PATH=$PATH"
 log "Debug: Current directory: $(pwd)"
 
+# Workaround for GStreamer PATH regression in MSYS2
+export PYTHONLEGACYWINDOWSDLLLOADING=1
+
+# Verify GStreamer packages are installed
+log "Debug: Verifying GStreamer packages:"
+pacman -Qs mingw-w64-x86_64-gstreamer | head -10 || true
+
 # List available GStreamer DLLs for debugging
-log "Debug: Available GStreamer DLLs:"
-for search_path in "/mingw64/bin" "/usr/bin" "/c/msys64/mingw64/bin" "$MSYSTEM_PREFIX/bin"; do
+log "Debug: Available DLL files:"
+for search_path in "/mingw64/bin" "$MSYSTEM_PREFIX/bin" "/c/msys64/mingw64/bin" "/usr/bin"; do
     if [ -d "$search_path" ]; then
         log "  Checking $search_path:"
-        ls -la "$search_path" | grep -i "gst" | head -5 || true
+        # First show GStreamer executables
+        log "    GStreamer executables:"
+        ls -la "$search_path"/gst-*.exe 2>/dev/null | head -5 || log "      No gst-*.exe found"
+        
+        # Show all libgst* DLLs (this catches libgstreamer-1.0-0.dll)
+        log "    GStreamer DLLs (libgst*):"
+        ls -la "$search_path"/libgst*.dll 2>/dev/null | head -10 || log "      No libgst*.dll found"
+        
+        # Show GLib DLLs
+        log "    GLib DLLs:"
+        ls -la "$search_path"/libglib*.dll 2>/dev/null | head -5 || log "      No libglib*.dll found"
+        ls -la "$search_path"/libgobject*.dll 2>/dev/null | head -5 || log "      No libgobject*.dll found"
+        
+        # Count total DLLs in directory
+        dll_count=$(ls "$search_path"/*.dll 2>/dev/null | wc -l)
+        log "    Total DLLs in directory: $dll_count"
     fi
 done
+
+# Use pacman to find where GStreamer DLLs are installed
+log "Debug: Files installed by gstreamer package:"
+pacman -Ql mingw-w64-x86_64-gstreamer 2>/dev/null | grep "\.dll$" | head -10 || log "  Could not query package files"
 
 # Define essential DLLs
 ESSENTIAL_DLLS=(
@@ -159,24 +185,41 @@ dll_count=0
 # Search in multiple locations
 DLL_SEARCH_PATHS=(
     "/mingw64/bin"
-    "/usr/bin"
-    "/c/msys64/mingw64/bin"
     "$MSYSTEM_PREFIX/bin"
+    "/c/msys64/mingw64/bin"
+    "/usr/bin"
 )
 
 for dll in "${ESSENTIAL_DLLS[@]}"; do
     dll_found=false
     for search_path in "${DLL_SEARCH_PATHS[@]}"; do
-        # Handle wildcards
-        for file in $search_path/$dll; do
-            if [ -f "$file" ]; then
-                cp "$file" "$DIST_DIR/" 2>/dev/null || true
-                ((dll_count++))
-                log "  Copied: $(basename "$file") from $search_path"
-                dll_found=true
-                break 2
+        if [ -d "$search_path" ]; then
+            # Handle wildcards properly - use find for better wildcard support
+            if [[ "$dll" == *"*"* ]]; then
+                # Contains wildcard
+                while IFS= read -r file; do
+                    if [ -f "$file" ]; then
+                        cp "$file" "$DIST_DIR/" 2>/dev/null || true
+                        ((dll_count++))
+                        log "  Copied: $(basename "$file") from $search_path"
+                        dll_found=true
+                        break
+                    fi
+                done < <(find "$search_path" -maxdepth 1 -name "$dll" -type f 2>/dev/null)
+                if [ "$dll_found" = true ]; then
+                    break
+                fi
+            else
+                # No wildcard - direct check
+                if [ -f "$search_path/$dll" ]; then
+                    cp "$search_path/$dll" "$DIST_DIR/" 2>/dev/null || true
+                    ((dll_count++))
+                    log "  Copied: $dll from $search_path"
+                    dll_found=true
+                    break
+                fi
             fi
-        done
+        fi
     done
     if [ "$dll_found" = false ]; then
         log "  ${YELLOW}Warning: $dll not found in any search path${NC}"
@@ -211,7 +254,40 @@ done
 
 if [ ${#missing_dlls[@]} -gt 0 ]; then
     log "${YELLOW}WARNING: Missing critical DLLs: ${missing_dlls[*]}${NC}"
-    log "${YELLOW}The application may not run properly without these DLLs.${NC}"
+    log "${YELLOW}Attempting fallback: copying all DLLs from /mingw64/bin${NC}"
+    
+    # Fallback: If critical DLLs are missing, copy ALL DLLs from mingw64/bin
+    # This is more aggressive but ensures we don't miss renamed or version-specific DLLs
+    fallback_dll_count=0
+    if [ -d "/mingw64/bin" ]; then
+        for dll_file in /mingw64/bin/*.dll; do
+            if [ -f "$dll_file" ]; then
+                filename=$(basename "$dll_file")
+                # Skip if already exists
+                if [ ! -f "$DIST_DIR/$filename" ]; then
+                    cp "$dll_file" "$DIST_DIR/" 2>/dev/null || true
+                    ((fallback_dll_count++))
+                fi
+            fi
+        done
+        log "  Copied $fallback_dll_count additional DLLs as fallback"
+        
+        # Re-check critical DLLs after fallback
+        log "  Re-checking critical DLLs after fallback..."
+        still_missing=()
+        for dll in "${critical_dlls[@]}"; do
+            if [ ! -f "$DIST_DIR/$dll" ]; then
+                still_missing+=("$dll")
+            fi
+        done
+        
+        if [ ${#still_missing[@]} -eq 0 ]; then
+            log "${GREEN}✓ All critical DLLs found after fallback${NC}"
+        else
+            log "${YELLOW}Still missing after fallback: ${still_missing[*]}${NC}"
+            log "${YELLOW}The application may not run properly without these DLLs.${NC}"
+        fi
+    fi
     # Don't exit - continue with the build
 fi
 
