@@ -7,7 +7,7 @@ use eframe::egui;
 #[cfg(feature = "gstreamer")]
 use gstreamer::glib;
 
-use file_scanner::{scan_video_files, VideoFile};
+use file_scanner::{VideoFile, scan_video_files};
 
 #[derive(Parser)]
 struct Cli {
@@ -1756,6 +1756,94 @@ fn load_config_for_logging() -> LoggingConfig {
     }
 }
 
+fn main() -> eframe::Result<()> {
+    let logging_config = load_config_for_logging();
+
+    // Set up logging
+    let logger = fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{}[{}][{}] {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Debug)
+        .chain(std::io::stdout())
+        .chain(fern::log_file(&logging_config.file).unwrap());
+    logger.apply().unwrap();
+
+    info!("Starting Summit Hip Numbers Media Player");
+
+    let args = Cli::parse();
+
+    if args.config {
+        // Launch config app
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
+            ..Default::default()
+        };
+        eframe::run_native(
+            "Summit Hip Numbers Config",
+            options,
+            Box::new(|cc| {
+                // Install image loaders
+                egui_extras::install_image_loaders(&cc.egui_ctx);
+                Ok(Box::new(ConfigApp::new()))
+            }),
+        )
+    } else {
+        // Load config to check kiosk mode
+        let config = load_config_for_kiosk();
+
+        // Set GStreamer plugin path for bundled plugins
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                // For portable distribution, check for gstreamer directory
+                let gstreamer_plugin_path = exe_dir.join("lib").join("gstreamer-1.0");
+                if gstreamer_plugin_path.exists() {
+                    info!(
+                        "Found bundled GStreamer plugins at: {}",
+                        gstreamer_plugin_path.display()
+                    );
+                    std::env::set_var("GST_PLUGIN_PATH", gstreamer_plugin_path);
+                } else {
+                    warn!(
+                        "Bundled GStreamer plugin directory not found. Relying on system-wide installation."
+                    );
+                }
+            }
+        }
+
+        #[cfg(feature = "gstreamer")]
+        gstreamer::init().expect("Failed to initialize GStreamer");
+
+        let mut viewport = egui::ViewportBuilder::default()
+            .with_inner_size([config.ui.window_width, config.ui.window_height]);
+        if config.ui.kiosk_mode {
+            viewport = viewport.with_fullscreen(true).with_decorations(false);
+            info!("Kiosk mode enabled: fullscreen with no decorations");
+        }
+
+        let options = eframe::NativeOptions {
+            viewport,
+            ..Default::default()
+        };
+
+        eframe::run_native(
+            "Summit Hip Numbers Media Player",
+            options,
+            Box::new(|cc| {
+                // Install image loaders
+                egui_extras::install_image_loaders(&cc.egui_ctx);
+                Ok(Box::new(MediaPlayerApp::new()))
+            }),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1765,6 +1853,7 @@ mod tests {
 
     // Mock VideoPlayer for testing
     #[cfg(test)]
+    #[allow(dead_code)]
     struct MockVideoPlayer;
 
     #[cfg(test)]
@@ -2343,92 +2432,4 @@ mod tests {
 
     // Arrow key navigation tests would require mocking egui input, which is complex
     // So skip GUI-specific tests
-}
-
-fn main() -> eframe::Result<()> {
-    let logging_config = load_config_for_logging();
-
-    // Set up logging
-    let logger = fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-                record.target(),
-                record.level(),
-                message
-            ))
-        })
-        .level(log::LevelFilter::Debug)
-        .chain(std::io::stdout())
-        .chain(fern::log_file(&logging_config.file).unwrap());
-    logger.apply().unwrap();
-
-    info!("Starting Summit Hip Numbers Media Player");
-
-    let args = Cli::parse();
-
-    if args.config {
-        // Launch config app
-        let options = eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
-            ..Default::default()
-        };
-        return eframe::run_native(
-            "Summit Hip Numbers Config",
-            options,
-            Box::new(|cc| {
-                // Install image loaders
-                egui_extras::install_image_loaders(&cc.egui_ctx);
-                Ok(Box::new(ConfigApp::new()))
-            }),
-        );
-    } else {
-        // Load config to check kiosk mode
-        let config = load_config_for_kiosk();
-
-        // Set GStreamer plugin path for bundled plugins
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-                // For portable distribution, check for gstreamer directory
-                let gstreamer_plugin_path = exe_dir.join("lib").join("gstreamer-1.0");
-                if gstreamer_plugin_path.exists() {
-                    info!(
-                        "Found bundled GStreamer plugins at: {}",
-                        gstreamer_plugin_path.display()
-                    );
-                    std::env::set_var("GST_PLUGIN_PATH", gstreamer_plugin_path);
-                } else {
-                    warn!(
-                        "Bundled GStreamer plugin directory not found. Relying on system-wide installation."
-                    );
-                }
-            }
-        }
-
-        #[cfg(feature = "gstreamer")]
-        gstreamer::init().expect("Failed to initialize GStreamer");
-
-        let mut viewport = egui::ViewportBuilder::default()
-            .with_inner_size([config.ui.window_width, config.ui.window_height]);
-        if config.ui.kiosk_mode {
-            viewport = viewport.with_fullscreen(true).with_decorations(false);
-            info!("Kiosk mode enabled: fullscreen with no decorations");
-        }
-
-        let options = eframe::NativeOptions {
-            viewport,
-            ..Default::default()
-        };
-
-        eframe::run_native(
-            "Summit Hip Numbers Media Player",
-            options,
-            Box::new(|cc| {
-                // Install image loaders
-                egui_extras::install_image_loaders(&cc.egui_ctx);
-                Ok(Box::new(MediaPlayerApp::new()))
-            }),
-        )
-    }
 }

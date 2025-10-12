@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use eframe::epaint::ColorImage;
 use gstreamer::prelude::*;
 use gstreamer::{Bin, Element, ElementFactory, MessageView, State};
@@ -45,7 +45,7 @@ impl VideoPlayer {
             .map_err(|e| anyhow!("Failed to create capsfilter: {:?}", e))?;
         capsfilter.set_property(
             "caps",
-            &gstreamer::Caps::builder("video/x-raw")
+            gstreamer::Caps::builder("video/x-raw")
                 .field("format", "RGBA")
                 .build(),
         );
@@ -273,8 +273,6 @@ mod tests {
         if let Ok(player) = VideoPlayer::new(&uri, tx) {
             let result = player.play();
             assert!(result.is_ok());
-        } else {
-            return;
         }
     }
 
@@ -289,8 +287,6 @@ mod tests {
         if let Ok(player) = VideoPlayer::new(&uri, tx) {
             let result = player.stop();
             assert!(result.is_ok());
-        } else {
-            return;
         }
     }
 
@@ -308,8 +304,6 @@ mod tests {
             // May fail or succeed, but test that it's called
             // In practice, after stop, play may work
             assert!(result.is_ok() || result.is_err()); // Allow either for coverage
-        } else {
-            return;
         }
     }
 
@@ -325,8 +319,6 @@ mod tests {
             player.stop().unwrap();
             let result = player.stop();
             assert!(result.is_ok());
-        } else {
-            return;
         }
     }
 
@@ -356,8 +348,6 @@ mod tests {
         let uri = format!("file://{}", temp_file.path().to_str().unwrap());
         if let Ok(player) = VideoPlayer::new(&uri, tx) {
             assert!(!player.is_eos());
-        } else {
-            return;
         }
     }
 
