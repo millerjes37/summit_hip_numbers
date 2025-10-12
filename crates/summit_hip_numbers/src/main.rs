@@ -1015,7 +1015,10 @@ impl MediaPlayerApp {
         }
 
         // Show splash every N videos
-        self.videos_played % self.config.splash.interval == 0
+        #[allow(clippy::manual_is_multiple_of)]
+        {
+            self.videos_played % self.config.splash.interval == 0
+        }
     }
 
     fn trim_log(&self) {
@@ -1857,6 +1860,7 @@ mod tests {
     struct MockVideoPlayer;
 
     #[cfg(test)]
+    #[allow(dead_code)]
     impl MockVideoPlayer {
         fn new(
             _uri: &str,
