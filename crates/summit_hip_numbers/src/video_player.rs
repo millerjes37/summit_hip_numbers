@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use eframe::epaint::ColorImage;
 use gstreamer::prelude::*;
 use gstreamer::{Bin, Element, ElementFactory, MessageView, State};
