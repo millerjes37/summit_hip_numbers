@@ -76,10 +76,11 @@ jobs:
            CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
          fi
 
-         CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
-         CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
-         CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
-         CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
+          CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
+          CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
+          CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
+          CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
+          CLANG_ARGS="$CLANG_ARGS -nostdinc"  # Don't search standard system include paths
 
          echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
 
