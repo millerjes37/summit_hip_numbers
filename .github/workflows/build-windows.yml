@@ -97,6 +97,9 @@ jobs:
           echo "C_INCLUDE_PATH=/mingw64/include:/mingw64/x86_64-w64-mingw32/include" >> $GITHUB_ENV
           echo "CPLUS_INCLUDE_PATH=/mingw64/include:/mingw64/x86_64-w64-mingw32/include" >> $GITHUB_ENV
 
+          # Force bindgen to use the MSYS2 clang
+          echo "CLANG_PATH=/mingw64/bin/clang" >> $GITHUB_ENV
+
           # Create symlink to redirect /usr/include to /mingw64/include for stubborn crates
           mkdir -p /usr
           ln -sf /mingw64/include /usr/include
