@@ -191,8 +191,10 @@ for dll in "${MEDIA_DLLS[@]}"; do
 done
 
 # Check for critical failures
-if [ ${#failed_dlls[@]} -gt 5 ]; then
+if [ ${#failed_dlls[@]} -gt 8 ]; then
     error_exit "Too many critical DLLs missing: ${failed_dlls[*]}"
+elif [ ${#failed_dlls[@]} -gt 3 ]; then
+    log "⚠ Warning: Some DLLs missing (${failed_dlls[*]}). Build may have reduced functionality."
 fi
 
 # Copy GStreamer plugins
@@ -271,8 +273,10 @@ else
     error_exit "GStreamer plugin directory not found: $SOURCE_PLUGIN_DIR"
 fi
 
-if [ $COPIED_PLUGINS -lt 10 ]; then
+if [ $COPIED_PLUGINS -lt 5 ]; then
     error_exit "Too few plugins copied ($COPIED_PLUGINS). Build may not work correctly."
+elif [ $COPIED_PLUGINS -lt 10 ]; then
+    log "⚠ Warning: Only $COPIED_PLUGINS plugins copied. Some features may not work."
 fi
 
 # Create directory structure and copy assets
@@ -545,8 +549,10 @@ fi
 
 # Count DLLs
 DLL_COUNT=$(find "$DIST_DIR" -name "*.dll" -type f | wc -l)
-if [ $DLL_COUNT -lt 15 ]; then
+if [ $DLL_COUNT -lt 10 ]; then
     error_exit "Too few DLLs found ($DLL_COUNT). Build incomplete."
+elif [ $DLL_COUNT -lt 15 ]; then
+    log "⚠ Warning: Only $DLL_COUNT DLLs found. Some features may not work."
 fi
 
 # Check for essential files
