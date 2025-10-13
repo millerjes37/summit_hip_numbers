@@ -94,6 +94,14 @@ Type: files; Name: "{app}\*.log"
 Filename: "schtasks.exe"; Parameters: "/Delete /TN ""Summit Hip Numbers Kiosk"" /F"; Flags: runhidden
 
 [Code]
+function IsWindows10OrLater: Boolean;
+var
+  Version: TWindowsVersion;
+begin
+  GetWindowsVersionEx(Version);
+  Result := (Version.Major >= 10);
+end;
+
 function InitializeSetup(): Boolean;
 var
   ErrorCode: Integer;
@@ -116,14 +124,6 @@ begin
     MsgBox('Summit Hip Numbers requires Windows 10 or later.', mbError, MB_OK);
     Result := False;
   end;
-end;
-
-function IsWindows10OrLater: Boolean;
-var
-  Version: TWindowsVersion;
-begin
-  GetWindowsVersionEx(Version);
-  Result := (Version.Major >= 10);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
