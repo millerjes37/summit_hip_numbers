@@ -15,7 +15,6 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
   RUST_LOG: debug
-  LIBCLANG_PATH: /usr/lib/llvm-14/lib
   LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu
   CPATH: /usr/include
   C_INCLUDE_PATH: /usr/include
@@ -55,6 +54,16 @@ jobs:
           # Verify FFmpeg installation
           pkg-config --exists --print-errors libavutil libavcodec libavformat libswscale libswresample
           pkg-config --modversion libavutil libavcodec libavformat
+          
+          # Find and set libclang path
+          echo "Searching for libclang..."
+          LIBCLANG_PATH=$(find /usr/lib -name "libclang.so*" -print -quit 2>/dev/null | xargs dirname)
+          if [ -z "$LIBCLANG_PATH" ]; then
+            echo "Error: libclang.so not found"
+            exit 1
+          fi
+          echo "Found libclang at: $LIBCLANG_PATH"
+          echo "LIBCLANG_PATH=$LIBCLANG_PATH" >> $GITHUB_ENV
       
       - uses: dtolnay/rust-toolchain@stable
       
