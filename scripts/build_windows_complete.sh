@@ -503,6 +503,13 @@ DETAILED SETUP:
    - Edit config.toml to customize settings
    - Run "$BINARY_NAME --config" for GUI configuration
    - Key settings: video directory, window size, fullscreen mode
+   
+   IMPORTANT: When editing config.toml, always use forward slashes (/) in paths!
+   - CORRECT:   directory = "./videos"  or  "C:/path/to/videos"
+   - INCORRECT: directory = ".\videos"  or  "C:\path\to\videos"
+   
+   Windows accepts forward slashes and they work correctly. Backslashes (\) 
+   are escape characters in TOML and will cause "invalid escape sequence" errors.
 
 3. Splash Screens:
    - Place PNG/JPG images in the "splash" directory
@@ -521,7 +528,8 @@ If the application won't start:
 - Ensure all DLL files are present in the main directory
 - Check that GStreamer plugins exist in lib/gstreamer-1.0/
 - Verify video files are in supported formats
-- Check config.toml for correct paths
+- Check config.toml for correct paths (use forward slashes, not backslashes!)
+- Look for "invalid escape sequence" errors if you edited config.toml
 
 If videos won't play:
 - Verify video files are valid MP4/MKV/AVI format

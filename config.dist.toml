@@ -27,6 +27,14 @@
 [video]
 # Directory containing video files to be played
 # For distribution, videos are in the 'videos' folder next to the executable
+#
+# IMPORTANT: Always use forward slashes (/) in paths, even on Windows!
+# Examples:
+#   ✓ CORRECT:   "./videos"  or  "C:/path/to/videos"
+#   ✗ INCORRECT: ".\videos"  or  "C:\path\to\videos"
+#
+# Windows accepts forward slashes and they work cross-platform.
+# Backslashes (\) are escape characters in TOML and will cause parse errors.
 directory = "./videos"
 
 # =============================================================================
@@ -67,6 +75,8 @@ interval = 0
 
 # Directory containing splash screen images (PNG, JPG, JPEG, BMP)
 # For distribution, splash images are in the 'splash' folder next to the executable
+#
+# IMPORTANT: Always use forward slashes (/) in paths, even on Windows!
 directory = "./splash"
 
 # =============================================================================
