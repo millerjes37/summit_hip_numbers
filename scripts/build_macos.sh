@@ -108,14 +108,26 @@ if [ -z "$CLANG_BUILTIN_INCLUDE" ]; then
 fi
 log "Clang builtin headers: $CLANG_BUILTIN_INCLUDE"
 
-# Configure bindgen to use specific include paths only
-export BINDGEN_EXTRA_CLANG_ARGS="-nostdinc"
+# Configure bindgen environment
+# Find the macOS SDK path
+MACOS_SDK_PATH=""
+if [ -d "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk" ]; then
+    MACOS_SDK_PATH="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+elif [ -d "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" ]; then
+    MACOS_SDK_PATH="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+fi
+
+log "macOS SDK: $MACOS_SDK_PATH"
+
+# Configure bindgen to use macOS SDK with system headers
+export BINDGEN_EXTRA_CLANG_ARGS=""
+if [ -n "$MACOS_SDK_PATH" ]; then
+    export BINDGEN_EXTRA_CLANG_ARGS="-isysroot $MACOS_SDK_PATH"
+fi
 if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
     export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
 fi
 export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$FFMPEG_INCLUDE_DIR"
-export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include"
-export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include"
 
 log "BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
 
