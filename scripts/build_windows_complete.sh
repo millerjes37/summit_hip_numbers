@@ -30,6 +30,7 @@ error_exit() {
 log "${BLUE}=== Summit Hip Numbers Windows Complete Build ===${NC}"
 log "Variant: $VARIANT"
 log "Build log: $BUILD_LOG"
+log "Script started successfully at $(date)"
 
 # Validate variant
 if [[ "$VARIANT" != "full" && "$VARIANT" != "demo" ]]; then
