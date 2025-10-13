@@ -41,7 +41,7 @@ log "${YELLOW}=== Setting up MSYS2 environment ===${NC}"
 export MSYSTEM=MINGW64
 export MSYSTEM_PREFIX=/mingw64
 export PATH="$MSYSTEM_PREFIX/bin:$PATH"
-export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
+export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig"
 export RUSTFLAGS="-L native=/mingw64/lib"
 
 # FFmpeg bindgen configuration (for ffmpeg-sys-next crate)
