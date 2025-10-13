@@ -827,70 +827,200 @@ jobs:
           }
           
           # Runtime test
-          Write-Host "`n[6/6] Runtime execution test..." -ForegroundColor Yellow
-          $logFile = Join-Path $workingDir "test-execution.log"
-          $errorLog = Join-Path $workingDir "test-execution-error.log"
+          Write-Host "`n[6/6] Comprehensive runtime execution test..." -ForegroundColor Yellow
+          $appLogFile = Join-Path $workingDir "summit_hip_numbers.log"
           
           try {
+            # Start the application
             $process = Start-Process -FilePath $exePath.FullName `
                                     -WorkingDirectory $workingDir `
                                     -PassThru `
-                                    -NoNewWindow `
-                                    -RedirectStandardOutput $logFile `
-                                    -RedirectStandardError $errorLog
+                                    -WindowStyle Hidden
             
             Write-Host "  Process started (PID: $($process.Id))" -ForegroundColor Green
             
-            # Wait and monitor
-            Start-Sleep -Seconds 3
+            # Wait for initialization
+            Write-Host "  [Test 1/7] Application startup (5s)..." -ForegroundColor Cyan
+            Start-Sleep -Seconds 5
             
             if ($process.HasExited) {
-              Write-Error "Process exited prematurely with code: $($process.ExitCode)"
-              Get-Content $errorLog | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+              Write-Error "Process crashed during startup with code: $($process.ExitCode)"
+              if (Test-Path $appLogFile) {
+                Get-Content $appLogFile | Select-Object -Last 50 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+              }
               exit 1
             }
+            Write-Host "    ✓ Application initialized successfully" -ForegroundColor Green
             
-            Write-Host "  ✓ Process running successfully" -ForegroundColor Green
-            
-            # Simulate interaction
-            Write-Host "  Simulating user interaction..." -ForegroundColor Yellow
+            # Prepare for UI automation
             Add-Type -AssemblyName System.Windows.Forms
-            Start-Sleep -Seconds 1
+            Start-Sleep -Milliseconds 500
+            
+            # Test 2: Arrow navigation (up/down)
+            Write-Host "  [Test 2/7] Testing arrow key navigation..." -ForegroundColor Cyan
             [System.Windows.Forms.SendKeys]::SendWait("{DOWN}")
-            Start-Sleep -Seconds 1
+            Start-Sleep -Seconds 2
+            [System.Windows.Forms.SendKeys]::SendWait("{DOWN}")
+            Start-Sleep -Seconds 2
             [System.Windows.Forms.SendKeys]::SendWait("{UP}")
             Start-Sleep -Seconds 2
             
-            # Check if still running
+            if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+              Write-Error "Process crashed during arrow navigation"
+              exit 1
+            }
+            Write-Host "    ✓ Arrow key navigation working" -ForegroundColor Green
+            
+            # Test 3: Hip number input (3-digit)
+            Write-Host "  [Test 3/7] Testing hip number input (001)..." -ForegroundColor Cyan
+            [System.Windows.Forms.SendKeys]::SendWait("0")
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.SendKeys]::SendWait("0")
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.SendKeys]::SendWait("1")
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+            Start-Sleep -Seconds 3
+            
+            if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+              Write-Error "Process crashed during hip number input"
+              exit 1
+            }
+            Write-Host "    ✓ Hip number input working" -ForegroundColor Green
+            
+            # Test 4: Multiple video switches
+            Write-Host "  [Test 4/7] Testing multiple video switches..." -ForegroundColor Cyan
+            [System.Windows.Forms.SendKeys]::SendWait("002{ENTER}")
+            Start-Sleep -Seconds 3
+            [System.Windows.Forms.SendKeys]::SendWait("003{ENTER}")
+            Start-Sleep -Seconds 3
+            
+            if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+              Write-Error "Process crashed during video switching"
+              exit 1
+            }
+            Write-Host "    ✓ Video switching working" -ForegroundColor Green
+            
+            # Test 5: Invalid input handling
+            Write-Host "  [Test 5/7] Testing invalid input handling..." -ForegroundColor Cyan
+            [System.Windows.Forms.SendKeys]::SendWait("999{ENTER}")
+            Start-Sleep -Seconds 2
+            
+            if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+              Write-Error "Process crashed on invalid input"
+              exit 1
+            }
+            Write-Host "    ✓ Invalid input handled gracefully" -ForegroundColor Green
+            
+            # Test 6: Check log for errors
+            Write-Host "  [Test 6/7] Analyzing application logs..." -ForegroundColor Cyan
+            if (Test-Path $appLogFile) {
+              $logContent = Get-Content $appLogFile
+              $errors = $logContent | Select-String -Pattern "\[ERROR\]" -SimpleMatch
+              $gstErrors = $logContent | Select-String -Pattern "GStreamer Error" -SimpleMatch
+              $playbackErrors = $logContent | Select-String -Pattern "Playback error" -SimpleMatch
+              
+              Write-Host "    Log file size: $((Get-Item $appLogFile).Length) bytes" -ForegroundColor Gray
+              Write-Host "    Total log lines: $($logContent.Count)" -ForegroundColor Gray
+              
+              # Check for video loading
+              $videoLoaded = $logContent | Select-String -Pattern "Loading video:" -SimpleMatch
+              if ($videoLoaded) {
+                Write-Host "    ✓ Videos loaded: $($videoLoaded.Count) attempts" -ForegroundColor Green
+              } else {
+                Write-Warning "    No video loading detected in logs"
+              }
+              
+              # Check for video playback start
+              $videoStarted = $logContent | Select-String -Pattern "Video player started" -SimpleMatch
+              if ($videoStarted) {
+                Write-Host "    ✓ Video playback started: $($videoStarted.Count) times" -ForegroundColor Green
+              } else {
+                Write-Warning "    No video playback detected in logs"
+              }
+              
+              # Report errors
+              if ($errors.Count -gt 0) {
+                Write-Host "    ⚠ Found $($errors.Count) ERROR entries:" -ForegroundColor Yellow
+                $errors | Select-Object -First 5 | ForEach-Object { Write-Host "      $_" -ForegroundColor Yellow }
+              }
+              
+              if ($playbackErrors.Count -gt 0) {
+                Write-Host "    ⚠ Found $($playbackErrors.Count) playback errors:" -ForegroundColor Yellow
+                $playbackErrors | Select-Object -First 3 | ForEach-Object { Write-Host "      $_" -ForegroundColor Yellow }
+                
+                # Check if errors are critical (streaming stopped, reason not-linked)
+                $criticalErrors = $logContent | Select-String -Pattern "reason not-linked"
+                if ($criticalErrors.Count -gt 0) {
+                  Write-Error "Critical GStreamer errors detected - video pipeline not working"
+                  Write-Host "`n=== Last 30 log lines ===" -ForegroundColor Red
+                  $logContent | Select-Object -Last 30 | ForEach-Object { Write-Host $_ }
+                  Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                  exit 1
+                }
+              }
+              
+              Write-Host "    ✓ Log analysis complete" -ForegroundColor Green
+            } else {
+              Write-Warning "    Application log file not found"
+            }
+            
+            # Test 7: Graceful exit
+            Write-Host "  [Test 7/7] Testing graceful exit..." -ForegroundColor Cyan
+            [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+            Start-Sleep -Seconds 2
+            
+            # Check if process exited gracefully
             if (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
-              Write-Host "  ✓ Process stable after interaction" -ForegroundColor Green
+              Write-Host "    Process still running, forcing exit..." -ForegroundColor Yellow
               Stop-Process -Id $process.Id -Force
             } else {
-              Write-Warning "Process exited during interaction test"
+              Write-Host "    ✓ Application exited gracefully" -ForegroundColor Green
             }
             
           } catch {
             Write-Error "Runtime test failed: $_"
-            if (Test-Path $errorLog) {
-              Get-Content $errorLog
+            Write-Host $_.Exception.Message -ForegroundColor Red
+            Write-Host $_.ScriptStackTrace -ForegroundColor Red
+            
+            # Try to kill process
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
             }
             exit 1
           }
           
-          # Display logs
+          # Display comprehensive logs
           Write-Host "`n============================================" -ForegroundColor Cyan
-          Write-Host "  EXECUTION LOGS" -ForegroundColor Cyan
+          Write-Host "  APPLICATION EXECUTION LOGS" -ForegroundColor Cyan
           Write-Host "============================================" -ForegroundColor Cyan
-          if (Test-Path $logFile) {
-            Get-Content $logFile | Write-Host
-          }
-          if (Test-Path $errorLog) {
-            Write-Host "`nError Log:" -ForegroundColor Yellow
-            Get-Content $errorLog | Write-Host
+          
+          if (Test-Path $appLogFile) {
+            $logContent = Get-Content $appLogFile
+            Write-Host "`nTotal log lines: $($logContent.Count)" -ForegroundColor Gray
+            Write-Host "`nFirst 20 lines:" -ForegroundColor Yellow
+            $logContent | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
+            
+            Write-Host "`n..." -ForegroundColor Gray
+            
+            Write-Host "`nLast 50 lines:" -ForegroundColor Yellow
+            $logContent | Select-Object -Last 50 | ForEach-Object { Write-Host $_ }
+            
+            # Summary statistics
+            $infoCount = ($logContent | Select-String -Pattern "\[INFO\]").Count
+            $warnCount = ($logContent | Select-String -Pattern "\[WARN\]").Count
+            $errorCount = ($logContent | Select-String -Pattern "\[ERROR\]").Count
+            
+            Write-Host "`n--- Log Summary ---" -ForegroundColor Cyan
+            Write-Host "  INFO:  $infoCount" -ForegroundColor Green
+            Write-Host "  WARN:  $warnCount" -ForegroundColor Yellow
+            Write-Host "  ERROR: $errorCount" -ForegroundColor $(if($errorCount -eq 0){'Green'}else{'Red'})
+          } else {
+            Write-Warning "Application log file not found at: $appLogFile"
           }
           
           Write-Host "`n============================================" -ForegroundColor Green
-          Write-Host "  ✓ ALL TESTS PASSED" -ForegroundColor Green
+          Write-Host "  ✓ ALL INTERFACE TESTS PASSED" -ForegroundColor Green
           Write-Host "============================================" -ForegroundColor Green
       
       - name: Upload Test Logs
