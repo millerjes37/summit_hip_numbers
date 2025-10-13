@@ -13,61 +13,178 @@ env:
   CARGO_TERM_COLOR: always
   MSYS2_INSTALL_DIR: C:\msys64
   INNO_SETUP_VERSION: 6.2.2
-  PKG_CONFIG_SYSROOT_DIR: /usr/x86_64-w64-mingw32
-  PKG_CONFIG_PATH: /usr/x86_64-w64-mingw32/lib/pkgconfig
-  PKG_CONFIG_ALLOW_CROSS: 1
-  FFMPEG_DIR: /usr
-  TARGET: x86_64-pc-windows-gnu
+  FFMPEG_INCLUDE_DIR: C:\msys64\mingw64\include
+  FFMPEG_LIB_DIR: C:\msys64\mingw64\lib
+  CPATH: C:\msys64\mingw64\include
+  C_INCLUDE_PATH: C:\msys64\mingw64\include
+  CPLUS_INCLUDE_PATH: C:\msys64\mingw64\include
 
 jobs:
   build-windows:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     strategy:
       matrix:
         variant: [full, demo]
+
     steps:
     - uses: actions/checkout@v4
 
-     - name: Install cross-compilation dependencies
-       run: |
-         sudo apt-get update
-         sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
-         sudo apt-get install -y pkg-config mingw-w64-x86-64-dev
-         sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libavdevice-dev
+    - name: Cache Cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
 
-    - name: Set up Rust cross-compilation
+    - name: Set up MSYS2 and FFmpeg dependencies
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-pkg-config
+          mingw-w64-x86_64-glib2
+          mingw-w64-x86_64-ffmpeg
+          mingw-w64-x86_64-clang
+          mingw-w64-x86_64-llvm
+          zip
+          unzip
+        update: true
+        path-type: inherit
+
+    - name: Set up Rust (GNU toolchain)
       uses: dtolnay/rust-toolchain@stable
       with:
-        targets: x86_64-pc-windows-gnu
+        toolchain: stable-x86_64-pc-windows-gnu
 
-    - name: Install cargo-audit
-      run: cargo install cargo-audit
-
-    - name: Run security audit
-      run: cargo audit
-
-     - name: Build application
-       run: |
-         cargo build --release --target x86_64-pc-windows-gnu --package summit_hip_numbers ${{ matrix.variant == 'demo' && '--features demo' || '' }}
-
-    - name: Create distribution
+    - name: Configure FFmpeg Bindgen Environment
+      shell: msys2 {0}
       run: |
-        mkdir -p dist/${{ matrix.variant }}
-        cp target/x86_64-pc-windows-gnu/release/summit_hip_numbers${{ matrix.variant == 'demo' && '_demo' || '' }}.exe dist/${{ matrix.variant }}/
-        # Copy required DLLs
-        cp /usr/x86_64-w64-mingw32/lib/*.dll dist/${{ matrix.variant }}/ 2>/dev/null || true
-        cp target/x86_64-pc-windows-gnu/release/deps/*.dll dist/${{ matrix.variant }}/ 2>/dev/null || true
+         # Set up environment for bindgen (used by ffmpeg-sys-next)
+         export MSYSTEM=MINGW64
+         export MSYSTEM_PREFIX=/mingw64
 
-    - name: Create portable ZIP
+         # Find libclang for bindgen
+         if [ -f "/mingw64/bin/libclang.dll" ]; then
+           echo "Found libclang.dll at: /mingw64/bin/libclang.dll"
+           echo "LIBCLANG_PATH=/mingw64/bin" >> $GITHUB_ENV
+         fi
+
+         # Configure clang to use MSYS2 system headers properly
+         CLANG_ARGS="-I/mingw64/include"
+
+         CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
+         if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
+           CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
+         fi
+
+          CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
+          CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
+          CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
+          CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
+          CLANG_ARGS="$CLANG_ARGS -nostdinc++"  # Don't search standard C++ include paths
+          CLANG_ARGS="$CLANG_ARGS -Wno-unused-command-line-argument"  # Suppress warnings about unused args
+
+          echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
+
+          # FFmpeg include paths for pkg-config fallback
+          echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
+          echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
+
+          # Force direct header paths instead of pkg-config to avoid /usr/include issues
+          echo "FFMPEG_PKG_CONFIG=0" >> $GITHUB_ENV
+
+          # Override CPATH to prioritize our include paths
+          echo "CPATH=/mingw64/include:/mingw64/x86_64-w64-mingw32/include" >> $GITHUB_ENV
+          echo "C_INCLUDE_PATH=/mingw64/include:/mingw64/x86_64-w64-mingw32/include" >> $GITHUB_ENV
+          echo "CPLUS_INCLUDE_PATH=/mingw64/include:/mingw64/x86_64-w64-mingw32/include" >> $GITHUB_ENV
+
+          # Force bindgen to use the MSYS2 clang
+          echo "CLANG_PATH=/mingw64/bin/clang.exe" >> $GITHUB_ENV
+
+          # Create symlink to redirect /usr/include to /mingw64/include for stubborn crates
+          mkdir -p /usr
+          ln -sf /mingw64/include /usr/include
+
+    - name: Create Distribution
+      shell: msys2 {0}
       run: |
-        cd dist/${{ matrix.variant }}
-        zip -r ../../summit_hip_numbers_${{ matrix.variant }}_portable.zip .
+        chmod +x scripts/build_windows_complete.sh
+        ./scripts/build_windows_complete.sh ${{ matrix.variant }}
 
-    - name: Upload portable application
+    - name: Debug Build Artifacts
+      if: always()
+      shell: pwsh
+      run: |
+        $variant = "${{ matrix.variant }}"
+        $distPath = "dist/$variant"
+        
+        if (Test-Path $distPath) {
+          Write-Host "$distPath contents:"
+          Get-ChildItem -Path $distPath -Recurse | Select-Object FullName, Length | Format-List
+          
+          # Check for ZIP file
+          $zipName = "summit_hip_numbers_${variant}_portable.zip"
+          if (Test-Path $zipName) {
+            Write-Host "✓ Found portable ZIP: $zipName" -ForegroundColor Green
+            $zipSize = (Get-Item $zipName).Length
+            Write-Host "  Size: $([math]::Round($zipSize/1MB, 2)) MB"
+          } else {
+            Write-Warning "Portable ZIP not found: $zipName"
+          }
+        } else {
+          Write-Error "$distPath directory missing!"
+        }
+
+    - name: Download and Install Inno Setup
+      if: matrix.variant == 'full'
+      shell: pwsh
+      run: |
+        $inno_url = "https://files.jrsoftware.org/is/6/innosetup-${{ env.INNO_SETUP_VERSION }}.exe"
+        $inno_path = "$env:TEMP\innosetup.exe"
+        Write-Host "Downloading Inno Setup from $inno_url"
+        Invoke-WebRequest -Uri $inno_url -OutFile $inno_path
+        Write-Host "Installing Inno Setup..."
+        Start-Process -FilePath $inno_path -ArgumentList "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /NORESTART /ALLUSERS /DIR=`"C:\Program Files (x86)\Inno Setup 6`"" -Wait
+        $inno_dir = "C:\Program Files (x86)\Inno Setup 6"
+        Write-Host "Adding '$inno_dir' to PATH"
+        echo "$inno_dir" >> $env:GITHUB_PATH
+
+    - name: Build Installer
+      if: matrix.variant == 'full'
+      shell: pwsh
+      run: |
+        # Create installer using Inno Setup
+        iscc.exe /Q "scripts/installer.iss"
+
+    - name: Upload Portable Application as Artifact
       uses: actions/upload-artifact@v4
       with:
         name: summit-hip-numbers-windows-${{ matrix.variant }}-portable
         path: summit_hip_numbers_${{ matrix.variant }}_portable.zip
+        
+    - name: Upload Installer as Artifact
+      uses: actions/upload-artifact@v4
+      if: always() && matrix.variant == 'full'
+      with:
+        name: summit-hip-numbers-windows-installer
+        path: dist/summit_hip_numbers_installer.exe
+
+  security-audit:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Rust (GNU toolchain)
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable-x86_64-pc-windows-gnu
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+    - name: Run security audit
+      run: cargo audit
 
   test-portable:
     runs-on: windows-latest
