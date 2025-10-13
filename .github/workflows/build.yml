@@ -275,10 +275,6 @@ jobs:
       - name: Configure FFmpeg Bindgen Environment
         shell: msys2 {0}
         run: |
-          echo "============================================"
-          echo "  CONFIGURING FFMPEG BINDGEN ENVIRONMENT"
-          echo "============================================"
-          
           # Set up environment for bindgen (used by ffmpeg-sys-next)
           export MSYSTEM=MINGW64
           export MSYSTEM_PREFIX=/mingw64
@@ -287,77 +283,29 @@ jobs:
           if [ -f "/mingw64/bin/libclang.dll" ]; then
             echo "Found libclang.dll at: /mingw64/bin/libclang.dll"
             echo "LIBCLANG_PATH=/mingw64/bin" >> $GITHUB_ENV
-          else
-            echo "Warning: libclang.dll not found, searching..."
-            find /mingw64 -name "libclang.dll" 2>/dev/null || echo "Not found"
           fi
           
           # Configure clang to use MSYS2 system headers properly
-          # The key issue is that bindgen's clang needs to find MinGW headers, not MSYS headers
-          # Also need to prevent it from looking in /usr/include (which doesn't exist in MSYS2)
+          CLANG_ARGS="-I/mingw64/include"
           
-          # Find clang builtin headers directory
           CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
-          echo "Found clang builtin headers at: $CLANG_BUILTIN_INCLUDE"
-          
-          # Set CLANG_ARGS for bindgen
-          # The key is to remap /usr/include to /mingw64/include since ffmpeg-sys-next 
-          # hardcodes Unix paths like /usr/include/libavcodec/avfft.h
-          CLANG_ARGS=""
           if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
             CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
           fi
-          CLANG_ARGS="$CLANG_ARGS -I/mingw64/include"
+          
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
-          CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32"
-          CLANG_ARGS="$CLANG_ARGS --sysroot=/mingw64"
+          CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
           CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
-          CLANG_ARGS="$CLANG_ARGS -D__MINGW64__"
-          CLANG_ARGS="$CLANG_ARGS -fms-extensions"
-          
-          # Create symlink to trick ffmpeg-sys-next's hardcoded /usr/include check
-          mkdir -p /usr
-          ln -sf /mingw64/include /usr/include || true
-          
+          CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
+
           echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
           
           # FFmpeg include paths for pkg-config fallback
           echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
           echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
           
-          # Tell ffmpeg-sys-next to use pkg-config (not search for static libs)
+          # Tell ffmpeg-sys-next to use pkg-config
           echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
-          
-          # Verify FFmpeg headers are accessible
-          echo ""
-          echo "Checking FFmpeg headers..."
-          for header in libavcodec/avcodec.h libavformat/avformat.h libavutil/avutil.h libswscale/swscale.h libswresample/swresample.h; do
-            if [ -f "/mingw64/include/$header" ]; then
-              echo "  ✓ $header"
-            else
-              echo "  ✗ $header NOT FOUND"
-            fi
-          done
-          
-          # Check if deprecated avfft.h exists (it shouldn't in FFmpeg 5.0+)
-          if [ -f "/mingw64/include/libavcodec/avfft.h" ]; then
-            echo "  ⚠ avfft.h found (deprecated, but present)"
-          else
-            echo "  ✓ avfft.h not present (expected for FFmpeg 5.0+)"
-          fi
-          
-          # Verify pkg-config can find FFmpeg
-          echo ""
-          echo "Checking pkg-config for FFmpeg..."
-          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
-          pkg-config --exists libavcodec && echo "  ✓ libavcodec (version $(pkg-config --modversion libavcodec))" || echo "  ✗ libavcodec NOT FOUND"
-          pkg-config --exists libavformat && echo "  ✓ libavformat (version $(pkg-config --modversion libavformat))" || echo "  ✗ libavformat NOT FOUND"
-          pkg-config --exists libavutil && echo "  ✓ libavutil (version $(pkg-config --modversion libavutil))" || echo "  ✗ libavutil NOT FOUND"
-          pkg-config --exists libswscale && echo "  ✓ libswscale (version $(pkg-config --modversion libswscale))" || echo "  ✗ libswscale NOT FOUND"
-          pkg-config --exists libswresample && echo "  ✓ libswresample (version $(pkg-config --modversion libswresample))" || echo "  ✗ libswresample NOT FOUND"
-          
-          echo ""
-          echo "Environment configured for FFmpeg bindgen"
       
       - name: Use Complete Build Script
         shell: msys2 {0}
@@ -373,13 +321,17 @@ jobs:
           export MSYSTEM_PREFIX=/mingw64
           export PATH="/mingw64/bin:$PATH"
           export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig"
-          
-          # FFmpeg bindgen configuration
-          export LIBCLANG_PATH="${LIBCLANG_PATH:-/mingw64/bin}"
-          export BINDGEN_EXTRA_CLANG_ARGS="${BINDGEN_EXTRA_CLANG_ARGS:--I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 --sysroot=/mingw64}"
-          export FFMPEG_INCLUDE_DIR="${FFMPEG_INCLUDE_DIR:-/mingw64/include}"
-          export FFMPEG_LIB_DIR="${FFMPEG_LIB_DIR:-/mingw64/lib}"
-          export FFMPEG_PKG_CONFIG="${FFMPEG_PKG_CONFIG:-1}"
+
+          # Recreate the symlink that may have been lost
+          mkdir -p /usr
+          ln -sf /mingw64/include /usr/include || true
+
+          # FFmpeg bindgen configuration - set explicitly since GITHUB_ENV may not carry over
+          export LIBCLANG_PATH="/mingw64/bin"
+          export BINDGEN_EXTRA_CLANG_ARGS="-I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 --sysroot=/mingw64 -isystem /mingw64/include -D__MINGW64__ -fms-extensions"
+          export FFMPEG_INCLUDE_DIR="/mingw64/include"
+          export FFMPEG_LIB_DIR="/mingw64/lib"
+          export FFMPEG_PKG_CONFIG="1"
           
           echo "Build environment:"
           echo "  LIBCLANG_PATH=$LIBCLANG_PATH"
