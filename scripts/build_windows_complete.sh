@@ -91,10 +91,14 @@ copy_dll_safe() {
     local dest_path="$DIST_DIR/$dll_name"
     
     if [ -f "$source_path" ]; then
-        cp "$source_path" "$dest_path"
-        local size=$(stat -c%s "$source_path" 2>/dev/null || echo "unknown")
-        log "  ✓ $dll_name ($size bytes)"
-        return 0
+        if cp "$source_path" "$dest_path" 2>/dev/null; then
+            local size=$(stat -c%s "$source_path" 2>/dev/null || echo "unknown")
+            log "  ✓ $dll_name ($size bytes)"
+            return 0
+        else
+            log "  ⚠ Failed to copy $dll_name"
+            return 1
+        fi
     else
         log "  ⚠ $dll_name not found"
         return 1
@@ -166,35 +170,44 @@ MEDIA_DLLS=(
 
 # Copy all DLLs with error handling
 log "Copying essential GLib/GObject DLLs..."
-failed_dlls=()
+failed_critical_dlls=()
 for dll in "${GLIB_DLLS[@]}"; do
     if ! copy_dll_safe "$dll"; then
-        failed_dlls+=("$dll")
+        failed_critical_dlls+=("$dll")
     fi
 done
 
 log "Copying GStreamer DLLs..."
 for dll in "${GSTREAMER_DLLS[@]}"; do
     if ! copy_dll_safe "$dll"; then
-        failed_dlls+=("$dll")
+        failed_critical_dlls+=("$dll")
     fi
 done
 
 log "Copying system DLLs..."
+failed_optional_dlls=()
 for dll in "${SYSTEM_DLLS[@]}"; do
-    copy_dll_safe "$dll" # Optional, don't fail build
+    if ! copy_dll_safe "$dll"; then
+        failed_optional_dlls+=("$dll")
+    fi
 done
 
 log "Copying media format DLLs..."
 for dll in "${MEDIA_DLLS[@]}"; do
-    copy_dll_safe "$dll" # Optional, don't fail build
+    if ! copy_dll_safe "$dll"; then
+        failed_optional_dlls+=("$dll")
+    fi
 done
 
 # Check for critical failures
-if [ ${#failed_dlls[@]} -gt 8 ]; then
-    error_exit "Too many critical DLLs missing: ${failed_dlls[*]}"
-elif [ ${#failed_dlls[@]} -gt 3 ]; then
-    log "⚠ Warning: Some DLLs missing (${failed_dlls[*]}). Build may have reduced functionality."
+if [ ${#failed_critical_dlls[@]} -gt 5 ]; then
+    error_exit "Too many critical DLLs missing: ${failed_critical_dlls[*]}"
+elif [ ${#failed_critical_dlls[@]} -gt 0 ]; then
+    log "⚠ Warning: Some critical DLLs missing (${failed_critical_dlls[*]}). Build may have reduced functionality."
+fi
+
+if [ ${#failed_optional_dlls[@]} -gt 0 ]; then
+    log "ℹ Optional DLLs not found (${failed_optional_dlls[*]}). This is normal and won't affect core functionality."
 fi
 
 # Copy GStreamer plugins
