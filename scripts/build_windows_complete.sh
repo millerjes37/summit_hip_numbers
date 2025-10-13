@@ -60,7 +60,20 @@ export LIBCLANG_PATH="${LIBCLANG_PATH:-/mingw64/bin}"
 # Configure clang arguments for bindgen to properly parse MinGW headers
 # --sysroot tells clang to use /mingw64 as the root, preventing /usr/include lookups
 if [ -z "${BINDGEN_EXTRA_CLANG_ARGS:-}" ]; then
-    export BINDGEN_EXTRA_CLANG_ARGS="-I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 --sysroot=/mingw64 -D__MINGW64__ -fms-extensions"
+    CLANG_ARGS="-I/mingw64/include"
+
+    # Find clang builtin include directory (critical for proper clang operation)
+    CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
+    if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
+        CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
+    fi
+
+    CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
+    CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
+    CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"  # Higher precedence for system headers
+    CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
+
+    export BINDGEN_EXTRA_CLANG_ARGS="$CLANG_ARGS"
 fi
 
 export FFMPEG_INCLUDE_DIR="${FFMPEG_INCLUDE_DIR:-/mingw64/include}"
@@ -563,9 +576,10 @@ for dir in "$DIST_DIR/splash" "$DIST_DIR/videos" "$DIST_DIR/logo"; do
     fi
 done
 
-cd "dist"
-zip -r "../summit_hip_numbers_${VARIANT}_portable.zip" "$VARIANT" >/dev/null 2>&1
-cd ..
+# Zip the contents of the distribution directory (not the directory itself) to avoid nested structure
+cd "$DIST_DIR"
+zip -r "../../summit_hip_numbers_${VARIANT}_portable.zip" . >/dev/null 2>&1
+cd ../..
 
 if [ -f "summit_hip_numbers_${VARIANT}_portable.zip" ]; then
     ZIP_SIZE=$(stat -c%s "summit_hip_numbers_${VARIANT}_portable.zip" 2>/dev/null || stat --format=%s "summit_hip_numbers_${VARIANT}_portable.zip" 2>/dev/null || echo "0")

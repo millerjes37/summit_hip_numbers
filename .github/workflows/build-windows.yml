@@ -55,6 +55,41 @@ jobs:
       with:
         toolchain: stable-x86_64-pc-windows-gnu
 
+    - name: Configure FFmpeg Bindgen Environment
+      shell: msys2 {0}
+      run: |
+         # Set up environment for bindgen (used by ffmpeg-sys-next)
+         export MSYSTEM=MINGW64
+         export MSYSTEM_PREFIX=/mingw64
+
+         # Find libclang for bindgen
+         if [ -f "/mingw64/bin/libclang.dll" ]; then
+           echo "Found libclang.dll at: /mingw64/bin/libclang.dll"
+           echo "LIBCLANG_PATH=/mingw64/bin" >> $GITHUB_ENV
+         fi
+
+         # Configure clang to use MSYS2 system headers properly
+         CLANG_ARGS="-I/mingw64/include"
+
+         CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
+         if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
+           CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
+         fi
+
+         CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
+         CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
+         CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
+         CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
+
+         echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
+
+         # FFmpeg include paths for pkg-config fallback
+         echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
+         echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
+
+         # Tell ffmpeg-sys-next to use pkg-config
+          echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
+
     - name: Create Distribution
       shell: msys2 {0}
       run: |
