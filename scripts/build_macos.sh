@@ -120,12 +120,13 @@ fi
 log "macOS SDK: $MACOS_SDK_PATH"
 
 # Configure bindgen to use macOS SDK with system headers
+# The order is important: clang builtins first, then SDK, then FFmpeg
 export BINDGEN_EXTRA_CLANG_ARGS=""
-if [ -n "$MACOS_SDK_PATH" ]; then
-    export BINDGEN_EXTRA_CLANG_ARGS="-isysroot $MACOS_SDK_PATH"
-fi
 if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
-    export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
+    export BINDGEN_EXTRA_CLANG_ARGS="-I$CLANG_BUILTIN_INCLUDE"
+fi
+if [ -n "$MACOS_SDK_PATH" ]; then
+    export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -isysroot $MACOS_SDK_PATH"
 fi
 export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$FFMPEG_INCLUDE_DIR"
 
