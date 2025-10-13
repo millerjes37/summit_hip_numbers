@@ -60,20 +60,32 @@ jobs:
     - name: Create Distribution
       shell: msys2 {0}
       run: |
-        chmod +x scripts/build_windows_msys2.sh
-        ./scripts/build_windows_msys2.sh ${{ matrix.variant }}
+        chmod +x scripts/build_windows_complete.sh
+        ./scripts/build_windows_complete.sh ${{ matrix.variant }}
 
     - name: Debug Build Artifacts
       if: always()
       shell: pwsh
       run: |
-        if (Test-Path dist/full) {
-          Write-Host "dist/full contents:"
-          Get-ChildItem -Path dist/full -Recurse | Select-Object FullName, Length | Format-List
+        $variant = "${{ matrix.variant }}"
+        $distPath = "dist/$variant"
+        
+        if (Test-Path $distPath) {
+          Write-Host "$distPath contents:"
+          Get-ChildItem -Path $distPath -Recurse | Select-Object FullName, Length | Format-List
+          
+          # Check for ZIP file
+          $zipName = "summit_hip_numbers_${variant}_portable.zip"
+          if (Test-Path $zipName) {
+            Write-Host "✓ Found portable ZIP: $zipName" -ForegroundColor Green
+            $zipSize = (Get-Item $zipName).Length
+            Write-Host "  Size: $([math]::Round($zipSize/1MB, 2)) MB"
+          } else {
+            Write-Warning "Portable ZIP not found: $zipName"
+          }
         } else {
-          Write-Error "dist/full directory missing!"
+          Write-Error "$distPath directory missing!"
         }
-        Get-ChildItem -Path scripts | Format-List
 
     - name: Download and Install Inno Setup
       if: matrix.variant == 'full'
