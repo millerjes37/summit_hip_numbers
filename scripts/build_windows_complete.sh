@@ -41,7 +41,16 @@ log "${YELLOW}=== Setting up MSYS2 environment ===${NC}"
 export MSYSTEM=MINGW64
 export MSYSTEM_PREFIX=/mingw64
 export PATH="$MSYSTEM_PREFIX/bin:$PATH"
-export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig"
+
+# Use Windows-style paths for PKG_CONFIG_PATH since Cargo converts MSYS paths incorrectly
+# Cargo expects Windows semicolon-separated paths when running on Windows
+if [ -n "${MSYS2_PATH_TYPE:-}" ]; then
+    # In MSYS2, convert to Windows paths
+    export PKG_CONFIG_PATH="$(cygpath -w /mingw64/lib/pkgconfig);$(cygpath -w /mingw64/share/pkgconfig)"
+else
+    export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig"
+fi
+
 export RUSTFLAGS="-L native=/mingw64/lib"
 
 # FFmpeg bindgen configuration (for ffmpeg-sys-next crate)
