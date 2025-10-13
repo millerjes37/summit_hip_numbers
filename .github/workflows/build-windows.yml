@@ -80,7 +80,8 @@ jobs:
           CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
           CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
           CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
-          CLANG_ARGS="$CLANG_ARGS -nostdinc"  # Don't search standard system include paths
+          CLANG_ARGS="$CLANG_ARGS -nostdinc++"  # Don't search standard C++ include paths
+          CLANG_ARGS="$CLANG_ARGS -Wno-unused-command-line-argument"  # Suppress warnings about unused args
 
          echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
 
