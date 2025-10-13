@@ -173,24 +173,26 @@ jobs:
         }
         Write-Host "`nExecutable found: $exePath" -ForegroundColor Green
         
-        # Check for critical DLLs
-        Write-Host "`nChecking for critical DLLs:" -ForegroundColor Yellow
+        # Check for critical DLLs (FFmpeg)
+        Write-Host "`nChecking for critical FFmpeg DLLs:" -ForegroundColor Yellow
         $criticalDlls = @(
-          "libglib-2.0-0.dll",
-          "libgobject-2.0-0.dll", 
-          "libgio-2.0-0.dll",
-          "libgstapp-1.0-0.dll",
-          "libgstreamer-1.0-0.dll"
+          "avutil-*.dll",
+          "avcodec-*.dll",
+          "avformat-*.dll",
+          "swscale-*.dll",
+          "swresample-*.dll"
         )
         
         $missingDlls = @()
-        foreach ($dll in $criticalDlls) {
-          $dllPath = "test_portable\$dll"
-          if (Test-Path $dllPath) {
-            Write-Host "  ✓ $dll" -ForegroundColor Green
+        foreach ($dllPattern in $criticalDlls) {
+          $foundDlls = Get-ChildItem -Path "test_portable" -Filter $dllPattern -ErrorAction SilentlyContinue
+          if ($foundDlls) {
+            foreach ($dll in $foundDlls) {
+              Write-Host "  ✓ $($dll.Name)" -ForegroundColor Green
+            }
           } else {
-            Write-Host "  ✗ $dll MISSING" -ForegroundColor Red
-            $missingDlls += $dll
+            Write-Host "  ✗ $dllPattern MISSING" -ForegroundColor Red
+            $missingDlls += $dllPattern
           }
         }
         
