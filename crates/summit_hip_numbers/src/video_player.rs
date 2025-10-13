@@ -64,7 +64,7 @@ impl VideoPlayer {
         let texture_sender = self.texture_sender.clone();
 
         let ictx = ffmpeg::format::input(&video_path)?;
-        
+
         let video_stream = ictx
             .streams()
             .best(ffmpeg::media::Type::Video)
@@ -80,7 +80,10 @@ impl VideoPlayer {
             match Self::setup_audio_output(audio_rx) {
                 Ok(stream) => Some(stream),
                 Err(e) => {
-                    log::warn!("Failed to setup audio output: {}, continuing without audio", e);
+                    log::warn!(
+                        "Failed to setup audio output: {}, continuing without audio",
+                        e
+                    );
                     None
                 }
             }
@@ -92,7 +95,7 @@ impl VideoPlayer {
         let video_path_clone = video_path.clone();
         let eos_clone = eos.clone();
         let error_clone = error.clone();
-        
+
         let video_handle = thread::spawn(move || {
             if let Err(e) = Self::video_playback_loop(
                 &video_path_clone,
@@ -114,7 +117,7 @@ impl VideoPlayer {
             let video_path_clone = video_path.clone();
             let eos_clone = eos.clone();
             let error_clone = error.clone();
-            
+
             Some(thread::spawn(move || {
                 if let Err(e) = Self::audio_playback_loop(
                     &video_path_clone,
@@ -142,7 +145,7 @@ impl VideoPlayer {
         let device = host
             .default_output_device()
             .ok_or_else(|| anyhow!("No audio output device found"))?;
-        
+
         let config = device.default_output_config()?;
         log::info!("Audio output config: {:?}", config);
 
@@ -341,19 +344,16 @@ impl VideoPlayer {
         let format = frame.format();
         let channels = frame.channels() as usize;
         let samples = frame.samples();
-        
+
         let mut output = Vec::new();
 
         match format {
             ffmpeg::format::Sample::F32(sample_type) => {
                 let data = frame.data(0);
                 let float_data = unsafe {
-                    std::slice::from_raw_parts(
-                        data.as_ptr() as *const f32,
-                        samples * channels,
-                    )
+                    std::slice::from_raw_parts(data.as_ptr() as *const f32, samples * channels)
                 };
-                
+
                 if sample_type == ffmpeg::format::sample::Type::Packed {
                     output.extend_from_slice(float_data);
                 } else {
@@ -361,10 +361,7 @@ impl VideoPlayer {
                         for ch in 0..channels {
                             let ch_data = frame.data(ch);
                             let ch_float = unsafe {
-                                std::slice::from_raw_parts(
-                                    ch_data.as_ptr() as *const f32,
-                                    samples,
-                                )
+                                std::slice::from_raw_parts(ch_data.as_ptr() as *const f32, samples)
                             };
                             output.push(ch_float[i]);
                         }
@@ -374,12 +371,9 @@ impl VideoPlayer {
             ffmpeg::format::Sample::I16(sample_type) => {
                 let data = frame.data(0);
                 let i16_data = unsafe {
-                    std::slice::from_raw_parts(
-                        data.as_ptr() as *const i16,
-                        samples * channels,
-                    )
+                    std::slice::from_raw_parts(data.as_ptr() as *const i16, samples * channels)
                 };
-                
+
                 if sample_type == ffmpeg::format::sample::Type::Packed {
                     for &sample in i16_data {
                         output.push(sample as f32 / 32768.0);
@@ -389,10 +383,7 @@ impl VideoPlayer {
                         for ch in 0..channels {
                             let ch_data = frame.data(ch);
                             let ch_i16 = unsafe {
-                                std::slice::from_raw_parts(
-                                    ch_data.as_ptr() as *const i16,
-                                    samples,
-                                )
+                                std::slice::from_raw_parts(ch_data.as_ptr() as *const i16, samples)
                             };
                             output.push(ch_i16[i] as f32 / 32768.0);
                         }

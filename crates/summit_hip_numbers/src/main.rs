@@ -1773,8 +1773,6 @@ fn main() -> eframe::Result<()> {
         // Load config to check kiosk mode
         let config = load_config_for_kiosk();
 
-
-
         let mut viewport = egui::ViewportBuilder::default()
             .with_inner_size([config.ui.window_width, config.ui.window_height]);
         if config.ui.kiosk_mode {
