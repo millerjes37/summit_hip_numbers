@@ -50,7 +50,7 @@ export LIBCLANG_PATH="${LIBCLANG_PATH:-/mingw64/bin}"
 
 # Configure clang arguments for bindgen to properly parse MinGW headers
 # --sysroot tells clang to use /mingw64 as the root, preventing /usr/include lookups
-if [ -z "$BINDGEN_EXTRA_CLANG_ARGS" ]; then
+if [ -z "${BINDGEN_EXTRA_CLANG_ARGS:-}" ]; then
     export BINDGEN_EXTRA_CLANG_ARGS="-I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 --sysroot=/mingw64 -D__MINGW64__ -fms-extensions"
 fi
 
