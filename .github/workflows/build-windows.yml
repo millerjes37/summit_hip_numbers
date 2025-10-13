@@ -46,9 +46,9 @@ jobs:
     - name: Run security audit
       run: cargo audit
 
-    - name: Build application
-      run: |
-        cargo build --release --target x86_64-pc-windows-gnu --package summit_hip_numbers${{ matrix.variant == 'demo' && ' --features demo' || '' }}
+     - name: Build application
+       run: |
+         cargo build --release --target x86_64-pc-windows-gnu --package summit_hip_numbers ${{ matrix.variant == 'demo' && '--features demo' || '' }}
 
     - name: Create distribution
       run: |
