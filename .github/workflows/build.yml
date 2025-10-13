@@ -147,6 +147,8 @@ jobs:
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-glib2
             mingw-w64-x86_64-ffmpeg
+            mingw-w64-x86_64-clang
+            mingw-w64-x86_64-llvm
             zip
             unzip
           update: true
@@ -270,6 +272,64 @@ jobs:
           echo "  ✅ ALL FFMPEG CHECKS PASSED"
           echo "============================================"
       
+      - name: Configure FFmpeg Bindgen Environment
+        shell: msys2 {0}
+        run: |
+          echo "============================================"
+          echo "  CONFIGURING FFMPEG BINDGEN ENVIRONMENT"
+          echo "============================================"
+          
+          # Set up environment for bindgen (used by ffmpeg-sys-next)
+          export MSYSTEM=MINGW64
+          export MSYSTEM_PREFIX=/mingw64
+          
+          # Find libclang for bindgen
+          if [ -f "/mingw64/bin/libclang.dll" ]; then
+            echo "Found libclang.dll at: /mingw64/bin/libclang.dll"
+            echo "LIBCLANG_PATH=/mingw64/bin" >> $GITHUB_ENV
+          else
+            echo "Warning: libclang.dll not found, searching..."
+            find /mingw64 -name "libclang.dll" 2>/dev/null || echo "Not found"
+          fi
+          
+          # Configure clang to use MSYS2 system headers properly
+          # The key issue is that bindgen's clang needs to find MinGW headers, not MSYS headers
+          CLANG_ARGS="-I/mingw64/include"
+          CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
+          CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32"
+          CLANG_ARGS="$CLANG_ARGS -D__MINGW64__"
+          CLANG_ARGS="$CLANG_ARGS -fms-extensions"
+          
+          echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
+          
+          # FFmpeg include paths for pkg-config fallback
+          echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
+          echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
+          
+          # Verify FFmpeg headers are accessible
+          echo ""
+          echo "Checking FFmpeg headers..."
+          for header in libavcodec/avcodec.h libavformat/avformat.h libavutil/avutil.h libswscale/swscale.h libswresample/swresample.h; do
+            if [ -f "/mingw64/include/$header" ]; then
+              echo "  ✓ $header"
+            else
+              echo "  ✗ $header NOT FOUND"
+            fi
+          done
+          
+          # Verify pkg-config can find FFmpeg
+          echo ""
+          echo "Checking pkg-config for FFmpeg..."
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
+          pkg-config --exists libavcodec && echo "  ✓ libavcodec" || echo "  ✗ libavcodec NOT FOUND"
+          pkg-config --exists libavformat && echo "  ✓ libavformat" || echo "  ✗ libavformat NOT FOUND"
+          pkg-config --exists libavutil && echo "  ✓ libavutil" || echo "  ✗ libavutil NOT FOUND"
+          pkg-config --exists libswscale && echo "  ✓ libswscale" || echo "  ✗ libswscale NOT FOUND"
+          pkg-config --exists libswresample && echo "  ✓ libswresample" || echo "  ✗ libswresample NOT FOUND"
+          
+          echo ""
+          echo "Environment configured for FFmpeg bindgen"
+      
       - name: Use Complete Build Script
         shell: msys2 {0}
         run: |
@@ -279,6 +339,24 @@ jobs:
       - name: Execute Complete Windows Build
         shell: msys2 {0}
         run: |
+          # Ensure environment variables are set for this step
+          export MSYSTEM=MINGW64
+          export MSYSTEM_PREFIX=/mingw64
+          export PATH="/mingw64/bin:$PATH"
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig"
+          
+          # FFmpeg bindgen configuration
+          export LIBCLANG_PATH="${LIBCLANG_PATH:-/mingw64/bin}"
+          export BINDGEN_EXTRA_CLANG_ARGS="${BINDGEN_EXTRA_CLANG_ARGS:--I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32}"
+          export FFMPEG_INCLUDE_DIR="${FFMPEG_INCLUDE_DIR:-/mingw64/include}"
+          export FFMPEG_LIB_DIR="${FFMPEG_LIB_DIR:-/mingw64/lib}"
+          
+          echo "Build environment:"
+          echo "  LIBCLANG_PATH=$LIBCLANG_PATH"
+          echo "  BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
+          echo "  FFMPEG_INCLUDE_DIR=$FFMPEG_INCLUDE_DIR"
+          echo "  PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          
           # Run the complete build script
           ./scripts/build_windows_complete.sh ${{ matrix.variant }}
           

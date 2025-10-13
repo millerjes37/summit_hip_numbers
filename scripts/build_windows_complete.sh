@@ -44,9 +44,25 @@ export PATH="$MSYSTEM_PREFIX/bin:$PATH"
 export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
 export RUSTFLAGS="-L native=/mingw64/lib"
 
+# FFmpeg bindgen configuration (for ffmpeg-sys-next crate)
+# These settings help bindgen (used by ffmpeg-sys-next) find the correct headers
+export LIBCLANG_PATH="${LIBCLANG_PATH:-/mingw64/bin}"
+
+# Configure clang arguments for bindgen to properly parse MinGW headers
+if [ -z "$BINDGEN_EXTRA_CLANG_ARGS" ]; then
+    export BINDGEN_EXTRA_CLANG_ARGS="-I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 -D__MINGW64__ -fms-extensions"
+fi
+
+export FFMPEG_INCLUDE_DIR="${FFMPEG_INCLUDE_DIR:-/mingw64/include}"
+export FFMPEG_LIB_DIR="${FFMPEG_LIB_DIR:-/mingw64/lib}"
+
 log "MSYSTEM: $MSYSTEM"
 log "MSYSTEM_PREFIX: $MSYSTEM_PREFIX"
 log "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+log "LIBCLANG_PATH: $LIBCLANG_PATH"
+log "BINDGEN_EXTRA_CLANG_ARGS: $BINDGEN_EXTRA_CLANG_ARGS"
+log "FFMPEG_INCLUDE_DIR: $FFMPEG_INCLUDE_DIR"
+log "FFMPEG_LIB_DIR: $FFMPEG_LIB_DIR"
 
 # Verify MSYS2 installation
 if [ ! -d "$MSYSTEM_PREFIX/bin" ]; then
