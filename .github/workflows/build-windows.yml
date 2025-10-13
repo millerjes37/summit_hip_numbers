@@ -87,7 +87,7 @@ jobs:
          echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
          echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
 
-         # Tell ffmpeg-sys-next to use pkg-config
+          # Tell ffmpeg-sys-next to use pkg-config
           echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
 
     - name: Create Distribution
