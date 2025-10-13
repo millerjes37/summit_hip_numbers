@@ -83,7 +83,7 @@ jobs:
           CLANG_ARGS="$CLANG_ARGS -nostdinc++"  # Don't search standard C++ include paths
           CLANG_ARGS="$CLANG_ARGS -Wno-unused-command-line-argument"  # Suppress warnings about unused args
 
-         echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
+          echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
 
           # FFmpeg include paths for pkg-config fallback
           echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
