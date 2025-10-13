@@ -118,10 +118,54 @@ jobs:
             mingw-w64-x86_64-gst-plugins-bad
             mingw-w64-x86_64-gst-plugins-ugly
             mingw-w64-x86_64-gst-libav
+            mingw-w64-x86_64-libxml2
+            mingw-w64-x86_64-xz
+            mingw-w64-x86_64-bzip2
+            mingw-w64-x86_64-freetype
+            mingw-w64-x86_64-harfbuzz
+            mingw-w64-x86_64-libpng
+            mingw-w64-x86_64-orc
             zip
             unzip
           update: true
           path-type: inherit
+      
+      - name: Verify System Dependencies
+        shell: msys2 {0}
+        run: |
+          echo "============================================"
+          echo "  VERIFYING SYSTEM DEPENDENCIES"
+          echo "============================================"
+          
+          # Verify critical system DLLs are present
+          CRITICAL_DLLS=(
+            "libxml2-2.dll"
+            "liblzma-5.dll"
+            "libbz2-1.dll"
+            "libfreetype-6.dll"
+            "libharfbuzz-0.dll"
+            "libpng16-16.dll"
+            "liborc-0.4-0.dll"
+          )
+          
+          MISSING_COUNT=0
+          for dll in "${CRITICAL_DLLS[@]}"; do
+            if [ -f "/mingw64/bin/$dll" ]; then
+              echo "  ✓ $dll found"
+            else
+              echo "  ✗ $dll NOT FOUND"
+              ((MISSING_COUNT++))
+            fi
+          done
+          
+          if [ $MISSING_COUNT -gt 0 ]; then
+            echo "  ⚠ Warning: $MISSING_COUNT system DLLs not found"
+            echo "  These are optional but recommended for full functionality"
+          else
+            echo "  ✓ All system dependencies found"
+          fi
+          
+          echo "============================================"
       
       - name: Setup Rust GNU Toolchain
         uses: dtolnay/rust-toolchain@stable

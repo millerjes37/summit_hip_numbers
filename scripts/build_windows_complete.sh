@@ -143,7 +143,7 @@ GSTREAMER_DLLS=(
     "libgstgl-1.0-0.dll"
 )
 
-# System DLLs (required)
+# System DLLs (recommended but optional for basic functionality)
 SYSTEM_DLLS=(
     "libgcc_s_seh-1.dll"
     "libstdc++-6.dll"
