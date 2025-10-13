@@ -42,6 +42,10 @@ export MSYSTEM=MINGW64
 export MSYSTEM_PREFIX=/mingw64
 export PATH="$MSYSTEM_PREFIX/bin:$PATH"
 
+# Create symlink to redirect /usr/include to /mingw64/include for stubborn crates
+mkdir -p /usr
+ln -sf /mingw64/include /usr/include
+
 # Use Windows-style paths for PKG_CONFIG_PATH since Cargo converts MSYS paths incorrectly
 # Cargo expects Windows semicolon-separated paths when running on Windows
 if [ -n "${MSYS2_PATH_TYPE:-}" ]; then
