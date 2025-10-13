@@ -1,18 +1,18 @@
 # Build script for Windows
 # Creates a portable distribution with all dependencies
-# Run this on a Windows machine with Rust and GStreamer installed
+# Run this on a Windows machine with Rust and FFmpeg installed
 
 param(
-    [switch]$SkipGStreamer,
+    [switch]$SkipFFmpeg,
     [switch]$SkipBuild,
-    [string]$GStreamerPath = ""
+    [string]$FFmpegPath = ""
 )
 
 # Enable verbose output
 $VerbosePreference = "Continue"
 
 Write-Host "=== Starting Windows Build Script ===" -ForegroundColor Cyan
-Write-Host "Parameters: SkipGStreamer=$SkipGStreamer, GStreamerPath='$GStreamerPath'" -ForegroundColor Gray
+Write-Host "Parameters: SkipFFmpeg=$SkipFFmpeg, FFmpegPath='$FFmpegPath'" -ForegroundColor Gray
 Write-Host "Current directory: $(Get-Location)" -ForegroundColor Gray
 Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
 Write-Host "Building Portable Summit Hip Numbers Media Player for Windows..." -ForegroundColor Green
@@ -55,25 +55,24 @@ Copy-Item $exePath (Join-Path $distDir "summit_hip_numbers.exe")
 $exeSize = (Get-Item (Join-Path $distDir "summit_hip_numbers.exe")).Length / 1MB
 Write-Host "Copied executable ($( [math]::Round($exeSize, 2)) MB)" -ForegroundColor Green
 
-# Find GStreamer installation
-if (!$SkipGStreamer) {
-    Write-Host "Looking for GStreamer installation..." -ForegroundColor Yellow
-    if (!$GStreamerPath) {
-        # Try to find GStreamer automatically
+# Find FFmpeg installation
+if (!$SkipFFmpeg) {
+    Write-Host "Looking for FFmpeg installation..." -ForegroundColor Yellow
+    if (!$FFmpegPath) {
+        # Try to find FFmpeg automatically
         $possiblePaths = @(
             "C:\msys64\mingw64",
-            "C:\gstreamer\1.0\msvc_x86_64\",
-            "C:\gstreamer\1.0\mingw_x86_64\",
-            "C:\gstreamer\1.0\x86_64\",
-            "${env:ProgramFiles}\gstreamer\1.0\x86_64\",
-            "${env:ProgramFiles(x86)}\gstreamer\1.0\x86_64\"
+            "C:\ffmpeg",
+            "${env:ProgramFiles}\ffmpeg",
+            "${env:ProgramFiles(x86)}\ffmpeg",
+            "C:\vcpkg\installed\x64-windows"
         )
 
-        Write-Host "Checking possible GStreamer paths:" -ForegroundColor Gray
+        Write-Host "Checking possible FFmpeg paths:" -ForegroundColor Gray
         foreach ($path in $possiblePaths) {
             Write-Host "  Checking: $path" -ForegroundColor Gray
             if (Test-Path $path) {
-                $GStreamerPath = $path
+                $FFmpegPath = $path
                 Write-Host "  Found at: $path" -ForegroundColor Green
                 break
             } else {
@@ -82,16 +81,16 @@ if (!$SkipGStreamer) {
         }
     }
 
-    if ($GStreamerPath -and (Test-Path $GStreamerPath)) {
-        Write-Host "Using GStreamer at: $GStreamerPath" -ForegroundColor Green
+    if ($FFmpegPath -and (Test-Path $FFmpegPath)) {
+        Write-Host "Using FFmpeg at: $FFmpegPath" -ForegroundColor Green
 
-        # Copy essential GStreamer files to dist
-        Write-Host "Copying GStreamer runtime files..." -ForegroundColor Yellow
+        # Copy essential FFmpeg files to dist
+        Write-Host "Copying FFmpeg runtime files..." -ForegroundColor Yellow
 
-        # Copy bin directory (ALL DLLs - don't be selective)
-        $binPath = Join-Path $GStreamerPath "bin"
+        # Copy bin directory (FFmpeg DLLs)
+        $binPath = Join-Path $FFmpegPath "bin"
         if (Test-Path $binPath) {
-            Write-Host "  Copying ALL DLLs from $binPath..." -ForegroundColor Gray
+            Write-Host "  Copying FFmpeg DLLs from $binPath..." -ForegroundColor Gray
             Write-Host "  Source: $binPath" -ForegroundColor Gray
             Write-Host "  Destination: $distDir" -ForegroundColor Gray
             
@@ -133,48 +132,41 @@ if (!$SkipGStreamer) {
                 exit 1
             }
 
-            # Verify critical DLLs are present
+            # Verify critical FFmpeg DLLs are present
             $criticalDlls = @(
-                "libglib-2.0-0.dll",
-                "libgobject-2.0-0.dll",
-                "libgio-2.0-0.dll",
-                "libgstapp-1.0-0.dll",
-                "libgstreamer-1.0-0.dll",
-                "libgstvideo-1.0-0.dll",
-                "libgstbase-1.0-0.dll",
-                "libgstpbutils-1.0-0.dll",
-                "libgmodule-2.0-0.dll",
-                "libintl-8.dll",
-                "libffi-8.dll",
-                "libpcre2-8-0.dll",
-                "libwinpthread-1.dll",
-                "zlib1.dll"
+                "avutil-*.dll",
+                "avcodec-*.dll",
+                "avformat-*.dll",
+                "swscale-*.dll",
+                "swresample-*.dll"
             )
             
-            Write-Host "  Verifying critical DLLs:" -ForegroundColor Yellow
+            Write-Host "  Verifying critical FFmpeg DLLs:" -ForegroundColor Yellow
             $missingDlls = @()
-            foreach ($dll in $criticalDlls) {
-                $dllPath = Join-Path $distDir $dll
-                if (Test-Path $dllPath) {
-                    Write-Host "    ✓ $dll" -ForegroundColor Green
+            foreach ($dllPattern in $criticalDlls) {
+                $found = Get-ChildItem -Path $distDir -Filter $dllPattern -File
+                if ($found) {
+                    foreach ($dll in $found) {
+                        Write-Host "    ✓ $($dll.Name)" -ForegroundColor Green
+                    }
                 } else {
-                    Write-Host "    ✗ $dll MISSING" -ForegroundColor Red
-                    $missingDlls += $dll
+                    Write-Host "    ✗ $dllPattern MISSING" -ForegroundColor Red
+                    $missingDlls += $dllPattern
                 }
             }
             
             if ($missingDlls.Count -gt 0) {
-                Write-Warning "Some critical DLLs are missing: $($missingDlls -join ', ')"
-                Write-Host "Searching for missing DLLs in GStreamer installation..." -ForegroundColor Yellow
+                Write-Warning "Some critical FFmpeg DLLs are missing: $($missingDlls -join ', ')"
+                Write-Host "Searching for missing DLLs in FFmpeg installation..." -ForegroundColor Yellow
                 
-                foreach ($dll in $missingDlls) {
-                    # Search recursively in GStreamer path
-                    $found = Get-ChildItem -Path $GStreamerPath -Filter $dll -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                foreach ($dllPattern in $missingDlls) {
+                    # Search recursively in FFmpeg path
+                    $found = Get-ChildItem -Path $FFmpegPath -Filter $dllPattern -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
                     if ($found) {
                         Copy-Item $found.FullName -Destination $distDir -Force
-                        Write-Host "    Found and copied: $dll from $($found.DirectoryName)" -ForegroundColor Green
+                        Write-Host "    Found and copied: $($found.Name) from $($found.DirectoryName)" -ForegroundColor Green
                     } else {
-                        Write-Warning "    Could not find: $dll anywhere in GStreamer installation"
+                        Write-Warning "    Could not find: $dllPattern anywhere in FFmpeg installation"
                     }
                 }
             }
@@ -182,48 +174,10 @@ if (!$SkipGStreamer) {
             Write-Host "  Bin directory not found at $binPath" -ForegroundColor Yellow
         }
 
-        # Copy lib\gstreamer-1.0 directory (plugins)
-        $pluginPath = Join-Path $GStreamerPath "lib\gstreamer-1.0"
-        if (Test-Path $pluginPath) {
-            Write-Host "  Copying plugins from $pluginPath..." -ForegroundColor Gray
-            $pluginDest = Join-Path $distDir "lib\gstreamer-1.0"
-            Copy-Item $pluginPath $pluginDest -Recurse -Force
-            $pluginFileCount = (Get-ChildItem $pluginDest -Recurse -File).Count
-            Write-Host "  Copied $pluginFileCount plugin files" -ForegroundColor Green
-        } else {
-            Write-Host "  Plugin directory not found at $pluginPath" -ForegroundColor Yellow
-        }
-
-        # Copy share directory (schemas and other data)
-        $sharePath = Join-Path $GStreamerPath "share"
-        if (Test-Path $sharePath) {
-            Write-Host "  Copying share directory from $sharePath..." -ForegroundColor Gray
-            $shareDest = Join-Path $distDir "share"
-            Copy-Item $sharePath $shareDest -Recurse -Force
-            $shareFileCount = (Get-ChildItem $shareDest -Recurse -File).Count
-            Write-Host "  Share directory copied ($shareFileCount files)" -ForegroundColor Green
-        } else {
-            Write-Host "  Share directory not found at $sharePath" -ForegroundColor Yellow
-        }
-
-        # Copy any additional lib files that might be needed
-        $libPath = Join-Path $GStreamerPath "lib"
-        if (Test-Path $libPath) {
-            Write-Host "  Copying additional lib files..." -ForegroundColor Gray
-            $libDest = Join-Path $distDir "lib"
-            if (!(Test-Path $libDest)) {
-                New-Item -ItemType Directory -Path $libDest | Out-Null
-            }
-            
-            # Copy .a files and other library files (excluding gstreamer-1.0 which we already copied)
-            Get-ChildItem -Path $libPath -Filter "*.a" -File | ForEach-Object {
-                Copy-Item $_.FullName -Destination $libDest -Force
-            }
-        }
-
-        Write-Host "GStreamer runtime files copied successfully" -ForegroundColor Green
+        Write-Host "FFmpeg runtime files copied successfully" -ForegroundColor Green
     } else {
-        Write-Warning "GStreamer not found. The portable version may not work without GStreamer installed on the target system."
+        Write-Warning "FFmpeg not found. The portable version may not work without FFmpeg DLLs."
+        Write-Host "You can download FFmpeg from: https://github.com/BtbN/FFmpeg-Builds/releases" -ForegroundColor Yellow
     }
 }
 
@@ -289,10 +243,8 @@ REM This script sets up the environment for the portable version
 
 echo Starting Summit Hip Numbers Media Player...
 
-REM Set GStreamer environment variables for portable version
-set GST_PLUGIN_PATH=%~dp0lib\gstreamer-1.0
-set GST_PLUGIN_SYSTEM_PATH=
-set PATH=%~dp0;%~dp0bin;%PATH%
+REM Set PATH to include FFmpeg DLLs
+set PATH=%~dp0;%PATH%
 
 REM Change to the application directory
 cd /d "%~dp0"
@@ -322,7 +274,7 @@ Files:
 - config.toml: Configuration file
 - videos/: Directory for your video files
 - splash/: Directory for splash images
-- lib/, share/, and *.dll files: GStreamer runtime
+- *.dll files: FFmpeg runtime libraries
 - run.bat: Launcher script
 
 Configuration:

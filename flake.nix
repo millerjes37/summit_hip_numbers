@@ -25,11 +25,7 @@
         # Common dependencies for both native and cross-compilation
         commonDeps = with pkgs; [
           pkg-config
-          gst_all_1.gstreamer
-          gst_all_1.gst-plugins-base
-          gst_all_1.gst-plugins-good
-          gst_all_1.gst-plugins-bad
-          gst_all_1.gst-plugins-ugly
+          ffmpeg.dev
           cargo-bundle
         ] ++ lib.optionals pkgs.stdenv.isLinux [
           # Linux-specific GUI dependencies
@@ -48,14 +44,8 @@
           freetype
         ];
 
-        gstLibs = with pkgs; [
-          glib
-          gst_all_1.gstreamer
-          gst_all_1.gst-plugins-base
-          gst_all_1.gst-plugins-good
-        ] ++ lib.optionals pkgs.stdenv.isLinux [
-          gst_all_1.gst-plugins-bad
-          gst_all_1.gst-plugins-ugly
+        ffmpegLibs = with pkgs; [
+          ffmpeg.dev
         ];
 
         # Build inputs for GUI applications
@@ -101,7 +91,7 @@
              cargoBuildFlags = [ "--package" "summit_hip_numbers" ];
              
              nativeBuildInputs = [ pkgs.pkg-config ];
-             buildInputs = gstLibs ++ guiLibs;
+             buildInputs = ffmpegLibs ++ guiLibs;
              
              # Environment variables for proper GUI operation (Linux only)
              env = lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -136,7 +126,7 @@
              cargoBuildFlags = [ "--package" "summit_hip_numbers" "--features" "demo" ];
              
              nativeBuildInputs = [ pkgs.pkg-config ];
-             buildInputs = gstLibs ++ guiLibs;
+             buildInputs = ffmpegLibs ++ guiLibs;
              
              # Environment variables for proper GUI operation (Linux only)
              env = lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -207,7 +197,7 @@
             pkg-config
             cargo-bundle
            ];
-           buildInputs = gstLibs;
+           buildInputs = ffmpegLibs;
            postBuild = ''
              cargo-bundle --release --format dmg
            '';

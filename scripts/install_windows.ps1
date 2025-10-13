@@ -105,58 +105,86 @@ if (!(Get-Command cargo -ErrorAction SilentlyContinue)) {
     Write-Host "Rust already installed" -ForegroundColor Green
 }
 
-# Install GStreamer with all plugins
-Write-Host "Installing GStreamer (full)..." -ForegroundColor Yellow
+# Install FFmpeg
+Write-Host "Installing FFmpeg..." -ForegroundColor Yellow
 try {
     # Try winget first
-    winget install GStreamer.GStreamer --accept-source-agreements --accept-package-agreements
+    winget install Gyan.FFmpeg --accept-source-agreements --accept-package-agreements
+    Write-Host "FFmpeg installed via winget" -ForegroundColor Green
 } catch {
     Write-Host "Winget installation failed, trying manual download..." -ForegroundColor Yellow
-    # Download GStreamer MSI if winget fails
-    $gstreamerUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/1.24.12/msvc/gstreamer-1.0-msvc-x86_64-1.24.12.msi"
-    $msiPath = "$env:TEMP\gstreamer.msi"
+    # Download FFmpeg build from BtbN/FFmpeg-Builds
+    $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
+    $zipPath = "$env:TEMP\ffmpeg.zip"
+    $extractPath = "C:\ffmpeg"
+    
     try {
-        Invoke-WebRequest -Uri $gstreamerUrl -OutFile $msiPath
-        Write-Host "Downloaded GStreamer MSI" -ForegroundColor Green
-        # Install MSI silently
-        Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Wait
-        Write-Host "Installed GStreamer MSI" -ForegroundColor Green
+        Write-Host "Downloading FFmpeg..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath -UseBasicParsing
+        Write-Host "Downloaded FFmpeg archive" -ForegroundColor Green
+        
+        # Extract archive
+        Write-Host "Extracting FFmpeg..." -ForegroundColor Yellow
+        if (!(Test-Path $extractPath)) {
+            New-Item -ItemType Directory -Path $extractPath | Out-Null
+        }
+        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+        
+        # Find the extracted folder (it has a version name)
+        $extractedFolder = Get-ChildItem -Path $extractPath -Directory | Select-Object -First 1
+        if ($extractedFolder) {
+            # Move contents to C:\ffmpeg
+            Move-Item -Path "$($extractedFolder.FullName)\*" -Destination $extractPath -Force
+            Remove-Item -Path $extractedFolder.FullName -Recurse -Force
+        }
+        
+        Write-Host "FFmpeg extracted to $extractPath" -ForegroundColor Green
     } catch {
-        Write-Error "Failed to download/install GStreamer: $_"
-        Write-Host "Please manually download from https://gstreamer.freedesktop.org/download/" -ForegroundColor Yellow
+        Write-Error "Failed to download/install FFmpeg: $_"
+        Write-Host "Please manually download from https://github.com/BtbN/FFmpeg-Builds/releases" -ForegroundColor Yellow
+        Write-Host "Or from: https://www.gyan.dev/ffmpeg/builds/" -ForegroundColor Yellow
         exit 1
     }
 }
 
-# Set environment variables for pkg-config and linking
+# Set environment variables for FFmpeg
 Write-Host "Setting environment variables..." -ForegroundColor Yellow
 
-# Possible GStreamer installation paths (check in order of preference)
-$gstreamerPaths = @(
-    "C:\gstreamer\1.0\x86_64\",  # winget/msi default
-    "C:\gstreamer\1.0\mingw_x86_64\",  # mingw variant
-    "${env:ProgramFiles}\gstreamer\1.0\x86_64\",  # Program Files
-    "${env:ProgramFiles(x86)}\gstreamer\1.0\x86_64\"  # Program Files (x86)
+# Possible FFmpeg installation paths (check in order of preference)
+$ffmpegPaths = @(
+    "C:\ffmpeg",  # Manual installation
+    "${env:ProgramFiles}\ffmpeg",  # Program Files
+    "C:\ProgramData\chocolatey\lib\ffmpeg\tools\ffmpeg",  # Chocolatey
+    "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Gyan.FFmpeg*"  # Winget
 )
 
-$gstreamerFound = $false
-foreach ($path in $gstreamerPaths) {
-    if (Test-Path $path) {
-        $env:PKG_CONFIG_PATH = "$path\lib\pkgconfig"
-        $env:GSTREAMER_ROOT = $path
-        $env:PATH = "$path\bin;" + $env:PATH
-        # Also add lib path for linking
-        $env:LIB = "$path\lib;" + $env:LIB
-        Write-Host "GStreamer found at: $path" -ForegroundColor Green
-        $gstreamerFound = $true
-        break
+$ffmpegFound = $false
+foreach ($pathPattern in $ffmpegPaths) {
+    $paths = Get-Item $pathPattern -ErrorAction SilentlyContinue
+    foreach ($path in $paths) {
+        if (Test-Path $path) {
+            $binPath = if (Test-Path "$path\bin") { "$path\bin" } else { $path }
+            $env:FFMPEG_DIR = $path
+            $env:PATH = "$binPath;" + $env:PATH
+            
+            # Set PKG_CONFIG_PATH if pkgconfig exists
+            $pkgConfigPath = "$path\lib\pkgconfig"
+            if (Test-Path $pkgConfigPath) {
+                $env:PKG_CONFIG_PATH = $pkgConfigPath
+            }
+            
+            Write-Host "FFmpeg found at: $path" -ForegroundColor Green
+            $ffmpegFound = $true
+            break
+        }
     }
+    if ($ffmpegFound) { break }
 }
 
-if (!$gstreamerFound) {
-    Write-Warning "GStreamer installation not found in standard locations."
-    Write-Host "Please ensure GStreamer is installed and set GSTREAMER_ROOT, PKG_CONFIG_PATH, and PATH manually." -ForegroundColor Yellow
-    Write-Host "Typical installation path: C:\gstreamer\1.0\x86_64\" -ForegroundColor Yellow
+if (!$ffmpegFound) {
+    Write-Warning "FFmpeg installation not found in standard locations."
+    Write-Host "Please ensure FFmpeg is installed and set FFMPEG_DIR and PATH manually." -ForegroundColor Yellow
+    Write-Host "Typical installation path: C:\ffmpeg" -ForegroundColor Yellow
 }
 
 # Check for Visual Studio Build Tools (required for linking)
@@ -183,23 +211,20 @@ if ($rustVersion) {
     Write-Warning "Rust verification failed"
 }
 
-$gstreamerVersion = & gst-launch-1.0 --version 2>&1 | Select-String "GStreamer"
-if ($gstreamerVersion) {
-    Write-Host "GStreamer installed: $($gstreamerVersion.Line)" -ForegroundColor Green
-
-    # Check for required plugins
-    Write-Host "Checking GStreamer plugins..." -ForegroundColor Yellow
-    $plugins = @("videoconvert", "autoaudiosink", "appsink", "playbin")
-    foreach ($plugin in $plugins) {
-        $pluginCheck = & gst-inspect-1.0 $plugin 2>&1 | Select-String "Plugin Details"
-        if ($pluginCheck) {
-            Write-Host "✓ $plugin plugin available" -ForegroundColor Green
-        } else {
-            Write-Warning "✗ $plugin plugin not found"
-        }
+$ffmpegVersion = & ffmpeg -version 2>&1 | Select-String "ffmpeg version"
+if ($ffmpegVersion) {
+    Write-Host "FFmpeg installed: $($ffmpegVersion.Line)" -ForegroundColor Green
+    
+    # Check for FFmpeg libraries
+    Write-Host "Checking FFmpeg libraries..." -ForegroundColor Yellow
+    $ffprobeCheck = Get-Command ffprobe -ErrorAction SilentlyContinue
+    if ($ffprobeCheck) {
+        Write-Host "✓ ffprobe available" -ForegroundColor Green
+    } else {
+        Write-Warning "✗ ffprobe not found"
     }
 } else {
-    Write-Warning "GStreamer verification failed"
+    Write-Warning "FFmpeg verification failed"
 }
 
 # Build the Rust project if not skipped
@@ -217,79 +242,26 @@ if (!$SkipBuild) {
         Write-Error "Build failed: $_"
         Write-Host "If build fails due to linking issues, ensure:" -ForegroundColor Yellow
         Write-Host "1. Visual Studio Build Tools are installed" -ForegroundColor Yellow
-        Write-Host "2. GStreamer is properly installed with all plugins" -ForegroundColor Yellow
+        Write-Host "2. FFmpeg is properly installed" -ForegroundColor Yellow
         Write-Host "3. Environment variables are set correctly" -ForegroundColor Yellow
         exit 1
     }
 
-    # Bundle GStreamer DLLs for portability
-    Write-Host "Bundling GStreamer DLLs for portable distribution..." -ForegroundColor Yellow
-    if ($gstreamerFound) {
-        $targetDir = "target\release"
-        $gstreamerBin = "$gstreamerPath\bin"
-
-        # Copy required GStreamer DLLs
-        $requiredDlls = @(
-            "libgstreamer-1.0-0.dll",
-            "libgstbase-1.0-0.dll",
-            "libgstvideo-1.0-0.dll",
-            "libgstapp-1.0-0.dll",
-            "libgstplay-1.0-0.dll",
-            "libgstaudio-1.0-0.dll",
-            "libgstpbutils-1.0-0.dll",
-            "libgobject-2.0-0.dll",
-            "libglib-2.0-0.dll",
-            "libintl-8.dll",
-            "libffi-8.dll",
-            "libpcre2-8-0.dll",
-            "libz-1.dll",
-            "libbz2-1.dll",
-            "libwinpthread-1.dll",
-            "libgcc_s_seh-1.dll",
-            "libstdc++-6.dll"
-        )
-
-        foreach ($dll in $requiredDlls) {
-            $sourcePath = Join-Path $gstreamerBin $dll
-            if (Test-Path $sourcePath) {
-                Copy-Item $sourcePath $targetDir -Force
-                Write-Host "Copied $dll" -ForegroundColor Green
-            } else {
-                Write-Warning "DLL not found: $dll"
-            }
-        }
-
-        # Create portable zip
-        Write-Host "Creating portable zip package..." -ForegroundColor Yellow
-        $zipName = "summit_hip_numbers_portable.zip"
-        $exeName = "summit_hip_numbers.exe"
-        $exePath = Join-Path $targetDir $exeName
-
-        if (Test-Path $exePath) {
-            # Create a temporary directory for zipping
-            $tempDir = "$env:TEMP\summit_portable"
-            if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
-            New-Item -ItemType Directory -Path $tempDir | Out-Null
-
-            # Copy exe and dlls
-            Copy-Item $exePath $tempDir
-            Get-ChildItem "$targetDir\*.dll" | Copy-Item -Destination $tempDir
-
-            # Also copy config files if they exist
-            if (Test-Path "config.toml") { Copy-Item "config.toml" $tempDir }
-            if (Test-Path "config.toml.example") { Copy-Item "config.toml.example" $tempDir }
-
-            # Create zip
-            Compress-Archive -Path "$tempDir\*" -DestinationPath $zipName -Force
-            Write-Host "Created portable zip: $zipName" -ForegroundColor Green
-
-            # Clean up temp dir
-            Remove-Item $tempDir -Recurse -Force
+    # Use the build_windows.ps1 script for portable distribution
+    Write-Host "`nCreating portable distribution..." -ForegroundColor Yellow
+    Write-Host "Running build_windows.ps1 script..." -ForegroundColor Yellow
+    
+    $buildScriptPath = "scripts\build_windows.ps1"
+    if (Test-Path $buildScriptPath) {
+        & $buildScriptPath -SkipBuild -FFmpegPath $(if ($ffmpegFound -and $env:FFMPEG_DIR) { $env:FFMPEG_DIR } else { "" })
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Portable distribution created successfully!" -ForegroundColor Green
         } else {
-            Write-Warning "Executable not found, skipping zip creation"
+            Write-Warning "Portable distribution creation had issues (exit code: $LASTEXITCODE)"
         }
     } else {
-        Write-Warning "GStreamer not found, cannot create portable bundle"
+        Write-Warning "Build script not found at $buildScriptPath"
+        Write-Host "You can manually run: .\scripts\build_windows.ps1" -ForegroundColor Yellow
     }
 }
 
@@ -302,23 +274,21 @@ if (Test-Path "summit_hip_numbers_portable.zip") {
 
 Write-Host "`nImportant Notes:" -ForegroundColor Yellow
 Write-Host "- Visual Studio Build Tools with C++ support are required for compilation" -ForegroundColor Yellow
-Write-Host "- If GStreamer plugins are missing, download the full MSI installer from:" -ForegroundColor Yellow
-Write-Host "  https://gstreamer.freedesktop.org/download/" -ForegroundColor Yellow
-Write-Host "- The application requires GStreamer plugins: videoconvert, autoaudiosink, appsink, playbin" -ForegroundColor Yellow
+Write-Host "- FFmpeg is required for video playback (much simpler than GStreamer!)" -ForegroundColor Yellow
+Write-Host "- Portable builds only need ~5 FFmpeg DLLs (vs 50+ with GStreamer)" -ForegroundColor Yellow
 Write-Host "- You may need to restart your PowerShell session for environment changes to take effect" -ForegroundColor Yellow
 
 # Set persistent environment variables for future sessions
 Write-Host "`nTo make environment variables persistent, add to your PowerShell profile:" -ForegroundColor Cyan
-if ($gstreamerFound) {
-    Write-Host "`$env:PKG_CONFIG_PATH = '$env:PKG_CONFIG_PATH'" -ForegroundColor Cyan
-    Write-Host "`$env:GSTREAMER_ROOT = '$env:GSTREAMER_ROOT'" -ForegroundColor Cyan
-    Write-Host "`$env:PATH = '$gstreamerPath\bin;' + `$env:PATH" -ForegroundColor Cyan
+if ($ffmpegFound) {
+    Write-Host "`$env:FFMPEG_DIR = '$env:FFMPEG_DIR'" -ForegroundColor Cyan
+    Write-Host "`$env:PATH = '$(Split-Path $env:FFMPEG_DIR)\bin;' + `$env:PATH" -ForegroundColor Cyan
 }
 
 Write-Host "`nNext Steps:" -ForegroundColor Cyan
-Write-Host "1. Add your video files to the 'videos' directory" -ForegroundColor Cyan
+Write-Host "1. Add your video files to the 'assets/videos' directory" -ForegroundColor Cyan
 Write-Host "2. Configure settings in 'config.toml' if needed" -ForegroundColor Cyan
 Write-Host "3. Run 'cargo run --release' to start the application" -ForegroundColor Cyan
-if (Test-Path "summit_hip_numbers_portable.zip") {
-    Write-Host "4. Or distribute the portable zip to other machines" -ForegroundColor Cyan
-}
+if (Test-Path "dist") {
+    Write-Host "4. Or use the portable distribution in the 'dist' folder" -ForegroundColor Cyan
+}

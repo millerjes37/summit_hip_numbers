@@ -1,237 +1,420 @@
 use anyhow::{anyhow, Result};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::Stream;
 use eframe::epaint::ColorImage;
-use gstreamer::prelude::*;
-use gstreamer::{Bin, Element, ElementFactory, MessageView, State};
-use gstreamer_app::AppSink;
-use gstreamer_video::{VideoFrame, VideoInfo};
-use std::sync::{Arc, Mutex};
+use ffmpeg_next as ffmpeg;
+use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc::{channel, Receiver, Sender},
+    Arc, Mutex,
+};
+use std::thread;
+use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 pub struct VideoPlayer {
-    pipeline: Element,
-    eos: Arc<Mutex<bool>>,
+    eos: Arc<AtomicBool>,
     error: Arc<Mutex<Option<String>>>,
+    video_path: String,
+    texture_sender: watch::Sender<Option<ColorImage>>,
+    _video_thread: Option<thread::JoinHandle<()>>,
+    _audio_thread: Option<thread::JoinHandle<()>>,
+    _audio_stream: Option<Stream>,
 }
 
 impl VideoPlayer {
     pub fn new(uri: &str, texture_sender: watch::Sender<Option<ColorImage>>) -> Result<Self> {
-        println!("Creating custom pipeline for URI: {}", uri);
+        ffmpeg::init().map_err(|e| anyhow!("Failed to initialize FFmpeg: {}", e))?;
 
-        // Create pipeline
-        let pipeline = ElementFactory::make("playbin")
-            .name("playbin")
-            .build()
-            .map_err(|e| anyhow!("Failed to create playbin: {:?}", e))?;
+        let video_path = if uri.starts_with("file://") {
+            uri.trim_start_matches("file://").to_string()
+        } else {
+            uri.to_string()
+        };
 
-        // Set the URI
-        pipeline.set_property("uri", uri);
+        if !Path::new(&video_path).exists() {
+            return Err(anyhow!("Video file not found: {}", video_path));
+        }
 
-        // Create video processing bin
-        let video_bin = Bin::new();
+        log::info!("Creating FFmpeg player for: {}", video_path);
 
-        // Create videoconvert to convert to RGBA
-        let videoconvert = ElementFactory::make("videoconvert")
-            .build()
-            .map_err(|e| anyhow!("Failed to create videoconvert: {:?}", e))?;
-
-        // Create videoscale if needed
-        let videoscale = ElementFactory::make("videoscale")
-            .build()
-            .map_err(|e| anyhow!("Failed to create videoscale: {:?}", e))?;
-
-        // Create capsfilter to force RGBA
-        let capsfilter = ElementFactory::make("capsfilter")
-            .build()
-            .map_err(|e| anyhow!("Failed to create capsfilter: {:?}", e))?;
-        capsfilter.set_property(
-            "caps",
-            gstreamer::Caps::builder("video/x-raw")
-                .field("format", "RGBA")
-                .build(),
-        );
-
-        // Create appsink for video
-        let appsink = gstreamer_app::AppSink::builder().build();
-        appsink.set_max_buffers(1);
-        appsink.set_drop(true);
-
-        // Add elements to bin
-        video_bin
-            .add(&videoconvert)
-            .map_err(|e| anyhow!("Failed to add videoconvert: {:?}", e))?;
-        video_bin
-            .add(&videoscale)
-            .map_err(|e| anyhow!("Failed to add videoscale: {:?}", e))?;
-        video_bin
-            .add(&capsfilter)
-            .map_err(|e| anyhow!("Failed to add capsfilter: {:?}", e))?;
-        video_bin
-            .add(appsink.upcast_ref::<Element>())
-            .map_err(|e| anyhow!("Failed to add appsink: {:?}", e))?;
-
-        // Link elements
-        videoconvert
-            .link(&videoscale)
-            .map_err(|e| anyhow!("Failed to link videoconvert to videoscale: {:?}", e))?;
-        videoscale
-            .link(&capsfilter)
-            .map_err(|e| anyhow!("Failed to link videoscale to capsfilter: {:?}", e))?;
-        capsfilter
-            .link(appsink.upcast_ref::<Element>())
-            .map_err(|e| anyhow!("Failed to link capsfilter to appsink: {:?}", e))?;
-
-        // Set ghost pad
-        let pad = videoconvert
-            .static_pad("sink")
-            .ok_or_else(|| anyhow!("Failed to get sink pad"))?;
-        video_bin
-            .add_pad(
-                &gstreamer::GhostPad::with_target(&pad)
-                    .map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?,
-            )
-            .map_err(|e| anyhow!("Failed to add ghost pad: {:?}", e))?;
-
-        // Set video sink
-        pipeline.set_property("video-sink", video_bin);
-
-        // Create audio sink (autoaudiosink for system default)
-        let audiosink = ElementFactory::make("autoaudiosink")
-            .build()
-            .map_err(|e| anyhow!("Failed to create audio sink: {:?}", e))?;
-        pipeline.set_property("audio-sink", audiosink);
-
-        let eos = Arc::new(Mutex::new(false));
+        let eos = Arc::new(AtomicBool::new(false));
         let error = Arc::new(Mutex::new(None));
 
         let player = VideoPlayer {
-            pipeline: pipeline.clone(),
-            eos: eos.clone(),
-            error: error.clone(),
+            eos,
+            error,
+            video_path,
+            texture_sender,
+            _video_thread: None,
+            _audio_thread: None,
+            _audio_stream: None,
         };
-
-        // Start bus watching
-        player.start_bus_watching(eos.clone(), error.clone());
-
-        // Start frame extraction
-        player.start_frame_extraction(appsink, texture_sender);
 
         Ok(player)
     }
 
-    fn start_bus_watching(&self, eos: Arc<Mutex<bool>>, error: Arc<Mutex<Option<String>>>) {
-        let bus = self.pipeline.bus().expect("Pipeline should have a bus");
+    pub fn play(&mut self) -> Result<()> {
+        log::info!("Starting FFmpeg playback");
 
-        std::thread::spawn(move || {
-            for msg in bus.iter_timed(gstreamer::ClockTime::NONE) {
-                match msg.view() {
-                    MessageView::Eos(_) => {
-                        println!("End of stream reached");
-                        *eos.lock().unwrap() = true;
-                    }
-                    MessageView::Error(err) => {
-                        let error_msg = format!(
-                            "Error from {:?}: {} ({:?})",
-                            err.src().map(|s| s.path_string()),
-                            err.error(),
-                            err.debug()
-                        );
-                        eprintln!("GStreamer Error: {}", error_msg);
-                        *error.lock().unwrap() = Some(error_msg);
-                        *eos.lock().unwrap() = true; // Treat errors as EOS
-                    }
-                    MessageView::Warning(warn) => {
-                        eprintln!(
-                            "Warning from {:?}: {} ({:?})",
-                            warn.src().map(|s| s.path_string()),
-                            warn.error(),
-                            warn.debug()
-                        );
-                    }
-                    MessageView::StateChanged(state_changed) => {
-                        if let Some(element) = msg.src() {
-                            if element.type_().name() == "GstPipeline" {
-                                println!(
-                                    "Pipeline state changed from {:?} to {:?}",
-                                    state_changed.old(),
-                                    state_changed.current()
-                                );
-                            }
-                        }
-                    }
-                    MessageView::AsyncDone(_) => {
-                        println!("Pipeline is prerolled and ready to play");
-                    }
-                    _ => {}
+        let video_path = self.video_path.clone();
+        let eos = self.eos.clone();
+        let error = self.error.clone();
+        let texture_sender = self.texture_sender.clone();
+
+        let ictx = ffmpeg::format::input(&video_path)?;
+        
+        let video_stream = ictx
+            .streams()
+            .best(ffmpeg::media::Type::Video)
+            .ok_or_else(|| anyhow!("No video stream found"))?;
+        let video_stream_index = video_stream.index();
+
+        let audio_stream_opt = ictx.streams().best(ffmpeg::media::Type::Audio);
+        let audio_stream_index = audio_stream_opt.as_ref().map(|s| s.index());
+
+        let (audio_tx, audio_rx): (Sender<Vec<f32>>, Receiver<Vec<f32>>) = channel();
+        let audio_stream = if let Some(_stream) = audio_stream_opt {
+            log::info!("Audio stream found, initializing audio output");
+            match Self::setup_audio_output(audio_rx) {
+                Ok(stream) => Some(stream),
+                Err(e) => {
+                    log::warn!("Failed to setup audio output: {}, continuing without audio", e);
+                    None
                 }
             }
+        } else {
+            log::info!("No audio stream found in video");
+            None
+        };
+
+        let video_path_clone = video_path.clone();
+        let eos_clone = eos.clone();
+        let error_clone = error.clone();
+        
+        let video_handle = thread::spawn(move || {
+            if let Err(e) = Self::video_playback_loop(
+                &video_path_clone,
+                video_stream_index,
+                texture_sender,
+                eos_clone.clone(),
+                error_clone.clone(),
+            ) {
+                log::error!("Video playback error: {}", e);
+                *error_clone.lock().unwrap() = Some(e.to_string());
+                eos_clone.store(true, Ordering::SeqCst);
+            } else {
+                log::info!("Video playback completed normally");
+                eos_clone.store(true, Ordering::SeqCst);
+            }
         });
-    }
 
-    fn start_frame_extraction(&self, appsink: AppSink, sender: watch::Sender<Option<ColorImage>>) {
-        appsink.set_callbacks(
-            gstreamer_app::AppSinkCallbacks::builder()
-                .new_sample(move |appsink| {
-                    match Self::pull_frame(appsink) {
-                        Some(frame) => {
-                            if let Err(e) = sender.send(Some(frame)) {
-                                eprintln!("Failed to send frame: {}", e);
-                            }
-                        }
-                        None => {
-                            eprintln!("Failed to pull frame");
-                        }
-                    }
-                    Ok(gstreamer::FlowSuccess::Ok)
-                })
-                .build(),
-        );
-    }
+        let audio_handle = if let Some(audio_idx) = audio_stream_index {
+            let video_path_clone = video_path.clone();
+            let eos_clone = eos.clone();
+            let error_clone = error.clone();
+            
+            Some(thread::spawn(move || {
+                if let Err(e) = Self::audio_playback_loop(
+                    &video_path_clone,
+                    audio_idx,
+                    audio_tx,
+                    eos_clone.clone(),
+                    error_clone.clone(),
+                ) {
+                    log::error!("Audio playback error: {}", e);
+                }
+            }))
+        } else {
+            None
+        };
 
-    fn pull_frame(appsink: &AppSink) -> Option<ColorImage> {
-        let sample = appsink.pull_sample().ok()?;
-        let buffer = sample.buffer()?;
-        let caps = sample.caps()?;
-        let video_info = VideoInfo::from_caps(caps).ok()?;
+        self._video_thread = Some(video_handle);
+        self._audio_thread = audio_handle;
+        self._audio_stream = audio_stream;
 
-        // Create a readable video frame
-        let frame = VideoFrame::from_buffer_readable(buffer.copy(), &video_info).ok()?;
-
-        let width = video_info.width() as usize;
-        let height = video_info.height() as usize;
-
-        // Get the frame data
-        let plane_data = frame.plane_data(0).ok()?;
-
-        Some(ColorImage::from_rgba_unmultiplied(
-            [width, height],
-            plane_data,
-        ))
-    }
-
-    pub fn play(&self) -> Result<()> {
-        println!("Setting pipeline to PLAYING state");
-        self.pipeline
-            .set_state(State::Playing)
-            .map_err(|e| anyhow!("Failed to set pipeline to PLAYING: {:?}", e))?;
         Ok(())
     }
 
+    fn setup_audio_output(audio_rx: Receiver<Vec<f32>>) -> Result<Stream> {
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .ok_or_else(|| anyhow!("No audio output device found"))?;
+        
+        let config = device.default_output_config()?;
+        log::info!("Audio output config: {:?}", config);
+
+        let audio_buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
+        let audio_buffer_clone = audio_buffer.clone();
+
+        thread::spawn(move || {
+            while let Ok(samples) = audio_rx.recv() {
+                let mut buffer = audio_buffer_clone.lock().unwrap();
+                buffer.extend_from_slice(&samples);
+            }
+        });
+
+        let stream = device.build_output_stream(
+            &config.into(),
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                let mut buffer = audio_buffer.lock().unwrap();
+                let len = data.len().min(buffer.len());
+                if len > 0 {
+                    data[..len].copy_from_slice(&buffer[..len]);
+                    buffer.drain(..len);
+                    if len < data.len() {
+                        data[len..].fill(0.0);
+                    }
+                } else {
+                    data.fill(0.0);
+                }
+            },
+            |err| eprintln!("Audio stream error: {}", err),
+            None,
+        )?;
+
+        stream.play()?;
+        log::info!("Audio stream started");
+        Ok(stream)
+    }
+
+    fn video_playback_loop(
+        video_path: &str,
+        video_stream_index: usize,
+        texture_sender: watch::Sender<Option<ColorImage>>,
+        eos: Arc<AtomicBool>,
+        error: Arc<Mutex<Option<String>>>,
+    ) -> Result<()> {
+        let mut ictx = ffmpeg::format::input(video_path)?;
+        let video_stream = ictx.streams().nth(video_stream_index).unwrap();
+
+        let context_decoder =
+            ffmpeg::codec::context::Context::from_parameters(video_stream.parameters())?;
+        let mut decoder = context_decoder.decoder().video()?;
+
+        let mut scaler = ffmpeg::software::scaling::context::Context::get(
+            decoder.format(),
+            decoder.width(),
+            decoder.height(),
+            ffmpeg::format::Pixel::RGBA,
+            decoder.width(),
+            decoder.height(),
+            ffmpeg::software::scaling::flag::Flags::BILINEAR,
+        )?;
+
+        let frame_rate = video_stream.avg_frame_rate();
+        let frame_duration = if frame_rate.numerator() > 0 {
+            Duration::from_secs_f64(frame_rate.denominator() as f64 / frame_rate.numerator() as f64)
+        } else {
+            Duration::from_millis(33)
+        };
+
+        let start_time = Instant::now();
+        let mut frame_count = 0u64;
+
+        for (stream, packet) in ictx.packets() {
+            if eos.load(Ordering::SeqCst) {
+                log::info!("Video playback stopped by user");
+                return Ok(());
+            }
+
+            if stream.index() == video_stream_index {
+                if let Err(e) = decoder.send_packet(&packet) {
+                    *error.lock().unwrap() = Some(format!("Failed to send packet: {}", e));
+                    return Err(anyhow!("Failed to send packet: {}", e));
+                }
+
+                let mut decoded = ffmpeg::util::frame::video::Video::empty();
+                while decoder.receive_frame(&mut decoded).is_ok() {
+                    if eos.load(Ordering::SeqCst) {
+                        log::info!("Video playback stopped during frame decode");
+                        return Ok(());
+                    }
+
+                    let mut rgb_frame = ffmpeg::util::frame::video::Video::empty();
+                    scaler.run(&decoded, &mut rgb_frame)?;
+
+                    let width = rgb_frame.width() as usize;
+                    let height = rgb_frame.height() as usize;
+                    let data = rgb_frame.data(0);
+
+                    let color_image = ColorImage::from_rgba_unmultiplied([width, height], data);
+
+                    if texture_sender.send(Some(color_image)).is_err() {
+                        log::warn!("Failed to send frame to texture channel");
+                        return Ok(());
+                    }
+
+                    frame_count += 1;
+                    let expected_time = start_time + frame_duration * frame_count as u32;
+                    let now = Instant::now();
+                    if expected_time > now {
+                        thread::sleep(expected_time - now);
+                    }
+                }
+            }
+        }
+
+        if !eos.load(Ordering::SeqCst) {
+            decoder.send_eof().ok();
+            let mut decoded = ffmpeg::util::frame::video::Video::empty();
+            while decoder.receive_frame(&mut decoded).is_ok() {
+                if eos.load(Ordering::SeqCst) {
+                    break;
+                }
+
+                let mut rgb_frame = ffmpeg::util::frame::video::Video::empty();
+                scaler.run(&decoded, &mut rgb_frame).ok();
+
+                let width = rgb_frame.width() as usize;
+                let height = rgb_frame.height() as usize;
+                let data = rgb_frame.data(0);
+
+                let color_image = ColorImage::from_rgba_unmultiplied([width, height], data);
+                texture_sender.send(Some(color_image)).ok();
+
+                frame_count += 1;
+                let expected_time = start_time + frame_duration * frame_count as u32;
+                let now = Instant::now();
+                if expected_time > now {
+                    thread::sleep(expected_time - now);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn audio_playback_loop(
+        video_path: &str,
+        audio_stream_index: usize,
+        audio_tx: Sender<Vec<f32>>,
+        eos: Arc<AtomicBool>,
+        _error: Arc<Mutex<Option<String>>>,
+    ) -> Result<()> {
+        let mut ictx = ffmpeg::format::input(video_path)?;
+        let audio_stream = ictx.streams().nth(audio_stream_index).unwrap();
+
+        let context_decoder =
+            ffmpeg::codec::context::Context::from_parameters(audio_stream.parameters())?;
+        let mut decoder = context_decoder.decoder().audio()?;
+
+        for (stream, packet) in ictx.packets() {
+            if eos.load(Ordering::SeqCst) {
+                log::info!("Audio playback stopped by user");
+                return Ok(());
+            }
+
+            if stream.index() == audio_stream_index {
+                decoder.send_packet(&packet)?;
+
+                let mut decoded = ffmpeg::util::frame::audio::Audio::empty();
+                while decoder.receive_frame(&mut decoded).is_ok() {
+                    if eos.load(Ordering::SeqCst) {
+                        return Ok(());
+                    }
+
+                    let samples = Self::convert_audio_frame(&decoded)?;
+                    if audio_tx.send(samples).is_err() {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        decoder.send_eof().ok();
+        let mut decoded = ffmpeg::util::frame::audio::Audio::empty();
+        while decoder.receive_frame(&mut decoded).is_ok() {
+            if eos.load(Ordering::SeqCst) {
+                break;
+            }
+            let samples = Self::convert_audio_frame(&decoded)?;
+            audio_tx.send(samples).ok();
+        }
+
+        Ok(())
+    }
+
+    fn convert_audio_frame(frame: &ffmpeg::util::frame::audio::Audio) -> Result<Vec<f32>> {
+        let format = frame.format();
+        let channels = frame.channels() as usize;
+        let samples = frame.samples();
+        
+        let mut output = Vec::new();
+
+        match format {
+            ffmpeg::format::Sample::F32(sample_type) => {
+                let data = frame.data(0);
+                let float_data = unsafe {
+                    std::slice::from_raw_parts(
+                        data.as_ptr() as *const f32,
+                        samples * channels,
+                    )
+                };
+                
+                if sample_type == ffmpeg::format::sample::Type::Packed {
+                    output.extend_from_slice(float_data);
+                } else {
+                    for i in 0..samples {
+                        for ch in 0..channels {
+                            let ch_data = frame.data(ch);
+                            let ch_float = unsafe {
+                                std::slice::from_raw_parts(
+                                    ch_data.as_ptr() as *const f32,
+                                    samples,
+                                )
+                            };
+                            output.push(ch_float[i]);
+                        }
+                    }
+                }
+            }
+            ffmpeg::format::Sample::I16(sample_type) => {
+                let data = frame.data(0);
+                let i16_data = unsafe {
+                    std::slice::from_raw_parts(
+                        data.as_ptr() as *const i16,
+                        samples * channels,
+                    )
+                };
+                
+                if sample_type == ffmpeg::format::sample::Type::Packed {
+                    for &sample in i16_data {
+                        output.push(sample as f32 / 32768.0);
+                    }
+                } else {
+                    for i in 0..samples {
+                        for ch in 0..channels {
+                            let ch_data = frame.data(ch);
+                            let ch_i16 = unsafe {
+                                std::slice::from_raw_parts(
+                                    ch_data.as_ptr() as *const i16,
+                                    samples,
+                                )
+                            };
+                            output.push(ch_i16[i] as f32 / 32768.0);
+                        }
+                    }
+                }
+            }
+            _ => {
+                return Err(anyhow!("Unsupported audio format: {:?}", format));
+            }
+        }
+
+        Ok(output)
+    }
+
     pub fn stop(&self) -> Result<()> {
-        println!("Stopping pipeline");
-
-        // First pause
-        let _ = self.pipeline.set_state(State::Paused);
-
-        // Then set to NULL
-        self.pipeline
-            .set_state(State::Null)
-            .map_err(|e| anyhow!("Failed to set pipeline to NULL: {:?}", e))?;
-
+        log::info!("Stopping FFmpeg player");
+        self.eos.store(true, Ordering::SeqCst);
         Ok(())
     }
 
     pub fn is_eos(&self) -> bool {
-        *self.eos.lock().unwrap()
+        self.eos.load(Ordering::SeqCst)
     }
 
     pub fn get_error(&self) -> Option<String> {
@@ -241,156 +424,7 @@ impl VideoPlayer {
 
 impl Drop for VideoPlayer {
     fn drop(&mut self) {
-        println!("Dropping VideoPlayer, cleaning up pipeline");
-        // Ensure pipeline is stopped before drop
-        let _ = self.stop();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use tempfile::NamedTempFile;
-    use tokio::sync::watch;
-
-    pub fn setup_gstreamer() -> bool {
-        if gstreamer::init().is_err() {
-            return false;
-        }
-        // Try to create a playbin to check if GStreamer is properly installed
-        gstreamer::ElementFactory::make("playbin").build().is_ok()
-    }
-
-    #[test]
-    fn test_play_success() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let temp_file = NamedTempFile::new().unwrap();
-        let uri = format!("file://{}", temp_file.path().to_str().unwrap());
-        if let Ok(player) = VideoPlayer::new(&uri, tx) {
-            let result = player.play();
-            assert!(result.is_ok());
-        }
-    }
-
-    #[test]
-    fn test_stop_success() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let temp_file = NamedTempFile::new().unwrap();
-        let uri = format!("file://{}", temp_file.path().to_str().unwrap());
-        if let Ok(player) = VideoPlayer::new(&uri, tx) {
-            let result = player.stop();
-            assert!(result.is_ok());
-        }
-    }
-
-    #[test]
-    fn test_play_after_stop() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let temp_file = NamedTempFile::new().unwrap();
-        let uri = format!("file://{}", temp_file.path().to_str().unwrap());
-        if let Ok(player) = VideoPlayer::new(&uri, tx) {
-            player.stop().unwrap();
-            let result = player.play();
-            // May fail or succeed, but test that it's called
-            // In practice, after stop, play may work
-            assert!(result.is_ok() || result.is_err()); // Allow either for coverage
-        }
-    }
-
-    #[test]
-    fn test_stop_twice() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let temp_file = NamedTempFile::new().unwrap();
-        let uri = format!("file://{}", temp_file.path().to_str().unwrap());
-        if let Ok(player) = VideoPlayer::new(&uri, tx) {
-            player.stop().unwrap();
-            let result = player.stop();
-            assert!(result.is_ok());
-        }
-    }
-
-    #[test]
-    fn test_new_invalid_uri() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let _player = VideoPlayer::new("invalid_uri", tx.clone());
-        // GStreamer may accept invalid URIs initially, but for test, assume it might fail or succeed
-        // In practice, it may succeed, so perhaps this test is not reliable
-        // Instead, use a non-existent file
-        let uri = "file:///definitely/nonexistent/file.mp4";
-        let _player = VideoPlayer::new(uri, tx.clone());
-        // May succeed or fail depending on GStreamer behavior
-        // For coverage, assume it's ok
-    }
-
-    #[test]
-    fn test_is_eos_initial_false() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let temp_file = NamedTempFile::new().unwrap();
-        let uri = format!("file://{}", temp_file.path().to_str().unwrap());
-        if let Ok(player) = VideoPlayer::new(&uri, tx) {
-            assert!(!player.is_eos());
-        }
-    }
-
-    #[test]
-    fn test_new_nonexistent_file() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let uri = "file:///nonexistent/file.mp4".to_string();
-        let player = VideoPlayer::new(&uri, tx);
-        // GStreamer may still create the pipeline, so may succeed or fail
-        // Allow either for coverage
-        let _ = player;
-    }
-
-    #[test]
-    fn test_eos_and_error_manipulation() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let temp_file = NamedTempFile::new().unwrap();
-        let uri = format!("file://{}", temp_file.path().to_str().unwrap());
-        if let Ok(player) = VideoPlayer::new(&uri, tx) {
-            // Manually set eos for testing
-            *player.eos.lock().unwrap() = true;
-            assert!(player.is_eos());
-            *player.error.lock().unwrap() = Some("test error".to_string());
-            assert_eq!(player.get_error(), Some("test error".to_string()));
-        }
-    }
-
-    #[test]
-    fn test_get_error_initial_none() {
-        if !setup_gstreamer() {
-            return;
-        }
-        let (tx, _rx) = watch::channel(None);
-        let temp_file = NamedTempFile::new().unwrap();
-        let uri = format!("file://{}", temp_file.path().to_str().unwrap());
-        if let Ok(player) = VideoPlayer::new(&uri, tx) {
-            assert!(player.get_error().is_none());
-        }
+        log::info!("Dropping VideoPlayer");
+        self.eos.store(true, Ordering::SeqCst);
     }
 }

@@ -1,6 +1,6 @@
 # Summit Hip Numbers Media Player
 
-A native GUI media player built with Rust, egui, and GStreamer for passive video playback with hip number input switching.
+A native GUI media player built with Rust, egui, and FFmpeg for passive video playback with hip number input switching.
 
 ## Applications
 
@@ -14,6 +14,7 @@ A utility for preparing USB drives with the media player and video content. See 
 
 ## Features
 
+- **Simplified Deployment**: FFmpeg-based video playback requires only ~5 DLLs (vs GStreamer's 50+)
 - **Reproducible Builds**: Uses Nix Flakes for consistent development and build environments across platforms
 - **Demo Mode**: Hardcoded settings for consistent demo experience (5-minute timeout, max 5 videos, hip numbers 1-5)
 - Passive cycling through video files in directory order
@@ -23,16 +24,16 @@ A utility for preparing USB drives with the media player and video content. See 
 - Fullscreen kiosk mode with customizable layout (default: 92% display area, 8% status bar)
 - Configuration GUI application for easy setup
 - Splash screen with image/text support and configurable intervals
-- Support for MP4 and other GStreamer-supported video formats
+- Support for MP4 and other FFmpeg-supported video formats
 - Cross-platform: Windows, macOS, Linux
-- Portable Windows distribution with bundled GStreamer runtime
+- **Ultra-portable Windows distribution** with only essential FFmpeg DLLs (no complex plugin system!)
 
 ## Requirements
 
 ### System Dependencies
 
 - **Nix**: For managing system dependencies and reproducible builds
-- **GStreamer**: Video playback framework (automatically managed by Nix)
+- **FFmpeg**: Video playback library (automatically managed by Nix, much simpler than GStreamer!)
 
 ### Rust Dependencies
 
@@ -61,23 +62,27 @@ cargo build --release
 
 ### Windows
 
-On Windows 10/11, use the provided PowerShell script to download the source code and install all dependencies:
+On Windows 10/11, use the provided PowerShell script for a **one-step installation**:
 
 ```powershell
-# Download source and install everything (recommended)
-iwr -useb https://raw.githubusercontent.com/millerjes37/summit_hip_numbers/main/install_windows.ps1 | iex
-
-# Or if you have the repository cloned already:
-.\install_windows.ps1
+# One-step: Download, install dependencies, build, and create portable distribution
+.\scripts\install_windows.ps1
 
 # Install dependencies only (skip build)
-.\install_windows.ps1 -SkipBuild
+.\scripts\install_windows.ps1 -SkipBuild
 
 # Then build separately
-.\build_windows.ps1
+.\scripts\build_windows.ps1
 ```
 
-This automatically clones the repository and uses winget to install Rust and GStreamer.
+**What it does:**
+- Installs Rust via winget
+- Installs FFmpeg (only ~5 DLLs needed!)
+- Builds the application
+- Creates portable `dist/` folder with everything bundled
+- No complex plugin system like GStreamer!
+
+The portable distribution can be copied to any Windows 10+ machine and run without installation.
 
 ## Configuration
 
@@ -180,10 +185,13 @@ iwr -useb https://raw.githubusercontent.com/millerjes37/summit_hip_numbers/main/
 Or use the build script after installing dependencies:
 
 ```powershell
-.\build_windows.ps1
+.\scripts\build_windows.ps1
 ```
 
-The install script automatically clones the repository and uses winget to install Rust and GStreamer.
+**Windows builds are now dramatically simpler:**
+- FFmpeg: ~5 DLLs (avutil, avcodec, avformat, swscale, swresample)
+- GStreamer (old): 50+ DLLs + complex plugin discovery system
+- **10x fewer dependencies = much easier deployment!**
 
 ### Cross-Compilation
 
@@ -239,7 +247,7 @@ The media player will look for a `config.toml` file in the current directory and
 - **Manual Switching**: Type 3-digit numbers to switch videos instantly
 - **Auto Playback**: Videos play automatically in sequence when not manually switched
 - **Arrow Navigation**: Use ↑/↓ arrow keys to navigate to previous/next video (if enabled)
-- **Supported Formats**: MP4 and other GStreamer-compatible video formats
+- **Supported Formats**: MP4 and other FFmpeg-compatible video formats
 
 ### Demo Mode
 
@@ -254,7 +262,8 @@ When running the demo version:
 ### Technologies
 
 - **GUI**: Built with egui for native performance and cross-platform compatibility
-- **Video Playback**: GStreamer with Rust bindings for robust media support
+- **Video Playback**: FFmpeg with Rust bindings (ffmpeg-next) for robust media support
+- **Audio Playback**: cpal for cross-platform audio output with minimal dependencies
 - **Build System**: Reproducible builds with Nix Flakes
 - **Configuration**: TOML-based configuration with GUI editor
 - **Architecture**: Cargo workspace with multiple applications
@@ -272,20 +281,21 @@ When running the demo version:
 
 - Ensure Nix is installed and Flakes are enabled
 - Enter the Nix shell: `nix develop`
-- If GStreamer fails, check that Nix can access system packages
+- If FFmpeg fails, check that Nix can access system packages
 
 ### Runtime Issues
 
-- **Videos not loading**: Check that video files are in the configured directory and supported by GStreamer
+- **Videos not loading**: Check that video files are in the configured directory and supported by FFmpeg
 - **Demo mode restrictions**: Demo version limits videos to 5 and hip numbers to 001-005
 - **Configuration not applying**: Demo mode overrides many settings - check if running demo version
 - **Performance issues**: Always run in `--release` mode for optimal performance
 - **Config not loading**: Ensure `config.toml` is in the same directory as the executable
+- **No audio**: Ensure FFmpeg DLLs are present in the same directory as the executable (Windows)
 
 ### File Support
 
-- **Videos**: MP4, and other formats supported by GStreamer
-- Ensure GStreamer plugins are available in the Nix environment
+- **Videos**: MP4 (recommended), and other formats supported by FFmpeg (AVI, MKV, MOV, etc.)
+- FFmpeg supports virtually all common video codecs (H.264, H.265, VP9, AV1, etc.)
 
 ## Project Structure
 
@@ -298,7 +308,7 @@ crates/summit_hip_numbers/
 ├── src/
 │   ├── main.rs          # Main application logic and UI
 │   ├── file_scanner.rs  # Video file discovery and hip number assignment
-│   └── video_player.rs  # GStreamer video playback integration
+│   └── video_player.rs  # FFmpeg video playback integration
 ├── Cargo.toml           # Rust dependencies for media player
 ```
 
@@ -330,29 +340,36 @@ crates/usb_prep_tool/
 
 ### Portable Distribution (Windows)
 
-The Windows build script creates a fully portable version that can be distributed as a drag-and-drop folder:
+The Windows build script creates a **truly portable version** with minimal dependencies:
 
 ```powershell
-# Create portable distribution
-.\build_windows.ps1
+# One command creates everything
+.\scripts\build_windows.ps1
 ```
 
 This creates:
 - `dist/` folder with all files
 - `summit_hip_numbers_portable.zip` for easy distribution
 
-The portable version includes:
-- Application executable
-- GStreamer runtime (all DLLs and plugins)
+**What's included:**
+- Application executable (~10MB)
+- **Only ~5 FFmpeg DLLs** (avutil, avcodec, avformat, swscale, swresample)
 - Configuration file
-- Sample videos
+- Directory structure (videos/, splash/, logo/)
 - Launcher script (`run.bat`)
+
+**Distribution size comparison:**
+- **With FFmpeg**: ~30-50MB total
+- With GStreamer (old): 150-200MB+ with 50+ DLLs and plugins
+- **70% smaller distributions!**
 
 **To use the portable version:**
 1. Extract the zip file to any Windows 10+ computer
-2. Double-click `run.bat` to start
-3. Add your videos to the `videos/` folder
+2. Add your videos to the `videos/` folder
+3. Double-click `run.bat` to start
 4. Edit `config.toml` for customization
+
+**No installation required!** All dependencies are bundled.
 
 ### Platform-Specific Distribution
 
@@ -362,7 +379,8 @@ The portable version includes:
 3. Include `config.toml` and your videos directory
 4. The Nix-built executable is self-contained
 
-#### Windows (Alternative)
-1. Build with `.\build_windows.ps1 -SkipGStreamer`
-2. Requires GStreamer installed on target systems
-3. Smaller distribution but less portable
+#### Windows
+**Recommended approach:** Use the portable distribution (see above)
+- No dependencies to install on target machines
+- Works on any Windows 10+ computer
+- Simple drag-and-drop deployment

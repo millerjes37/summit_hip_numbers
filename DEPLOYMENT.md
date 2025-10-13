@@ -63,23 +63,26 @@ cargo run --release --bin summit_hip_numbers -- --config
 
 ### Windows
 
-#### Development
-```bash
-# Uses config.toml with assets/ directory
-cargo run --release --bin summit_hip_numbers
-```
-
-#### Distribution Build
+#### One-Step Installation & Build
 ```powershell
-# Run from project root
-.\scripts\build_windows.ps1
+# Downloads dependencies, builds, and creates portable distribution
+.\scripts\install_windows.ps1
 
 # Creates dist/ folder with:
 # - summit_hip_numbers.exe
 # - config.toml (from config.dist.toml)
 # - run.bat launcher
 # - videos/, splash/, logo/ directories
-# - All required GStreamer DLLs
+# - Only ~5 FFmpeg DLLs (simplified vs GStreamer's 50+ DLLs!)
+```
+
+#### Manual Build (if already have dependencies)
+```powershell
+# Build executable
+cargo build --release
+
+# Create portable distribution
+.\scripts\build_windows.ps1
 ```
 
 #### Deployment
@@ -87,6 +90,8 @@ cargo run --release --bin summit_hip_numbers
 2. Place video files in `videos/` directory
 3. Place splash images in `splash/` directory
 4. Double-click `run.bat` to launch
+
+**No additional dependencies needed on target machine!** FFmpeg DLLs are included.
 
 ### macOS
 
@@ -203,10 +208,10 @@ Where NNN is a 3-digit number (e.g., 001, 002, 003)
 2. Ensure videos are in supported format (MP4 recommended)
 3. Verify video files have proper hip number prefix (001_, 002_, etc.)
 
-### GStreamer Issues (Windows)
-1. Ensure all DLLs are in the distribution folder
+### FFmpeg Issues (Windows)
+1. Ensure FFmpeg DLLs are in the distribution folder (~5 DLLs)
 2. Run from `run.bat` instead of directly executing .exe
-3. Check that Visual C++ Redistributables are installed
+3. Check that Visual C++ Redistributables are installed (usually pre-installed on Windows 10+)
 
 ### Splash Screen Issues
 1. Verify splash directory contains image files

@@ -1,11 +1,8 @@
 mod file_scanner;
-#[cfg(feature = "gstreamer")]
 mod video_player;
 
 use clap::Parser;
 use eframe::egui;
-#[cfg(feature = "gstreamer")]
-use gstreamer::glib;
 
 use file_scanner::{scan_video_files, VideoFile};
 
@@ -23,7 +20,6 @@ use std::path::PathBuf;
 #[cfg(feature = "demo")]
 use std::time::Instant;
 use tokio::sync::watch;
-#[cfg(feature = "gstreamer")]
 use video_player::VideoPlayer;
 
 use log::{error, info, warn};
@@ -561,11 +557,9 @@ struct MediaPlayerApp {
     current_file_name: String,
     splash_timer: f64,
     show_splash: bool,
-    #[cfg(feature = "gstreamer")]
     video_player: Option<VideoPlayer>,
     load_video_index: Option<usize>,
     invalid_input_timer: f64,
-    #[cfg(feature = "gstreamer")]
     texture_sender: watch::Sender<Option<egui::ColorImage>>,
     texture_receiver: watch::Receiver<Option<egui::ColorImage>>,
     current_texture: Option<egui::TextureHandle>,
@@ -720,7 +714,6 @@ impl Default for MediaPlayerApp {
             current_file_name: "No file loaded".to_string(),
             splash_timer: 0.0,
             show_splash: true,
-            #[cfg(feature = "gstreamer")]
             video_player: None,
             load_video_index: None,
             invalid_input_timer: 0.0,
@@ -1040,15 +1033,12 @@ impl MediaPlayerApp {
         }
     }
 
-    #[cfg(feature = "gstreamer")]
     fn load_video(&mut self, index: usize) {
-        // Stop and drop the current player
         if let Some(player) = self.video_player.take() {
             if let Err(e) = player.stop() {
                 eprintln!("Error stopping player: {}", e);
             }
-            // Give GStreamer a moment to clean up
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
 
         if let Some(video_file) = self.video_files.get(index) {
@@ -1067,21 +1057,11 @@ impl MediaPlayerApp {
                     return;
                 }
             };
-            let uri = match glib::filename_to_uri(&abs_path, None) {
-                Ok(uri) => uri.to_string(),
-                Err(e) => {
-                    error!(
-                        "Failed to convert path to URI {}: {}",
-                        abs_path.display(),
-                        e
-                    );
-                    self.current_file_name = format!("Error: {}", e);
-                    return;
-                }
-            };
+
+            let uri = format!("file://{}", abs_path.display());
 
             match VideoPlayer::new(&uri, self.texture_sender.clone()) {
-                Ok(player) => {
+                Ok(mut player) => {
                     if let Err(e) = player.play() {
                         error!("Failed to play video: {}", e);
                         self.current_file_name = format!("Error: {}", e);
@@ -1099,14 +1079,7 @@ impl MediaPlayerApp {
             error!("Invalid video index {}", index);
         }
 
-        // Trim log after loading video
         self.trim_log();
-    }
-
-    #[cfg(not(feature = "gstreamer"))]
-    fn load_video(&mut self, _index: usize) {
-        // Mock implementation for testing
-        self.current_file_name = "Mock loaded".to_string();
     }
 
     fn validate_and_switch(&mut self, input: &str) -> bool {
@@ -1220,18 +1193,14 @@ impl MediaPlayerApp {
         egui::Color32::WHITE
     }
 
-    #[cfg(feature = "gstreamer")]
     fn update_playback(&mut self, _current_time: f64) {
-        #[cfg(feature = "gstreamer")]
         if let Some(player) = &self.video_player {
-            // Check for errors first
             if let Some(error) = player.get_error() {
                 error!("Playback error detected: {}", error);
                 self.next_video();
                 return;
             }
 
-            // Check for end of stream
             if player.is_eos() {
                 info!("EOS detected, loading next video");
                 self.next_video();
@@ -1252,6 +1221,10 @@ impl eframe::App for MediaPlayerApp {
                     info!("Hiding splash screen after duration (videos loaded, interval=0)");
                     self.show_splash = false;
                     self.splash_texture = None;
+                    // Increment videos_played to prevent splash from showing again
+                    if self.videos_played == 0 {
+                        self.videos_played = 1;
+                    }
                 } else if self.video_files.is_empty() && !self.splash_images.is_empty() {
                     // If no videos are loaded, keep cycling splash screens
                     // Reset timer and move to next splash (if multiple)
@@ -1800,27 +1773,7 @@ fn main() -> eframe::Result<()> {
         // Load config to check kiosk mode
         let config = load_config_for_kiosk();
 
-        // Set GStreamer plugin path for bundled plugins
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-                // For portable distribution, check for gstreamer directory
-                let gstreamer_plugin_path = exe_dir.join("lib").join("gstreamer-1.0");
-                if gstreamer_plugin_path.exists() {
-                    info!(
-                        "Found bundled GStreamer plugins at: {}",
-                        gstreamer_plugin_path.display()
-                    );
-                    std::env::set_var("GST_PLUGIN_PATH", gstreamer_plugin_path);
-                } else {
-                    warn!(
-                        "Bundled GStreamer plugin directory not found. Relying on system-wide installation."
-                    );
-                }
-            }
-        }
 
-        #[cfg(feature = "gstreamer")]
-        gstreamer::init().expect("Failed to initialize GStreamer");
 
         let mut viewport = egui::ViewportBuilder::default()
             .with_inner_size([config.ui.window_width, config.ui.window_height]);
@@ -2147,7 +2100,6 @@ mod tests {
         assert_eq!(app.current_file_name, "No file loaded");
         assert_eq!(app.splash_timer, 0.0);
         assert!(app.show_splash);
-        #[cfg(feature = "gstreamer")]
         assert!(app.video_player.is_none());
         assert_eq!(app.videos_played, 0);
     }
