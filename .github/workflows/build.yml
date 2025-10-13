@@ -133,13 +133,18 @@ jobs:
       - name: Verify System Dependencies
         shell: msys2 {0}
         run: |
+          set +e  # Don't exit on error
           echo "============================================"
           echo "  VERIFYING SYSTEM DEPENDENCIES"
           echo "============================================"
           
-          # Verify critical system DLLs are present
-          CRITICAL_DLLS=(
-            "libxml2-2.dll"
+          # Check what's actually installed
+          echo "Checking /mingw64/bin for relevant DLLs..."
+          ls -la /mingw64/bin/libxml2*.dll 2>/dev/null || echo "  No libxml2 DLL variants found"
+          ls -la /mingw64/bin/liblzma*.dll 2>/dev/null || echo "  No liblzma DLL variants found"
+          
+          # Verify system DLLs are present
+          SYSTEM_DLLS=(
             "liblzma-5.dll"
             "libbz2-1.dll"
             "libfreetype-6.dll"
@@ -149,23 +154,39 @@ jobs:
           )
           
           MISSING_COUNT=0
-          for dll in "${CRITICAL_DLLS[@]}"; do
+          for dll in "${SYSTEM_DLLS[@]}"; do
             if [ -f "/mingw64/bin/$dll" ]; then
               echo "  ✓ $dll found"
             else
               echo "  ✗ $dll NOT FOUND"
-              ((MISSING_COUNT++))
+              MISSING_COUNT=$((MISSING_COUNT + 1))
             fi
           done
           
+          # Check for libxml2 separately since it may have different versions
+          if [ -f "/mingw64/bin/libxml2-2.dll" ]; then
+            echo "  ✓ libxml2-2.dll found"
+          elif [ -f "/mingw64/bin/libxml2.dll" ]; then
+            echo "  ✓ libxml2.dll found (alternative version)"
+          else
+            echo "  ⚠ libxml2 NOT FOUND (optional - needed for some media formats)"
+            MISSING_COUNT=$((MISSING_COUNT + 1))
+          fi
+          
           if [ $MISSING_COUNT -gt 0 ]; then
+            echo ""
             echo "  ⚠ Warning: $MISSING_COUNT system DLLs not found"
             echo "  These are optional but recommended for full functionality"
+            echo "  Build will continue - missing DLLs will be skipped"
           else
+            echo ""
             echo "  ✓ All system dependencies found"
           fi
           
           echo "============================================"
+          
+          # Always exit successfully - these are optional dependencies
+          exit 0
       
       - name: Setup Rust GNU Toolchain
         uses: dtolnay/rust-toolchain@stable

@@ -100,6 +100,20 @@ copy_dll_safe() {
             return 1
         fi
     else
+        # Try alternative names for certain DLLs
+        case "$dll_name" in
+            libxml2-2.dll)
+                # Try libxml2.dll without version suffix
+                if [ -f "/mingw64/bin/libxml2.dll" ]; then
+                    if cp "/mingw64/bin/libxml2.dll" "$dest_path" 2>/dev/null; then
+                        local size=$(stat -c%s "/mingw64/bin/libxml2.dll" 2>/dev/null || echo "unknown")
+                        log "  ✓ $dll_name (found as libxml2.dll, $size bytes)"
+                        return 0
+                    fi
+                fi
+                ;;
+        esac
+        
         log "  ⚠ $dll_name not found"
         return 1
     fi
