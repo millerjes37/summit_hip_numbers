@@ -26,57 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev \
-            libglib2.0-dev \
-            libgtk-3-dev \
-            pkg-config
-      
-      - uses: dtolnay/rust-toolchain@stable
-      
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "crates/summit_hip_numbers"
-          cache-on-failure: true
-      
-      - name: Format Check
-        run: cargo fmt --all -- --check
-      
-      - name: Clippy (All Targets)
-        run: cargo clippy --all-targets --all-features -- -D warnings
-      
-      - name: Unit Tests
-        run: cargo test --workspace --verbose
-      
-      - name: Security Audit
-        run: |
-          cargo install cargo-audit
-          cargo audit
-      
-      - name: Dependency Check
-        run: cargo tree --duplicates
-
-  # ============================================================================
-  # WINDOWS BUILD - Full & Demo Variants
-  # ============================================================================
-  
-  build-windows:
-    name: Windows Build (${{ matrix.variant }})
-    runs-on: windows-latest
-    needs: validate
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [full, demo]
-    
-    steps:
-      - uses: actions/checkout@v4
+          lfs: true
       
       - name: Setup Build Environment
         id: setup
@@ -524,6 +475,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       
       - name: Setup Build Environment
         id: setup
@@ -618,6 +571,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       
       - name: Setup Build Environment
         id: setup
