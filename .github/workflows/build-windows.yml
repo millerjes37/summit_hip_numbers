@@ -87,8 +87,8 @@ jobs:
          echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
          echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
 
-          # Tell ffmpeg-sys-next to use pkg-config
-          echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
+          # Force direct header paths instead of pkg-config to avoid /usr/include issues
+          echo "FFMPEG_PKG_CONFIG=0" >> $GITHUB_ENV
 
     - name: Create Distribution
       shell: msys2 {0}
