@@ -294,9 +294,11 @@ jobs:
           
           # Configure clang to use MSYS2 system headers properly
           # The key issue is that bindgen's clang needs to find MinGW headers, not MSYS headers
+          # Also need to prevent it from looking in /usr/include (which doesn't exist in MSYS2)
           CLANG_ARGS="-I/mingw64/include"
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
           CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32"
+          CLANG_ARGS="$CLANG_ARGS --sysroot=/mingw64"
           CLANG_ARGS="$CLANG_ARGS -D__MINGW64__"
           CLANG_ARGS="$CLANG_ARGS -fms-extensions"
           
@@ -305,6 +307,9 @@ jobs:
           # FFmpeg include paths for pkg-config fallback
           echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
           echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
+          
+          # Tell ffmpeg-sys-next to use pkg-config (not search for static libs)
+          echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
           
           # Verify FFmpeg headers are accessible
           echo ""
@@ -317,15 +322,22 @@ jobs:
             fi
           done
           
+          # Check if deprecated avfft.h exists (it shouldn't in FFmpeg 5.0+)
+          if [ -f "/mingw64/include/libavcodec/avfft.h" ]; then
+            echo "  ⚠ avfft.h found (deprecated, but present)"
+          else
+            echo "  ✓ avfft.h not present (expected for FFmpeg 5.0+)"
+          fi
+          
           # Verify pkg-config can find FFmpeg
           echo ""
           echo "Checking pkg-config for FFmpeg..."
           export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
-          pkg-config --exists libavcodec && echo "  ✓ libavcodec" || echo "  ✗ libavcodec NOT FOUND"
-          pkg-config --exists libavformat && echo "  ✓ libavformat" || echo "  ✗ libavformat NOT FOUND"
-          pkg-config --exists libavutil && echo "  ✓ libavutil" || echo "  ✗ libavutil NOT FOUND"
-          pkg-config --exists libswscale && echo "  ✓ libswscale" || echo "  ✗ libswscale NOT FOUND"
-          pkg-config --exists libswresample && echo "  ✓ libswresample" || echo "  ✗ libswresample NOT FOUND"
+          pkg-config --exists libavcodec && echo "  ✓ libavcodec (version $(pkg-config --modversion libavcodec))" || echo "  ✗ libavcodec NOT FOUND"
+          pkg-config --exists libavformat && echo "  ✓ libavformat (version $(pkg-config --modversion libavformat))" || echo "  ✗ libavformat NOT FOUND"
+          pkg-config --exists libavutil && echo "  ✓ libavutil (version $(pkg-config --modversion libavutil))" || echo "  ✗ libavutil NOT FOUND"
+          pkg-config --exists libswscale && echo "  ✓ libswscale (version $(pkg-config --modversion libswscale))" || echo "  ✗ libswscale NOT FOUND"
+          pkg-config --exists libswresample && echo "  ✓ libswresample (version $(pkg-config --modversion libswresample))" || echo "  ✗ libswresample NOT FOUND"
           
           echo ""
           echo "Environment configured for FFmpeg bindgen"
@@ -347,14 +359,17 @@ jobs:
           
           # FFmpeg bindgen configuration
           export LIBCLANG_PATH="${LIBCLANG_PATH:-/mingw64/bin}"
-          export BINDGEN_EXTRA_CLANG_ARGS="${BINDGEN_EXTRA_CLANG_ARGS:--I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32}"
+          export BINDGEN_EXTRA_CLANG_ARGS="${BINDGEN_EXTRA_CLANG_ARGS:--I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 --sysroot=/mingw64}"
           export FFMPEG_INCLUDE_DIR="${FFMPEG_INCLUDE_DIR:-/mingw64/include}"
           export FFMPEG_LIB_DIR="${FFMPEG_LIB_DIR:-/mingw64/lib}"
+          export FFMPEG_PKG_CONFIG="${FFMPEG_PKG_CONFIG:-1}"
           
           echo "Build environment:"
           echo "  LIBCLANG_PATH=$LIBCLANG_PATH"
           echo "  BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
           echo "  FFMPEG_INCLUDE_DIR=$FFMPEG_INCLUDE_DIR"
+          echo "  FFMPEG_LIB_DIR=$FFMPEG_LIB_DIR"
+          echo "  FFMPEG_PKG_CONFIG=$FFMPEG_PKG_CONFIG"
           echo "  PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           
           # Run the complete build script
