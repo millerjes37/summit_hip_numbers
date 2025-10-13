@@ -90,6 +90,35 @@ else
     log "Building full version..."
 fi
 
+# Configure bindgen to prevent looking in /usr/include
+log "Configuring bindgen environment..."
+
+# Find FFmpeg installation via pkg-config
+FFMPEG_INCLUDE_DIR=$(pkg-config --variable=includedir libavutil)
+if [ -z "$FFMPEG_INCLUDE_DIR" ]; then
+    FFMPEG_INCLUDE_DIR="/opt/homebrew/include"
+fi
+log "FFmpeg headers: $FFMPEG_INCLUDE_DIR"
+
+# Find clang builtin headers
+CLANG_BUILTIN_INCLUDE=$(find /Library/Developer/CommandLineTools/usr/lib/clang /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang -type d -name include 2>/dev/null | head -n1)
+if [ -z "$CLANG_BUILTIN_INCLUDE" ]; then
+    # Try homebrew clang
+    CLANG_BUILTIN_INCLUDE=$(find /opt/homebrew/opt/llvm/lib/clang -type d -name include 2>/dev/null | head -n1)
+fi
+log "Clang builtin headers: $CLANG_BUILTIN_INCLUDE"
+
+# Configure bindgen to use specific include paths only
+export BINDGEN_EXTRA_CLANG_ARGS="-nostdinc"
+if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
+    export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
+fi
+export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$FFMPEG_INCLUDE_DIR"
+export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include"
+export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include"
+
+log "BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
+
 # Build with cargo
 cargo build --release --package summit_hip_numbers $FEATURES 2>&1 | tee -a "$LOG_FILE"
 

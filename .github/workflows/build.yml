@@ -295,10 +295,17 @@ jobs:
           # Configure clang to use MSYS2 system headers properly
           # The key issue is that bindgen's clang needs to find MinGW headers, not MSYS headers
           # Also need to prevent it from looking in /usr/include (which doesn't exist in MSYS2)
+          
+          # Find clang builtin headers directory
+          CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
+          echo "Found clang builtin headers at: $CLANG_BUILTIN_INCLUDE"
+          
           CLANG_ARGS="-nostdinc"
+          if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
+            CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
+          fi
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/include"
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
-          CLANG_ARGS="$CLANG_ARGS -I/mingw64/lib/clang/*/include"
           CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32"
           CLANG_ARGS="$CLANG_ARGS --sysroot=/mingw64"
           CLANG_ARGS="$CLANG_ARGS -D__MINGW64__"
