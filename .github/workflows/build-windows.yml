@@ -92,6 +92,9 @@ jobs:
           # Force direct header paths instead of pkg-config to avoid /usr/include issues
           echo "FFMPEG_PKG_CONFIG=0" >> $GITHUB_ENV
 
+          # Override CPATH to prioritize our include paths
+          echo "CPATH=/mingw64/include:/mingw64/x86_64-w64-mingw32/include" >> $GITHUB_ENV
+
           # Create symlink to redirect /usr/include to /mingw64/include for stubborn crates
           mkdir -p /usr
           ln -sf /mingw64/include /usr/include
