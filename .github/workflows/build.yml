@@ -909,7 +909,7 @@ jobs:
             if (Test-Path $appLogFile) {
               $logContent = Get-Content $appLogFile
               $errors = $logContent | Select-String -Pattern "\[ERROR\]" -SimpleMatch
-              $gstErrors = $logContent | Select-String -Pattern "GStreamer Error" -SimpleMatch
+              $ffmpegErrors = $logContent | Select-String -Pattern "FFmpeg Error" -SimpleMatch
               $playbackErrors = $logContent | Select-String -Pattern "Playback error" -SimpleMatch
               
               Write-Host "    Log file size: $((Get-Item $appLogFile).Length) bytes" -ForegroundColor Gray
@@ -941,10 +941,10 @@ jobs:
                 Write-Host "    ⚠ Found $($playbackErrors.Count) playback errors:" -ForegroundColor Yellow
                 $playbackErrors | Select-Object -First 3 | ForEach-Object { Write-Host "      $_" -ForegroundColor Yellow }
                 
-                # Check if errors are critical (streaming stopped, reason not-linked)
-                $criticalErrors = $logContent | Select-String -Pattern "reason not-linked"
+                # Check if errors are critical (FFmpeg decode errors)
+                $criticalErrors = $logContent | Select-String -Pattern "decode error|invalid data"
                 if ($criticalErrors.Count -gt 0) {
-                  Write-Error "Critical GStreamer errors detected - video pipeline not working"
+                  Write-Error "Critical FFmpeg errors detected - video pipeline not working"
                   Write-Host "`n=== Last 30 log lines ===" -ForegroundColor Red
                   $logContent | Select-Object -Last 30 | ForEach-Object { Write-Host $_ }
                   Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue

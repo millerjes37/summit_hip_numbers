@@ -18,7 +18,7 @@
 [video]
 # Directory containing video files to be played
 # Files are sorted alphabetically and assigned hip numbers (001, 002, 003, etc.)
-# Supported formats: MP4, AVI, MKV, and other GStreamer-compatible formats
+# Supported formats: MP4, AVI, MKV, and other FFmpeg-compatible formats
 directory = "./videos"
 
 # =============================================================================
