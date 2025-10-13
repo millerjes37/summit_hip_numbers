@@ -17,6 +17,8 @@ env:
   RUST_LOG: debug
   LIBCLANG_PATH: /usr/lib/llvm-14/lib
   LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu
+  CPATH: /usr/include
+  C_INCLUDE_PATH: /usr/include
 
 jobs:
   # ============================================================================
