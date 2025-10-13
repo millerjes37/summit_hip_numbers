@@ -46,10 +46,8 @@ Name: "kioskmode"; Description: "Enable auto-start for kiosk mode"; Flags: unche
 Source: "..\dist\full\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; Configuration
 Source: "..\dist\full\config.toml"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
-; All DLLs
+; All DLLs (FFmpeg and dependencies)
 Source: "..\dist\full\*.dll"; DestDir: "{app}"; Flags: ignoreversion
-; GStreamer plugins
-Source: "..\dist\full\lib\gstreamer-1.0\*"; DestDir: "{app}\lib\gstreamer-1.0"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Documentation
 Source: "..\dist\full\README.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\full\VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
@@ -69,8 +67,7 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\run.bat"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 
 [Registry]
-; Create registry entries for GStreamer
-Root: HKLM; Subkey: "System\CurrentControlSet\Control\Session Manager\Environment"; ValueType: expandsz; ValueName: "GST_PLUGIN_PATH"; ValueData: "{app}\lib\gstreamer-1.0;{olddata}"; Flags: preservestringtype
+; Add application directory to PATH for FFmpeg DLLs
 Root: HKLM; Subkey: "System\CurrentControlSet\Control\Session Manager\Environment"; ValueType: expandsz; ValueName: "PATH"; ValueData: "{app};{olddata}"; Flags: preservestringtype
 ; Application registry entries
 Root: HKLM; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
