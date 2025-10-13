@@ -300,7 +300,10 @@ jobs:
           CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
           echo "Found clang builtin headers at: $CLANG_BUILTIN_INCLUDE"
           
-          CLANG_ARGS="-nostdinc"
+          # Set CLANG_ARGS for bindgen
+          # The key is to remap /usr/include to /mingw64/include since ffmpeg-sys-next 
+          # hardcodes Unix paths like /usr/include/libavcodec/avfft.h
+          CLANG_ARGS=""
           if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
             CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
           fi
@@ -308,8 +311,13 @@ jobs:
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
           CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32"
           CLANG_ARGS="$CLANG_ARGS --sysroot=/mingw64"
+          CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
           CLANG_ARGS="$CLANG_ARGS -D__MINGW64__"
           CLANG_ARGS="$CLANG_ARGS -fms-extensions"
+          
+          # Create symlink to trick ffmpeg-sys-next's hardcoded /usr/include check
+          mkdir -p /usr
+          ln -sf /mingw64/include /usr/include || true
           
           echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
           
