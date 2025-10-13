@@ -92,7 +92,7 @@ copy_dll_safe() {
     
     if [ -f "$source_path" ]; then
         if cp "$source_path" "$dest_path" 2>/dev/null; then
-            local size=$(stat -c%s "$source_path" 2>/dev/null || echo "unknown")
+            local size=$(stat -c%s "$source_path" 2>/dev/null || stat --format=%s "$source_path" 2>/dev/null || echo "unknown")
             log "  ✓ $dll_name ($size bytes)"
             return 0
         else
@@ -259,7 +259,7 @@ if [ -d "$SOURCE_PLUGIN_DIR" ]; then
         if [ -f "$source_plugin" ]; then
             cp "$source_plugin" "$PLUGIN_DIR/"
             log "  ✓ $plugin"
-            ((COPIED_PLUGINS++))
+            COPIED_PLUGINS=$((COPIED_PLUGINS + 1))
         else
             log "  ⚠ $plugin not found"
         fi
@@ -273,9 +273,11 @@ if [ -d "$SOURCE_PLUGIN_DIR" ]; then
             # Skip if already copied
             if [ ! -f "$PLUGIN_DIR/$plugin_name" ]; then
                 # Check file size (skip if > 10MB)
-                size=$(stat -c%s "$plugin_file" 2>/dev/null || echo "0")
+                size=$(stat -c%s "$plugin_file" 2>/dev/null || stat --format=%s "$plugin_file" 2>/dev/null || echo "0")
                 if [ "$size" -lt 10485760 ]; then  # 10MB
-                    cp "$plugin_file" "$PLUGIN_DIR/" 2>/dev/null && ((COPIED_PLUGINS++))
+                    if cp "$plugin_file" "$PLUGIN_DIR/" 2>/dev/null; then
+                        COPIED_PLUGINS=$((COPIED_PLUGINS + 1))
+                    fi
                 fi
             fi
         fi
@@ -597,7 +599,7 @@ zip -r "../summit_hip_numbers_${VARIANT}_portable.zip" "$VARIANT" >/dev/null 2>&
 cd ..
 
 if [ -f "summit_hip_numbers_${VARIANT}_portable.zip" ]; then
-    ZIP_SIZE=$(stat -c%s "summit_hip_numbers_${VARIANT}_portable.zip")
+    ZIP_SIZE=$(stat -c%s "summit_hip_numbers_${VARIANT}_portable.zip" 2>/dev/null || stat --format=%s "summit_hip_numbers_${VARIANT}_portable.zip" 2>/dev/null || echo "0")
     ZIP_SIZE_MB=$((ZIP_SIZE / 1024 / 1024))
     log "✓ Created portable ZIP: summit_hip_numbers_${VARIANT}_portable.zip (${ZIP_SIZE_MB} MB)"
 else
@@ -616,7 +618,7 @@ log ""
 log "Directory structure:"
 find "$DIST_DIR" -type f | head -20 | while read file; do
     rel_path=$(echo "$file" | sed "s|^$DIST_DIR/||")
-    size=$(stat -c%s "$file" 2>/dev/null || echo "?")
+    size=$(stat -c%s "$file" 2>/dev/null || stat --format=%s "$file" 2>/dev/null || echo "?")
     log "  $rel_path ($size bytes)"
 done
 
