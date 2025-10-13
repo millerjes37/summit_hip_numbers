@@ -85,12 +85,16 @@ jobs:
 
          echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
 
-         # FFmpeg include paths for pkg-config fallback
-         echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
-         echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
+          # FFmpeg include paths for pkg-config fallback
+          echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
+          echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
 
           # Force direct header paths instead of pkg-config to avoid /usr/include issues
           echo "FFMPEG_PKG_CONFIG=0" >> $GITHUB_ENV
+
+          # Create symlink to redirect /usr/include to /mingw64/include for stubborn crates
+          mkdir -p /usr
+          ln -sf /mingw64/include /usr/include
 
     - name: Create Distribution
       shell: msys2 {0}
