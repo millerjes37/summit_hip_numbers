@@ -134,7 +134,6 @@ if [ ${#MISSING_LIBS[@]} -ne 0 ]; then
     log_error "Missing FFmpeg libraries: ${MISSING_LIBS[*]}"
     exit 1
 fi
-done
 
 # Build the Rust project if not skipped
 if [ "$SKIP_BUILD" = false ]; then
