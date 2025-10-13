@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build script for macOS
 # Creates a DMG bundle with all dependencies
-# Run this on a macOS machine with Rust and GStreamer installed
+# Run this on a macOS machine with Rust and FFmpeg installed
 
 set -e  # Exit on error
 
@@ -60,9 +60,9 @@ for tool in cargo rustc pkg-config; do
     fi
 done
 
-# Check for GStreamer
-if ! pkg-config --exists gstreamer-1.0; then
-    log "${RED}Error: GStreamer not found. Install with: brew install gstreamer gst-plugins-base gst-plugins-good${NC}"
+# Check for FFmpeg
+if ! pkg-config --exists libavutil libavcodec libavformat; then
+    log "${RED}Error: FFmpeg not found. Install with: brew install ffmpeg${NC}"
     exit 1
 fi
 
@@ -197,19 +197,19 @@ else
     log "  ✓ Created placeholder AppIcon.icns"
 fi
 
-# Step 7: Bundle GStreamer frameworks (optional)
+# Step 7: Bundle FFmpeg frameworks (optional)
 log ""
-log "${YELLOW}[7/8] Checking GStreamer dependencies...${NC}"
+log "${YELLOW}[7/8] Checking FFmpeg dependencies...${NC}"
 
-# Get GStreamer location from pkg-config
-GST_PREFIX=$(pkg-config --variable=prefix gstreamer-1.0)
-if [ -n "$GST_PREFIX" ]; then
-    log "GStreamer found at: $GST_PREFIX"
+# Get FFmpeg location from pkg-config
+FFMPEG_PREFIX=$(pkg-config --variable=prefix libavutil)
+if [ -n "$FFMPEG_PREFIX" ]; then
+    log "FFmpeg found at: $FFMPEG_PREFIX"
     
     # Note: Full framework embedding would require more complex bundling
-    # For now, we'll rely on system GStreamer installation
-    log "${YELLOW}Note: This build requires GStreamer to be installed on the target system${NC}"
-    log "To create a fully portable bundle, consider using create-dmg with embedded frameworks"
+    # For now, we'll rely on system FFmpeg installation
+    log "${YELLOW}Note: This build requires FFmpeg to be installed on the target system${NC}"
+    log "To create a fully portable bundle, consider using dylibbundler with embedded frameworks"
 fi
 
 # Step 8: Sign the bundle (if certificates available)

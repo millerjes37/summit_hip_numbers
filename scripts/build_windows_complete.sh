@@ -122,13 +122,11 @@ copy_dll_safe() {
 # Copy all required DLLs to root directory (Windows standard)
 log "${YELLOW}=== Copying runtime dependencies ===${NC}"
 
-# Core GLib/GObject DLLs (required)
+# Core GLib/GObject DLLs (required for UI)
 GLIB_DLLS=(
     "libglib-2.0-0.dll"
-    "libgmodule-2.0-0.dll"
     "libgobject-2.0-0.dll"
     "libgio-2.0-0.dll"
-    "libgthread-2.0-0.dll"
     "libffi-8.dll"
     "libintl-8.dll"
     "libiconv-2.dll"
@@ -137,49 +135,31 @@ GLIB_DLLS=(
     "zlib1.dll"
 )
 
-# Core GStreamer DLLs (required)
-GSTREAMER_DLLS=(
-    "libgstreamer-1.0-0.dll"
-    "libgstbase-1.0-0.dll"
-    "libgstcontroller-1.0-0.dll"
-    "libgstnet-1.0-0.dll"
-    "libgstapp-1.0-0.dll"
-    "libgstvideo-1.0-0.dll"
-    "libgstaudio-1.0-0.dll"
-    "libgstpbutils-1.0-0.dll"
-    "libgsttag-1.0-0.dll"
-    "libgstriff-1.0-0.dll"
-    "libgstfft-1.0-0.dll"
-    "libgstrtp-1.0-0.dll"
-    "libgstrtsp-1.0-0.dll"
-    "libgstsdp-1.0-0.dll"
-    "libgstallocators-1.0-0.dll"
-    "libgstgl-1.0-0.dll"
+# Core FFmpeg DLLs (required for audio/video)
+FFMPEG_DLLS=(
+    "avutil-*.dll"
+    "avcodec-*.dll"
+    "avformat-*.dll"
+    "swscale-*.dll"
+    "swresample-*.dll"
 )
 
-# System DLLs (recommended but optional for basic functionality)
+# System DLLs (recommended for full functionality)
 SYSTEM_DLLS=(
     "libgcc_s_seh-1.dll"
     "libstdc++-6.dll"
-    "liborc-0.4-0.dll"
     "libbz2-1.dll"
-    "libfreetype-6.dll"
-    "libharfbuzz-0.dll"
-    "libpng16-16.dll"
-    "libxml2-2.dll"
     "liblzma-5.dll"
 )
 
-# Additional media format DLLs (optional but recommended)
+# Additional codec/format DLLs (optional but recommended)
 MEDIA_DLLS=(
+    "libx264-*.dll"
+    "libx265-*.dll"
+    "libvpx-*.dll"
     "libopus-0.dll"
     "libvorbis-0.dll"
-    "libvorbisenc-2.dll"
     "libogg-0.dll"
-    "libflac-12.dll"
-    "libmpg123-0.dll"
-    "libx264-164.dll"
-    "libx265-199.dll"
 )
 
 # Copy all DLLs with error handling
@@ -191,10 +171,23 @@ for dll in "${GLIB_DLLS[@]}"; do
     fi
 done
 
-log "Copying GStreamer DLLs..."
-for dll in "${GSTREAMER_DLLS[@]}"; do
-    if ! copy_dll_safe "$dll"; then
-        failed_critical_dlls+=("$dll")
+log "Copying FFmpeg DLLs..."
+for dll_pattern in "${FFMPEG_DLLS[@]}"; do
+    # Handle wildcard patterns
+    found=false
+    for dll_file in /mingw64/bin/$dll_pattern; do
+        if [ -f "$dll_file" ]; then
+            dll_name=$(basename "$dll_file")
+            if cp "$dll_file" "$DIST_DIR/$dll_name" 2>/dev/null; then
+                local size=$(stat -c%s "$dll_file" 2>/dev/null || stat --format=%s "$dll_file" 2>/dev/null || echo "unknown")
+                log "  ✓ $dll_name ($size bytes)"
+                found=true
+            fi
+        fi
+    done
+    if [ "$found" = false ]; then
+        log "  ✗ $dll_pattern NOT FOUND"
+        failed_critical_dlls+=("$dll_pattern")
     fi
 done
 
@@ -207,10 +200,14 @@ for dll in "${SYSTEM_DLLS[@]}"; do
 done
 
 log "Copying media format DLLs..."
-for dll in "${MEDIA_DLLS[@]}"; do
-    if ! copy_dll_safe "$dll"; then
-        failed_optional_dlls+=("$dll")
-    fi
+for dll_pattern in "${MEDIA_DLLS[@]}"; do
+    # Handle wildcard patterns
+    for dll_file in /mingw64/bin/$dll_pattern; do
+        if [ -f "$dll_file" ]; then
+            dll_name=$(basename "$dll_file")
+            cp "$dll_file" "$DIST_DIR/$dll_name" 2>/dev/null && log "  ✓ $dll_name" || failed_optional_dlls+=("$dll_name")
+        fi
+    done
 done
 
 # Check for critical failures
@@ -224,89 +221,10 @@ if [ ${#failed_optional_dlls[@]} -gt 0 ]; then
     log "ℹ Optional DLLs not found (${failed_optional_dlls[*]}). This is normal and won't affect core functionality."
 fi
 
-# Copy GStreamer plugins
-log "${YELLOW}=== Copying GStreamer plugins ===${NC}"
-PLUGIN_DIR="$DIST_DIR/lib/gstreamer-1.0"
-mkdir -p "$PLUGIN_DIR"
-
-# Essential plugins for video playback
-ESSENTIAL_PLUGINS=(
-    "libgstcoreelements.dll"
-    "libgstplayback.dll"
-    "libgsttypefindfunctions.dll"
-    "libgstapp.dll"
-    "libgstvideoconvert.dll"
-    "libgstvideoscale.dll"
-    "libgstvideofilter.dll"
-    "libgstautodetect.dll"
-    "libgstdirectsound.dll"
-    "libgstwasapi.dll"
-    "libgstdeinterlace.dll"
-    "libgstinterleave.dll"
-    "libgstaudioconvert.dll"
-    "libgstaudioresample.dll"
-    "libgstvolume.dll"
-    "libgstaudiotestsrc.dll"
-    "libgstvideotestsrc.dll"
-)
-
-# MP4/H.264 support plugins
-MP4_PLUGINS=(
-    "libgstisomp4.dll"
-    "libgstlibav.dll"
-    "libgstmatroska.dll"
-    "libgstavi.dll"
-    "libgstqtdemux.dll"
-    "libgstmpeg2dec.dll"
-    "libgstmpegdemux.dll"
-    "libgstmpegpsmux.dll"
-)
-
-# Copy plugins with fallback
-SOURCE_PLUGIN_DIR="/mingw64/lib/gstreamer-1.0"
-COPIED_PLUGINS=0
-
-if [ -d "$SOURCE_PLUGIN_DIR" ]; then
-    log "Copying essential plugins..."
-    for plugin in "${ESSENTIAL_PLUGINS[@]}" "${MP4_PLUGINS[@]}"; do
-        source_plugin="$SOURCE_PLUGIN_DIR/$plugin"
-        if [ -f "$source_plugin" ]; then
-            cp "$source_plugin" "$PLUGIN_DIR/"
-            log "  ✓ $plugin"
-            COPIED_PLUGINS=$((COPIED_PLUGINS + 1))
-        else
-            log "  ⚠ $plugin not found"
-        fi
-    done
-    
-    # Copy any remaining plugins (with size limit to avoid huge files)
-    log "Copying additional plugins..."
-    while IFS= read -r -d $'\0' plugin_file; do
-        if [ -f "$plugin_file" ]; then
-            plugin_name=$(basename "$plugin_file")
-            # Skip if already copied
-            if [ ! -f "$PLUGIN_DIR/$plugin_name" ]; then
-                # Check file size (skip if > 10MB)
-                size=$(stat -c%s "$plugin_file" 2>/dev/null || stat --format=%s "$plugin_file" 2>/dev/null || echo "0")
-                if [ "$size" -lt 10485760 ]; then  # 10MB
-                    if cp "$plugin_file" "$PLUGIN_DIR/" 2>/dev/null; then
-                        COPIED_PLUGINS=$((COPIED_PLUGINS + 1))
-                    fi
-                fi
-            fi
-        fi
-    done < <(find "$SOURCE_PLUGIN_DIR" -name "*.dll" -type f -print0 2>/dev/null || true)
-    
-    log "✓ Copied $COPIED_PLUGINS total GStreamer plugins"
-else
-    error_exit "GStreamer plugin directory not found: $SOURCE_PLUGIN_DIR"
-fi
-
-if [ $COPIED_PLUGINS -lt 5 ]; then
-    error_exit "Too few plugins copied ($COPIED_PLUGINS). Build may not work correctly."
-elif [ $COPIED_PLUGINS -lt 10 ]; then
-    log "⚠ Warning: Only $COPIED_PLUGINS plugins copied. Some features may not work."
-fi
+# Note: FFmpeg handles codecs internally, no plugin directory needed
+log "${YELLOW}=== FFmpeg Configuration ===${NC}"
+log "FFmpeg libraries provide built-in codec support"
+log "No separate plugin directory required"
 
 # Create directory structure and copy assets
 log "${YELLOW}=== Creating directory structure and copying assets ===${NC}"
@@ -369,12 +287,6 @@ echo Variant: $VARIANT
 echo ========================================
 echo.
 
-REM Set GStreamer environment for portable distribution
-set GST_PLUGIN_PATH=%~dp0lib\\gstreamer-1.0
-set GST_PLUGIN_SYSTEM_PATH=%~dp0lib\\gstreamer-1.0
-set GST_DEBUG=2
-set GST_DEBUG_NO_COLOR=1
-
 REM Add current directory to PATH for DLL resolution
 set PATH=%~dp0;%PATH%
 
@@ -382,7 +294,6 @@ REM Change to the application directory
 cd /d "%~dp0"
 
 REM Display environment info
-echo GStreamer Plugin Path: %GST_PLUGIN_PATH%
 echo Current Directory: %CD%
 echo.
 
@@ -443,7 +354,7 @@ else
 echo "- Full version: Unlimited videos and features"
 echo "- Hip numbers: 001-999"
 fi)
-- GStreamer video playback
+- FFmpeg audio/video playback
 - Kiosk mode support
 - 3-digit hip number navigation
 - Splash screen support
@@ -456,7 +367,7 @@ Directory Structure:
 - videos/: Place MP4 video files here
 - splash/: Splash screen images
 - logo/: Application logo assets
-- lib/gstreamer-1.0/: GStreamer plugins
+
 - *.dll: Runtime libraries
 
 System Requirements:
@@ -526,7 +437,7 @@ TROUBLESHOOTING:
 
 If the application won't start:
 - Ensure all DLL files are present in the main directory
-- Check that GStreamer plugins exist in lib/gstreamer-1.0/
+- Verify FFmpeg DLLs (avutil, avcodec, avformat, swscale, swresample) are present
 - Verify video files are in supported formats
 - Check config.toml for correct paths (use forward slashes, not backslashes!)
 - Look for "invalid escape sequence" errors if you edited config.toml
@@ -551,8 +462,7 @@ Command Line Options:
 - $BINARY_NAME --help: Display help information
 
 Environment Variables:
-- GST_DEBUG=3: Increase GStreamer debug output
-- GST_DEBUG_FILE=debug.log: Log debug info to file
+- RUST_LOG=debug: Increase application debug output
 
 Configuration File (config.toml):
 The configuration file controls all application behavior including:
@@ -601,7 +511,7 @@ for file in "${ESSENTIAL_FILES[@]}"; do
 done
 
 # Check directory structure
-REQUIRED_DIRS=("videos" "splash" "logo" "lib/gstreamer-1.0")
+REQUIRED_DIRS=("videos" "splash" "logo")
 for dir in "${REQUIRED_DIRS[@]}"; do
     if [ ! -d "$DIST_DIR/$dir" ]; then
         error_exit "Required directory missing: $dir"

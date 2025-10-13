@@ -33,11 +33,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev \
+            libavutil-dev \
+            libavcodec-dev \
+            libavformat-dev \
+            libswscale-dev \
+            libswresample-dev \
+            libasound2-dev \
             libglib2.0-dev \
             libgtk-3-dev \
-            pkg-config
+            pkg-config \
+            clang
       
       - uses: dtolnay/rust-toolchain@stable
       
@@ -108,7 +113,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
       
-      - name: Setup MSYS2 & GStreamer
+      - name: Setup MSYS2 & FFmpeg
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -116,19 +121,7 @@ jobs:
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-glib2
-            mingw-w64-x86_64-gstreamer
-            mingw-w64-x86_64-gst-plugins-base
-            mingw-w64-x86_64-gst-plugins-good
-            mingw-w64-x86_64-gst-plugins-bad
-            mingw-w64-x86_64-gst-plugins-ugly
-            mingw-w64-x86_64-gst-libav
-            mingw-w64-x86_64-libxml2
-            mingw-w64-x86_64-xz
-            mingw-w64-x86_64-bzip2
-            mingw-w64-x86_64-freetype
-            mingw-w64-x86_64-harfbuzz
-            mingw-w64-x86_64-libpng
-            mingw-w64-x86_64-orc
+            mingw-w64-x86_64-ffmpeg
             zip
             unzip
           update: true
@@ -142,54 +135,45 @@ jobs:
           echo "  VERIFYING SYSTEM DEPENDENCIES"
           echo "============================================"
           
-          # Check what's actually installed
-          echo "Checking /mingw64/bin for relevant DLLs..."
-          ls -la /mingw64/bin/libxml2*.dll 2>/dev/null || echo "  No libxml2 DLL variants found"
-          ls -la /mingw64/bin/liblzma*.dll 2>/dev/null || echo "  No liblzma DLL variants found"
+          # Check for FFmpeg libraries
+          echo "Checking /mingw64/bin for FFmpeg DLLs..."
+          ls -la /mingw64/bin/avutil*.dll 2>/dev/null || echo "  No avutil DLL found"
+          ls -la /mingw64/bin/avcodec*.dll 2>/dev/null || echo "  No avcodec DLL found"
+          ls -la /mingw64/bin/avformat*.dll 2>/dev/null || echo "  No avformat DLL found"
+          ls -la /mingw64/bin/swscale*.dll 2>/dev/null || echo "  No swscale DLL found"
+          ls -la /mingw64/bin/swresample*.dll 2>/dev/null || echo "  No swresample DLL found"
           
-          # Verify system DLLs are present
-          SYSTEM_DLLS=(
-            "liblzma-5.dll"
-            "libbz2-1.dll"
-            "libfreetype-6.dll"
-            "libharfbuzz-0.dll"
-            "libpng16-16.dll"
-            "liborc-0.4-0.dll"
+          # Verify FFmpeg DLLs are present
+          FFMPEG_DLLS=(
+            "avutil-*.dll"
+            "avcodec-*.dll"
+            "avformat-*.dll"
+            "swscale-*.dll"
+            "swresample-*.dll"
           )
           
           MISSING_COUNT=0
-          for dll in "${SYSTEM_DLLS[@]}"; do
-            if [ -f "/mingw64/bin/$dll" ]; then
-              echo "  ✓ $dll found"
+          for dll_pattern in "${FFMPEG_DLLS[@]}"; do
+            if ls /mingw64/bin/$dll_pattern 1> /dev/null 2>&1; then
+              echo "  ✓ $dll_pattern found"
             else
-              echo "  ✗ $dll NOT FOUND"
+              echo "  ✗ $dll_pattern NOT FOUND"
               MISSING_COUNT=$((MISSING_COUNT + 1))
             fi
           done
           
-          # Check for libxml2 separately since it may have different versions
-          if [ -f "/mingw64/bin/libxml2-2.dll" ]; then
-            echo "  ✓ libxml2-2.dll found"
-          elif [ -f "/mingw64/bin/libxml2.dll" ]; then
-            echo "  ✓ libxml2.dll found (alternative version)"
-          else
-            echo "  ⚠ libxml2 NOT FOUND (optional - needed for some media formats)"
-            MISSING_COUNT=$((MISSING_COUNT + 1))
-          fi
-          
           if [ $MISSING_COUNT -gt 0 ]; then
             echo ""
-            echo "  ⚠ Warning: $MISSING_COUNT system DLLs not found"
-            echo "  These are optional but recommended for full functionality"
-            echo "  Build will continue - missing DLLs will be skipped"
+            echo "  ✗ Error: $MISSING_COUNT FFmpeg libraries not found"
+            echo "  FFmpeg is required for audio/video playback"
+            exit 1
           else
             echo ""
-            echo "  ✓ All system dependencies found"
+            echo "  ✓ All FFmpeg dependencies found"
           fi
           
           echo "============================================"
           
-          # Always exit successfully - these are optional dependencies
           exit 0
       
       - name: Setup Rust GNU Toolchain
@@ -197,11 +181,11 @@ jobs:
         with:
           toolchain: stable-x86_64-pc-windows-gnu
       
-      - name: Comprehensive GStreamer Verification
+      - name: Verify FFmpeg Installation
         shell: msys2 {0}
         run: |
           echo "============================================"
-          echo "  COMPREHENSIVE GSTREAMER VERIFICATION"
+          echo "  VERIFYING FFMPEG INSTALLATION"
           echo "============================================"
           
           # Set up environment
@@ -210,162 +194,55 @@ jobs:
           export PATH="$MSYSTEM_PREFIX/bin:$PATH"
           export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
           
-          # Function to check if a command exists
-          command_exists() {
-            command -v "$1" >/dev/null 2>&1
-          }
+          echo "1. Checking FFmpeg executables..."
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "  ✓ ffmpeg: $(which ffmpeg)"
+            ffmpeg -version | head -n1
+          else
+            echo "  ✗ ffmpeg NOT FOUND"
+            exit 1
+          fi
           
-          # Function to check if a file exists
-          file_exists() {
-            test -f "$1"
-          }
-          
-          # Function to check if a directory exists
-          dir_exists() {
-            test -d "$1"
-          }
-          
-          echo "1. Checking GStreamer executables..."
-          GSTREAMER_TOOLS=(
-            "gst-inspect-1.0"
-            "gst-launch-1.0"
-            "gst-discoverer-1.0"
-            "gst-typefind-1.0"
+          echo -e "\n2. Checking FFmpeg libraries..."
+          FFMPEG_LIBS=(
+            "libavutil"
+            "libavcodec"
+            "libavformat"
+            "libswscale"
+            "libswresample"
           )
           
-          for tool in "${GSTREAMER_TOOLS[@]}"; do
-            if command_exists "$tool"; then
-              echo "  ✓ $tool: $(which $tool)"
+          for lib in "${FFMPEG_LIBS[@]}"; do
+            if pkg-config --exists "$lib"; then
+              VERSION=$(pkg-config --modversion "$lib")
+              echo "  ✓ $lib: $VERSION"
             else
-              echo "  ✗ $tool: NOT FOUND"
-              exit 1
-            fi
-          done
-          
-          echo -e "\n2. Checking core GStreamer libraries..."
-          CORE_LIBS=(
-            "/mingw64/lib/libgstreamer-1.0.dll.a"
-            "/mingw64/lib/libgstbase-1.0.dll.a"
-            "/mingw64/lib/libgstapp-1.0.dll.a"
-            "/mingw64/lib/libgstvideo-1.0.dll.a"
-            "/mingw64/lib/libgstaudio-1.0.dll.a"
-          )
-          
-          for lib in "${CORE_LIBS[@]}"; do
-            if file_exists "$lib"; then
-              echo "  ✓ $(basename $lib): $(ls -lh $lib | awk '{print $5}')"
-            else
-              echo "  ✗ $(basename $lib): NOT FOUND"
+              echo "  ✗ $lib: NOT FOUND"
               exit 1
             fi
           done
           
           echo -e "\n3. Checking runtime DLLs..."
-          RUNTIME_DLLS=(
-            "/mingw64/bin/libgstreamer-1.0-0.dll"
-            "/mingw64/bin/libgstbase-1.0-0.dll"
-            "/mingw64/bin/libgstapp-1.0-0.dll"
-            "/mingw64/bin/libgstvideo-1.0-0.dll"
-            "/mingw64/bin/libgstaudio-1.0-0.dll"
-            "/mingw64/bin/libglib-2.0-0.dll"
-            "/mingw64/bin/libgobject-2.0-0.dll"
-            "/mingw64/bin/libgio-2.0-0.dll"
-          )
-          
-          for dll in "${RUNTIME_DLLS[@]}"; do
-            if file_exists "$dll"; then
-              echo "  ✓ $(basename $dll): $(ls -lh $dll | awk '{print $5}')"
+          for lib in "${FFMPEG_LIBS[@]}"; do
+            dll_pattern="/mingw64/bin/${lib#lib}-*.dll"
+            if ls $dll_pattern 1> /dev/null 2>&1; then
+              dll_file=$(ls $dll_pattern | head -n1)
+              dll_size=$(ls -lh "$dll_file" | awk '{print $5}')
+              echo "  ✓ $(basename $dll_file): $dll_size"
             else
-              echo "  ✗ $(basename $dll): NOT FOUND"
+              echo "  ✗ ${lib#lib}-*.dll NOT FOUND"
               exit 1
             fi
           done
           
-          echo -e "\n4. Checking GStreamer plugin directories..."
-          PLUGIN_DIRS=(
-            "/mingw64/lib/gstreamer-1.0"
-            "/mingw64/bin/gstreamer-1.0"
-          )
-          
-          for plugin_dir in "${PLUGIN_DIRS[@]}"; do
-            if dir_exists "$plugin_dir"; then
-              plugin_count=$(find "$plugin_dir" -name "*.dll" | wc -l)
-              echo "  ✓ $plugin_dir: $plugin_count plugins"
-              if [ $plugin_count -lt 10 ]; then
-                echo "    WARNING: Low plugin count, checking specific plugins..."
-              fi
-            else
-              echo "  ✗ $plugin_dir: NOT FOUND"
-            fi
-          done
-          
-          echo -e "\n5. Verifying essential plugins..."
-          ESSENTIAL_PLUGINS=(
-            "coreelements"
-            "playback"
-            "typefindfunctions"
-            "app"
-            "videoconvert"
-            "videoscale"
-            "autodetect"
-          )
-          
-          OPTIONAL_PLUGINS=(
-            "directsound"
-            "wasapi"
-          )
-          
-          missing_essential=0
-          for plugin in "${ESSENTIAL_PLUGINS[@]}"; do
-            if gst-inspect-1.0 "$plugin" >/dev/null 2>&1; then
-              echo "  ✓ $plugin"
-            else
-              echo "  ✗ $plugin: NOT AVAILABLE"
-              ((missing_essential++))
-            fi
-          done
-          
-          for plugin in "${OPTIONAL_PLUGINS[@]}"; do
-            if gst-inspect-1.0 "$plugin" >/dev/null 2>&1; then
-              echo "  ✓ $plugin (optional)"
-            else
-              echo "  ⚠ $plugin: NOT AVAILABLE (optional)"
-            fi
-          done
-          
-          if [ $missing_essential -gt 3 ]; then
-            echo "  ✗ Too many essential plugins missing ($missing_essential)"
-            exit 1
-          fi
-          
-          echo -e "\n6. Testing pkg-config integration..."
-          if pkg-config --exists gstreamer-1.0; then
-            GST_VERSION=$(pkg-config --modversion gstreamer-1.0)
-            GST_CFLAGS=$(pkg-config --cflags gstreamer-1.0)
-            GST_LIBS=$(pkg-config --libs gstreamer-1.0)
-            echo "  ✓ GStreamer version: $GST_VERSION"
-            echo "  ✓ CFLAGS: $GST_CFLAGS"
-            echo "  ✓ LIBS: $GST_LIBS"
-          else
-            echo "  ✗ pkg-config cannot find gstreamer-1.0"
-            exit 1
-          fi
-          
-          echo -e "\n7. Testing basic GStreamer functionality..."
-          if timeout 10s bash -c 'echo "videotestsrc num-buffers=1 ! fakesink" | gst-launch-1.0 >/dev/null 2>&1'; then
-            echo "  ✓ Basic pipeline test passed"
-          else
-            echo "  ⚠ Basic pipeline test failed (but continuing)"
-          fi
-          
-          echo -e "\n8. Environment summary..."
+          echo -e "\n4. Environment summary..."
           echo "  PATH: $PATH"
           echo "  PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
           echo "  MSYSTEM: $MSYSTEM"
           echo "  MSYSTEM_PREFIX: $MSYSTEM_PREFIX"
           
           echo -e "\n============================================"
-          echo "  ✅ ALL GSTREAMER CHECKS PASSED"
+          echo "  ✅ ALL FFMPEG CHECKS PASSED"
           echo "============================================"
       
       - name: Use Complete Build Script
@@ -774,27 +651,26 @@ jobs:
           # Verify critical DLLs
           Write-Host "`n[4/6] Verifying critical DLLs..." -ForegroundColor Yellow
           $criticalDlls = @(
-            "libglib-2.0-0.dll",
-            "libgobject-2.0-0.dll",
-            "libgio-2.0-0.dll",
-            "libgstreamer-1.0-0.dll",
-            "libgstapp-1.0-0.dll",
-            "libgstbase-1.0-0.dll",
-            "libgstvideo-1.0-0.dll",
-            "libgstaudio-1.0-0.dll"
+            "avutil-*.dll",
+            "avcodec-*.dll",
+            "avformat-*.dll",
+            "swscale-*.dll",
+            "swresample-*.dll"
           )
           
           $workingDir = Split-Path -Parent $exePath.FullName
           $missingDlls = @()
           
-          foreach ($dll in $criticalDlls) {
-            $dllPath = Join-Path $workingDir $dll
-            if (Test-Path $dllPath) {
-              $dllSize = (Get-Item $dllPath).Length
-              Write-Host "  ✓ $dll ($([math]::Round($dllSize/1KB, 2)) KB)" -ForegroundColor Green
+          foreach ($dllPattern in $criticalDlls) {
+            $matchingDlls = Get-ChildItem -Path $workingDir -Filter $dllPattern -ErrorAction SilentlyContinue
+            if ($matchingDlls) {
+              foreach ($dll in $matchingDlls) {
+                $dllSize = $dll.Length
+                Write-Host "  ✓ $($dll.Name) ($([math]::Round($dllSize/1KB, 2)) KB)" -ForegroundColor Green
+              }
             } else {
-              Write-Host "  ✗ $dll MISSING" -ForegroundColor Red
-              $missingDlls += $dll
+              Write-Host "  ✗ $dllPattern MISSING" -ForegroundColor Red
+              $missingDlls += $dllPattern
             }
           }
           
@@ -805,25 +681,14 @@ jobs:
             exit 1
           }
           
-          # Check GStreamer plugins
-          Write-Host "`n[5/6] Checking GStreamer plugins..." -ForegroundColor Yellow
-          $pluginDirs = @(
-            (Join-Path $workingDir "lib\gstreamer-1.0"),
-            (Join-Path $workingDir "gstreamer-1.0")
-          )
-          
-          $foundPlugins = $false
-          foreach ($pluginDir in $pluginDirs) {
-            if (Test-Path $pluginDir) {
-              $plugins = Get-ChildItem -Path $pluginDir -Filter "*.dll"
-              Write-Host "  ✓ Found $($plugins.Count) plugins in: $pluginDir" -ForegroundColor Green
-              $foundPlugins = $true
-              break
-            }
-          }
-          
-          if (-not $foundPlugins) {
-            Write-Warning "No GStreamer plugins found - audio/video may not work"
+          # Check for FFmpeg codecs
+          Write-Host "`n[5/6] Checking FFmpeg codec support..." -ForegroundColor Yellow
+          $avcodecDll = Get-ChildItem -Path $workingDir -Filter "avcodec-*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($avcodecDll) {
+            $codecSize = $avcodecDll.Length
+            Write-Host "  ✓ FFmpeg codec library present: $($avcodecDll.Name) ($([math]::Round($codecSize/1MB, 2)) MB)" -ForegroundColor Green
+          } else {
+            Write-Warning "FFmpeg codec library not found - video playback may not work"
           }
           
           # Runtime test
