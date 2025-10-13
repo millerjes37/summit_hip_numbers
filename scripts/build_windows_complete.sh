@@ -608,6 +608,15 @@ log "  - Directory structure: Complete"
 
 # Create portable ZIP archive
 log "${YELLOW}=== Creating portable archive ===${NC}"
+
+# Ensure empty directories have at least a placeholder file for ZIP preservation
+for dir in "$DIST_DIR/splash" "$DIST_DIR/videos" "$DIST_DIR/logo"; do
+    if [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
+        touch "$dir/.gitkeep"
+        log "  Created .gitkeep in empty directory: $(basename "$dir")"
+    fi
+done
+
 cd "dist"
 zip -r "../summit_hip_numbers_${VARIANT}_portable.zip" "$VARIANT" >/dev/null 2>&1
 cd ..
