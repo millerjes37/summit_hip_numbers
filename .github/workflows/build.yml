@@ -309,24 +309,20 @@ jobs:
           fi
 
           # Configure clang to use MSYS2 system headers properly
-          # IMPORTANT: Use -nostdinc to prevent looking in /usr/include
-          CLANG_ARGS="-nostdinc -I/mingw64/include"
-
+          # Priority order: clang builtins, mingw64 includes, system includes
           CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
+
+          CLANG_ARGS=""
           if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
-            CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
+            CLANG_ARGS="-I$CLANG_BUILTIN_INCLUDE"
           fi
 
+          CLANG_ARGS="$CLANG_ARGS -I/mingw64/include"
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
           CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
-          CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
           CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
 
           echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
-
-          # Override CPATH to point to mingw64/include instead of /usr/include
-          echo "CPATH=/mingw64/include" >> $GITHUB_ENV
-          echo "C_INCLUDE_PATH=/mingw64/include" >> $GITHUB_ENV
 
           # FFmpeg include paths for pkg-config fallback
           echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
@@ -351,10 +347,21 @@ jobs:
           export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig"
 
           # FFmpeg bindgen configuration - set explicitly since GITHUB_ENV may not carry over
+          # Priority order: clang builtins, mingw64 includes, system includes
+          CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
+
+          BINDGEN_ARGS=""
+          if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
+            BINDGEN_ARGS="-I$CLANG_BUILTIN_INCLUDE"
+          fi
+
+          BINDGEN_ARGS="$BINDGEN_ARGS -I/mingw64/include"
+          BINDGEN_ARGS="$BINDGEN_ARGS -I/mingw64/x86_64-w64-mingw32/include"
+          BINDGEN_ARGS="$BINDGEN_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
+          BINDGEN_ARGS="$BINDGEN_ARGS -D__MINGW64__ -fms-extensions"
+
           export LIBCLANG_PATH="/mingw64/bin"
-          export BINDGEN_EXTRA_CLANG_ARGS="-nostdinc -I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 --sysroot=/mingw64 -isystem /mingw64/include -D__MINGW64__ -fms-extensions"
-          export CPATH="/mingw64/include"
-          export C_INCLUDE_PATH="/mingw64/include"
+          export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_ARGS"
           export FFMPEG_INCLUDE_DIR="/mingw64/include"
           export FFMPEG_LIB_DIR="/mingw64/lib"
           export FFMPEG_PKG_CONFIG="1"
@@ -362,8 +369,6 @@ jobs:
           echo "Build environment:"
           echo "  LIBCLANG_PATH=$LIBCLANG_PATH"
           echo "  BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
-          echo "  CPATH=$CPATH"
-          echo "  C_INCLUDE_PATH=$C_INCLUDE_PATH"
           echo "  FFMPEG_INCLUDE_DIR=$FFMPEG_INCLUDE_DIR"
           echo "  FFMPEG_LIB_DIR=$FFMPEG_LIB_DIR"
           echo "  FFMPEG_PKG_CONFIG=$FFMPEG_PKG_CONFIG"

@@ -90,7 +90,7 @@
              # Build only the main package
              cargoBuildFlags = [ "--package" "summit_hip_numbers" ];
              
-             nativeBuildInputs = [ pkgs.pkg-config ];
+             nativeBuildInputs = [ pkgs.pkg-config pkgs.clang pkgs.llvmPackages.libclang.lib ];
              buildInputs = ffmpegLibs ++ guiLibs;
              
              # Environment variables for proper GUI operation (Linux only)
@@ -125,7 +125,7 @@
              # Build demo variant with features flag
              cargoBuildFlags = [ "--package" "summit_hip_numbers" "--features" "demo" ];
              
-             nativeBuildInputs = [ pkgs.pkg-config ];
+             nativeBuildInputs = [ pkgs.pkg-config pkgs.clang pkgs.llvmPackages.libclang.lib ];
              buildInputs = ffmpegLibs ++ guiLibs;
              
              # Environment variables for proper GUI operation (Linux only)
