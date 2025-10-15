@@ -331,6 +331,33 @@ jobs:
           # Tell ffmpeg-sys-next to use pkg-config
           echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
 
+      - name: Create /usr/include Directory Structure
+        shell: msys2 {0}
+        run: |
+          # ffmpeg-sys-next hardcodes paths to /usr/include in its build.rs
+          # Create /usr/include and copy headers to satisfy these lookups
+          echo "Creating /usr/include directory structure..."
+
+          # Create the directory
+          mkdir -p /usr/include
+
+          # Copy FFmpeg headers from mingw64 to /usr/include
+          if [ -d "/mingw64/include" ]; then
+            echo "Copying headers from /mingw64/include to /usr/include..."
+            cp -r /mingw64/include/* /usr/include/ 2>/dev/null || true
+
+            # Verify critical headers are present
+            if [ -f "/usr/include/libavcodec/avcodec.h" ]; then
+              echo "✓ FFmpeg headers successfully copied to /usr/include"
+              ls -la /usr/include/libav* 2>/dev/null || echo "libav* directories:"
+            else
+              echo "⚠ Warning: FFmpeg headers may not have been copied correctly"
+            fi
+          else
+            echo "Error: /mingw64/include not found"
+            exit 1
+          fi
+
       - name: Use Complete Build Script
         shell: msys2 {0}
         run: |
