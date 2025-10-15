@@ -209,24 +209,19 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         build_cmd.arg("--features").arg("demo");
     }
 
-    // Add target for cross-compilation if needed
-    let (target, use_cross) = match (current_os, platform) {
-        // Native builds
-        ("linux", "linux") => ("x86_64-unknown-linux-gnu", false),
-        ("macos", "macos") => ("x86_64-apple-darwin", false),
-        ("windows", "windows") => ("x86_64-pc-windows-gnu", false),
-
-        // Cross-compilation (requires `cross` tool)
-        (_, "linux") => ("x86_64-unknown-linux-gnu", true),
-        (_, "windows") => ("x86_64-pc-windows-gnu", true),
-
-        // Can't cross-compile to macOS (requires actual macOS)
-        (_, "macos") if current_os != "macos" => {
-            println!("  ⚠ Skipping macOS build (requires macOS runner)");
-            return Ok(());
+    // Always use cross for Linux and Windows to ensure self-contained builds
+    // Only macOS requires native builds (can't cross-compile to macOS)
+    let (target, use_cross) = match platform {
+        "linux" => ("x86_64-unknown-linux-gnu", true),
+        "windows" => ("x86_64-pc-windows-gnu", true),
+        "macos" => {
+            if current_os != "macos" {
+                println!("  ⚠ Skipping macOS build (requires macOS runner)");
+                return Ok(());
+            }
+            ("x86_64-apple-darwin", false)
         }
-
-        _ => return Err(anyhow::anyhow!("Unsupported platform combination")),
+        _ => return Err(anyhow::anyhow!("Unsupported platform: {}", platform)),
     };
 
     build_cmd.arg("--target").arg(target);
