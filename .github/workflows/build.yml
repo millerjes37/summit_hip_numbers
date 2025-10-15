@@ -51,15 +51,6 @@ jobs:
         if: matrix.platform == 'macos'
         run: brew install ffmpeg pkg-config
 
-      - name: Install Windows Dependencies
-        if: matrix.platform == 'windows'
-        shell: msys2 {0}
-        run: |
-          pacman -S --noconfirm \
-            mingw-w64-x86_64-ffmpeg \
-            mingw-w64-x86_64-pkg-config \
-            zip
-
       - name: Setup MSYS2
         if: matrix.platform == 'windows'
         uses: msys2/setup-msys2@v2
