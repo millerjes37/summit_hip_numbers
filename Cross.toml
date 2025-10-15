@@ -7,9 +7,27 @@ image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
 # Install all dependencies needed for compilation
 pre-build = [
     "apt-get update",
+    # Core FFmpeg libraries
     "apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev libavfilter-dev libavdevice-dev",
+    # GUI and window system libraries
     "apt-get install -y libasound2-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev",
     "apt-get install -y libwayland-dev libxkbcommon-dev pkg-config clang",
+    # Optional FFmpeg audio libraries
+    "apt-get install -y libjack-dev || true",
+    "apt-get install -y libopenal-dev || true",
+    "apt-get install -y libsdl2-dev || true",
+    "apt-get install -y libpulse-dev || true",
+    "apt-get install -y libcaca-dev || true",
+    "apt-get install -y libgl1-mesa-dev || true",
+    # Optional FFmpeg video input libraries
+    "apt-get install -y libraw1394-dev || true",
+    "apt-get install -y libavc1394-dev || true",
+    "apt-get install -y libiec61883-dev || true",
+    "apt-get install -y libdc1394-dev || true",
+    # Optional FFmpeg audio/video libraries
+    "apt-get install -y libcdio-dev || true",
+    "apt-get install -y libcdio-paranoia-dev || true",
+    "apt-get install -y libbs2b-dev || true",
 ]
 
 [target.x86_64-pc-windows-gnu]
