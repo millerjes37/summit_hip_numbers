@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -83,12 +83,12 @@ fn ensure_ffmpeg(root: &Path, platform: &str) -> Result<PathBuf> {
             // macOS uses system FFmpeg via Homebrew or system libraries
             println!("  ℹ macOS will use system FFmpeg libraries");
             return Ok(ffmpeg_dir); // Return dummy path
-        },
+        }
         "linux" => {
             // Linux uses system libraries
             println!("  ℹ Linux will use system FFmpeg libraries");
             return Ok(ffmpeg_dir); // Return dummy path
-        },
+        }
         _ => bail!("Unsupported platform: {}", platform),
     }
 
@@ -101,8 +101,7 @@ fn download_ffmpeg_windows(ffmpeg_dir: &Path) -> Result<()> {
     let url = "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip";
 
     println!("    Downloading from: {}", url);
-    let response = reqwest::blocking::get(url)
-        .context("Failed to download FFmpeg")?;
+    let response = reqwest::blocking::get(url).context("Failed to download FFmpeg")?;
 
     if !response.status().is_success() {
         bail!("Failed to download FFmpeg: HTTP {}", response.status());
@@ -125,7 +124,10 @@ fn download_ffmpeg_windows(ffmpeg_dir: &Path) -> Result<()> {
         };
 
         // Only extract bin/ and lib/ directories
-        if !outpath.starts_with("bin") && !outpath.starts_with("lib") && !outpath.starts_with("include") {
+        if !outpath.starts_with("bin")
+            && !outpath.starts_with("lib")
+            && !outpath.starts_with("include")
+        {
             continue;
         }
 
@@ -154,7 +156,12 @@ fn ensure_cross_installed() -> Result<()> {
 
     println!("  ⬇ Installing cross for cross-compilation...");
     let status = Command::new("cargo")
-        .args(&["install", "cross", "--git", "https://github.com/cross-rs/cross"])
+        .args(&[
+            "install",
+            "cross",
+            "--git",
+            "https://github.com/cross-rs/cross",
+        ])
         .status()
         .context("Failed to install cross")?;
 
@@ -242,7 +249,11 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     };
 
     if !status.success() {
-        return Err(anyhow::anyhow!("Build failed for {} - {}", platform, variant));
+        return Err(anyhow::anyhow!(
+            "Build failed for {} - {}",
+            platform,
+            variant
+        ));
     }
 
     // Create distribution directory
@@ -281,8 +292,10 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     }
 
     let binary_dest = platform_dist.join(binary_name);
-    fs::copy(&binary_src, &binary_dest)
-        .context(format!("Failed to copy binary to {}", binary_dest.display()))?;
+    fs::copy(&binary_src, &binary_dest).context(format!(
+        "Failed to copy binary to {}",
+        binary_dest.display()
+    ))?;
 
     // Make executable on Unix
     #[cfg(unix)]
