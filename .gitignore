@@ -1,4 +1,5 @@
 /target
 /dist
 /result
+/.ffmpeg
 crates/*/target

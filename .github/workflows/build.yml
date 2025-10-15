@@ -37,32 +37,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # Install system dependencies for FFmpeg
-      - name: Install Linux Dependencies
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libavutil-dev libavcodec-dev libavformat-dev \
-            libswscale-dev libswresample-dev \
-            pkg-config clang
-
-      - name: Install macOS Dependencies
-        if: matrix.platform == 'macos'
-        run: brew install ffmpeg pkg-config
-
-      - name: Setup MSYS2
-        if: matrix.platform == 'windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-ffmpeg
-            mingw-w64-x86_64-pkg-config
-            zip
-
-      # Build all variants using xtask
+      # xtask handles all dependencies - FFmpeg download, cross-compilation, etc.
       - name: Build distributions
         run: cargo xtask dist --platform ${{ matrix.platform }}
 

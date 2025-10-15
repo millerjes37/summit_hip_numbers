@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -67,9 +67,111 @@ fn build_dist(platform: &str, variant: &str) -> Result<()> {
     Ok(())
 }
 
+fn ensure_ffmpeg(root: &Path, platform: &str) -> Result<PathBuf> {
+    let ffmpeg_dir = root.join(".ffmpeg").join(format!("{}-x64", platform));
+
+    if ffmpeg_dir.exists() {
+        println!("  ✓ FFmpeg already downloaded for {}", platform);
+        return Ok(ffmpeg_dir);
+    }
+
+    println!("  ⬇ Downloading portable FFmpeg for {}...", platform);
+
+    match platform {
+        "windows" => download_ffmpeg_windows(&ffmpeg_dir)?,
+        "macos" => {
+            // macOS uses system FFmpeg via Homebrew or system libraries
+            println!("  ℹ macOS will use system FFmpeg libraries");
+            return Ok(ffmpeg_dir); // Return dummy path
+        },
+        "linux" => {
+            // Linux uses system libraries
+            println!("  ℹ Linux will use system FFmpeg libraries");
+            return Ok(ffmpeg_dir); // Return dummy path
+        },
+        _ => bail!("Unsupported platform: {}", platform),
+    }
+
+    println!("  ✓ FFmpeg downloaded to: {}", ffmpeg_dir.display());
+    Ok(ffmpeg_dir)
+}
+
+fn download_ffmpeg_windows(ffmpeg_dir: &Path) -> Result<()> {
+    // Download FFmpeg shared build from gyan.dev
+    let url = "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip";
+
+    println!("    Downloading from: {}", url);
+    let response = reqwest::blocking::get(url)
+        .context("Failed to download FFmpeg")?;
+
+    if !response.status().is_success() {
+        bail!("Failed to download FFmpeg: HTTP {}", response.status());
+    }
+
+    let bytes = response.bytes().context("Failed to read response")?;
+
+    println!("    Extracting FFmpeg archive...");
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor)?;
+
+    fs::create_dir_all(&ffmpeg_dir)?;
+
+    // Extract files we need (bin/ and lib/)
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => path,
+            None => continue,
+        };
+
+        // Only extract bin/ and lib/ directories
+        if !outpath.starts_with("bin") && !outpath.starts_with("lib") && !outpath.starts_with("include") {
+            continue;
+        }
+
+        let outpath = ffmpeg_dir.join(outpath);
+
+        if file.name().ends_with('/') {
+            fs::create_dir_all(&outpath)?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                fs::create_dir_all(p)?;
+            }
+            let mut outfile = fs::File::create(&outpath)?;
+            std::io::copy(&mut file, &mut outfile)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn ensure_cross_installed() -> Result<()> {
+    // Check if cross is installed
+    if Command::new("cross").arg("--version").output().is_ok() {
+        println!("  ✓ cross is already installed");
+        return Ok(());
+    }
+
+    println!("  ⬇ Installing cross for cross-compilation...");
+    let status = Command::new("cargo")
+        .args(&["install", "cross", "--git", "https://github.com/cross-rs/cross"])
+        .status()
+        .context("Failed to install cross")?;
+
+    if !status.success() {
+        bail!("Failed to install cross");
+    }
+
+    println!("  ✓ cross installed successfully");
+    Ok(())
+}
+
 fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -> Result<()> {
     // Detect current platform
     let current_os = env::consts::OS;
+
+    // Ensure FFmpeg is available for target platform
+    let ffmpeg_dir = ensure_ffmpeg(root, platform)?;
 
     // Build the application
     println!("  [1/4] Building application...");
@@ -80,7 +182,7 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         .arg("--package")
         .arg("summit_hip_numbers");
 
-    if variant == &"demo" {
+    if variant == "demo" {
         build_cmd.arg("--features").arg("demo");
     }
 
@@ -106,12 +208,35 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
 
     build_cmd.arg("--target").arg(target);
 
+    // Set FFmpeg environment variables for Windows builds
+    if platform == "windows" && ffmpeg_dir.exists() {
+        let bin_dir = ffmpeg_dir.join("bin");
+        let lib_dir = ffmpeg_dir.join("lib");
+        let include_dir = ffmpeg_dir.join("include");
+
+        if bin_dir.exists() {
+            build_cmd.env("FFMPEG_DIR", &ffmpeg_dir);
+            build_cmd.env("FFMPEG_LIB_DIR", &lib_dir);
+            build_cmd.env("FFMPEG_INCLUDE_DIR", &include_dir);
+        }
+    }
+
     let status = if use_cross {
+        // Ensure cross is installed
+        ensure_cross_installed()?;
+
         println!("  Using cross for {} target", target);
-        Command::new("cross")
-            .args(&build_cmd.get_args().collect::<Vec<_>>())
-            .status()
-            .context("Failed to run cross")?
+        let mut cross_cmd = Command::new("cross");
+        cross_cmd.args(build_cmd.get_args().collect::<Vec<_>>());
+
+        // Copy environment variables to cross
+        for (key, value) in build_cmd.get_envs() {
+            if let Some(val) = value {
+                cross_cmd.env(key, val);
+            }
+        }
+
+        cross_cmd.status().context("Failed to run cross")?
     } else {
         build_cmd.status().context("Failed to run cargo build")?
     };
@@ -171,6 +296,11 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     // Copy assets
     copy_assets(root, &platform_dist)?;
 
+    // Bundle Windows DLLs if needed
+    if platform == "windows" {
+        bundle_windows_dlls(root, &platform_dist)?;
+    }
+
     // Create archive
     println!("  [4/4] Creating archive...");
     create_archive(&dist_name, &platform_dist, platform)?;
@@ -214,13 +344,42 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+fn bundle_windows_dlls(root: &Path, dist_dir: &Path) -> Result<()> {
+    println!("  [3.5/4] Bundling Windows DLLs...");
+
+    let ffmpeg_bin = root.join(".ffmpeg/windows-x64/bin");
+
+    if !ffmpeg_bin.exists() {
+        println!("  ⚠ FFmpeg bin directory not found, skipping DLL bundling");
+        return Ok(());
+    }
+
+    let mut copied = 0;
+
+    // Copy all DLLs from FFmpeg bin directory
+    for entry in fs::read_dir(&ffmpeg_bin)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) == Some("dll") {
+            let filename = path.file_name().unwrap();
+            let dest = dist_dir.join(filename);
+            fs::copy(&path, &dest)
+                .with_context(|| format!("Failed to copy DLL: {}", filename.to_string_lossy()))?;
+            copied += 1;
+        }
+    }
+
+    println!("  ✓ Copied {} DLLs", copied);
+    Ok(())
+}
+
 fn create_archive(name: &str, source: &Path, platform: &str) -> Result<()> {
     let parent = source.parent().unwrap();
 
     if platform == "windows" {
         // Create ZIP for Windows
         let archive_name = format!("{}.zip", name);
-        let archive_path = parent.join(&archive_name);
 
         let status = Command::new("zip")
             .args(&["-r", archive_name.as_str(), name])
@@ -234,7 +393,6 @@ fn create_archive(name: &str, source: &Path, platform: &str) -> Result<()> {
     } else {
         // Create tar.gz for Unix
         let archive_name = format!("{}.tar.gz", name);
-        let archive_path = parent.join(&archive_name);
 
         let status = Command::new("tar")
             .args(&["-czf", archive_name.as_str(), name])
