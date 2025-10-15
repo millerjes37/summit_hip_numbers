@@ -41,7 +41,8 @@ jobs:
           sudo apt-get install -y \
             libasound2-dev \
             libavutil-dev libavcodec-dev libavformat-dev \
-            libswscale-dev libswresample-dev \
+            libswscale-dev libswresample-dev libavfilter-dev \
+            libavdevice-dev \
             pkg-config clang
 
       - name: Format Check
