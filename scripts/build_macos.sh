@@ -120,16 +120,32 @@ fi
 log "macOS SDK: $MACOS_SDK_PATH"
 
 # Configure bindgen to use macOS SDK with system headers
-# Force include stdint.h to ensure uint32_t, uint64_t, uint8_t types are available
+# Try multiple approaches to ensure stdint.h types are available
 export BINDGEN_EXTRA_CLANG_ARGS=""
 if [ -n "$MACOS_SDK_PATH" ]; then
-    export BINDGEN_EXTRA_CLANG_ARGS="-include stdint.h"
+    # Use absolute path to stdint.h with -include
+    if [ -f "$MACOS_SDK_PATH/usr/include/stdint.h" ]; then
+        export BINDGEN_EXTRA_CLANG_ARGS="-include $MACOS_SDK_PATH/usr/include/stdint.h"
+    else
+        export BINDGEN_EXTRA_CLANG_ARGS="-include stdint.h"
+    fi
+
+    # Add include path for SDK headers
     export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$MACOS_SDK_PATH/usr/include"
+
+    # Set sysroot
     export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -isysroot $MACOS_SDK_PATH"
+
+    # Add framework paths
+    export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -F$MACOS_SDK_PATH/System/Library/Frameworks"
 fi
+
+# Add clang builtin includes
 if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
     export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
 fi
+
+# Add FFmpeg includes
 export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$FFMPEG_INCLUDE_DIR"
 
 log "BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"

@@ -317,6 +317,7 @@ jobs:
             CLANG_ARGS="-I$CLANG_BUILTIN_INCLUDE"
           fi
 
+          CLANG_ARGS="$CLANG_ARGS -I/usr/include"
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/include"
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
           CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
@@ -349,10 +350,18 @@ jobs:
             # Verify critical headers are present
             if [ -f "/usr/include/libavcodec/avcodec.h" ]; then
               echo "✓ FFmpeg headers successfully copied to /usr/include"
-              ls -la /usr/include/libav* 2>/dev/null || echo "libav* directories:"
+              ls -la /usr/include/libav* 2>/dev/null | head -10
             else
               echo "⚠ Warning: FFmpeg headers may not have been copied correctly"
             fi
+
+            # Get absolute Windows path for /usr/include
+            WIN_USR_INCLUDE=$(cygpath -w /usr/include)
+            echo "Windows path for /usr/include: $WIN_USR_INCLUDE"
+
+            # Also try to verify the path is accessible
+            echo "Verifying path accessibility..."
+            test -f "/usr/include/libavcodec/avfft.h" && echo "✓ /usr/include/libavcodec/avfft.h exists" || echo "✗ /usr/include/libavcodec/avfft.h NOT FOUND"
           else
             echo "Error: /mingw64/include not found"
             exit 1
@@ -382,6 +391,7 @@ jobs:
             BINDGEN_ARGS="-I$CLANG_BUILTIN_INCLUDE"
           fi
 
+          BINDGEN_ARGS="$BINDGEN_ARGS -I/usr/include"
           BINDGEN_ARGS="$BINDGEN_ARGS -I/mingw64/include"
           BINDGEN_ARGS="$BINDGEN_ARGS -I/mingw64/x86_64-w64-mingw32/include"
           BINDGEN_ARGS="$BINDGEN_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
@@ -1067,12 +1077,20 @@ jobs:
           echo "============================================"
           echo "  LINUX PORTABLE TEST - ${{ matrix.variant }}"
           echo "============================================"
-          
+
+          # List downloaded files
+          echo -e "\n[0/5] Listing downloaded files..."
+          ls -la
+          echo ""
+          find . -name "*.tar.gz" -o -name "*.zip" | head -20
+
           # Extract archive
           echo -e "\n[1/5] Extracting archive..."
-          ARCHIVE=$(ls summit_hip_numbers_linux_${{ matrix.variant }}_*.tar.gz | head -n 1)
+          ARCHIVE=$(ls summit_hip_numbers_linux_${{ matrix.variant }}_*.tar.gz 2>/dev/null | head -n 1)
           if [ -z "$ARCHIVE" ]; then
-            echo "ERROR: Archive not found"
+            echo "ERROR: Archive not found with pattern summit_hip_numbers_linux_${{ matrix.variant }}_*.tar.gz"
+            echo "Available files:"
+            ls -la
             exit 1
           fi
           tar -xzf "$ARCHIVE"
