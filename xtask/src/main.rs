@@ -123,15 +123,31 @@ fn download_ffmpeg_windows(ffmpeg_dir: &Path) -> Result<()> {
             None => continue,
         };
 
-        // Only extract bin/ and lib/ directories
-        if !outpath.starts_with("bin")
-            && !outpath.starts_with("lib")
-            && !outpath.starts_with("include")
-        {
+        // Strip the top-level directory (e.g., "ffmpeg-7.1-essentials_build/")
+        // and check if remaining path starts with bin/lib/include
+        let components: Vec<_> = outpath.components().collect();
+        if components.len() < 2 {
             continue;
         }
 
-        let outpath = ffmpeg_dir.join(outpath);
+        // Skip the first component (top-level directory)
+        let relative_path: PathBuf = components[1..].iter().collect();
+
+        // Check if this is a bin/lib/include file
+        let first_dir = relative_path.components().next();
+        let should_extract = match first_dir {
+            Some(std::path::Component::Normal(dir)) => {
+                let dir_str = dir.to_string_lossy();
+                dir_str == "bin" || dir_str == "lib" || dir_str == "include"
+            }
+            _ => false,
+        };
+
+        if !should_extract {
+            continue;
+        }
+
+        let outpath = ffmpeg_dir.join(&relative_path);
 
         if file.name().ends_with('/') {
             fs::create_dir_all(&outpath)?;
@@ -366,6 +382,7 @@ fn bundle_windows_dlls(root: &Path, dist_dir: &Path) -> Result<()> {
     }
 
     let mut copied = 0;
+    let mut dll_names = Vec::new();
 
     // Copy all DLLs from FFmpeg bin directory
     for entry in fs::read_dir(&ffmpeg_bin)? {
@@ -377,11 +394,21 @@ fn bundle_windows_dlls(root: &Path, dist_dir: &Path) -> Result<()> {
             let dest = dist_dir.join(filename);
             fs::copy(&path, &dest)
                 .with_context(|| format!("Failed to copy DLL: {}", filename.to_string_lossy()))?;
+            dll_names.push(filename.to_string_lossy().to_string());
             copied += 1;
         }
     }
 
-    println!("  ✓ Copied {} DLLs", copied);
+    if copied > 0 {
+        dll_names.sort();
+        println!("  ✓ Copied {} DLLs:", copied);
+        for dll in &dll_names {
+            println!("    - {}", dll);
+        }
+    } else {
+        println!("  ⚠ No DLLs found in FFmpeg bin directory");
+    }
+
     Ok(())
 }
 
