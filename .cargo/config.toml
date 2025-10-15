@@ -1,9 +1,2 @@
-# Cargo configuration for Summit HIP Numbers
-
 [alias]
-# Unified build system
 xtask = "run --package xtask --"
-
-# Quick commands
-dist = "xtask dist"
-dist-all = "xtask dist --all"

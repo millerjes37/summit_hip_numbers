@@ -1,17 +1,12 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use colored::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
-
-mod ffmpeg;
-mod dist;
-mod cross;
+use std::{env, fs};
 
 #[derive(Parser)]
 #[command(name = "xtask")]
-#[command(about = "Build automation for Summit HIP Numbers", long_about = None)]
+#[command(about = "Build automation for Summit HIP Numbers")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -19,148 +14,246 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Build for all platforms and create distributions
+    /// Build distribution packages for all platforms
     Dist {
-        /// Build only for specific platform (windows, linux, macos)
-        #[arg(long)]
-        platform: Option<String>,
+        /// Specific platform to build (linux, macos, windows, or all)
+        #[arg(long, default_value = "all")]
+        platform: String,
 
-        /// Build variant (full or demo)
-        #[arg(long, default_value = "full")]
+        /// Variant to build (full, demo, or all)
+        #[arg(long, default_value = "all")]
         variant: String,
-
-        /// Build all variants
-        #[arg(long)]
-        all: bool,
-    },
-
-    /// Download and set up FFmpeg static libraries
-    FfmpegSetup {
-        /// Force re-download even if libraries exist
-        #[arg(long)]
-        force: bool,
-    },
-
-    /// Set up cross-compilation tools
-    CrossSetup,
-
-    /// Clean build artifacts
-    Clean {
-        /// Also clean downloaded FFmpeg libraries
-        #[arg(long)]
-        all: bool,
     },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Ensure we're in the project root
-    let project_root = project_root()?;
-    std::env::set_current_dir(&project_root)?;
-
     match cli.command {
-        Commands::Dist { platform, variant, all } => {
-            println!("{}", "=== Summit HIP Numbers - Unified Build System ===".cyan().bold());
-
-            // Set up FFmpeg if not already done
-            println!("\n{}", "Checking FFmpeg static libraries...".yellow());
-            ffmpeg::ensure_ffmpeg_libs(false)?;
-
-            // Set up cross if building for Linux/Windows
-            if platform.is_none() || platform.as_deref() == Some("linux") || platform.as_deref() == Some("windows") {
-                println!("\n{}", "Checking cross-compilation tools...".yellow());
-                cross::ensure_cross()?;
-            }
-
-            // Build distributions
-            let variants = if all {
-                vec!["full".to_string(), "demo".to_string()]
-            } else {
-                vec![variant]
-            };
-
-            let platforms = if let Some(p) = platform {
-                vec![p]
-            } else {
-                vec!["windows".to_string(), "linux".to_string(), "macos".to_string()]
-            };
-
-            for platform in &platforms {
-                for variant in &variants {
-                    println!("\n{}", format!("Building {} - {} variant", platform, variant).green().bold());
-                    dist::build_platform(platform, variant)?;
-                }
-            }
-
-            println!("\n{}", "✓ All builds completed successfully!".green().bold());
-            println!("Distributions available in: {}", "dist/".cyan());
-        }
-
-        Commands::FfmpegSetup { force } => {
-            println!("{}", "=== FFmpeg Static Library Setup ===".cyan().bold());
-            ffmpeg::ensure_ffmpeg_libs(force)?;
-            println!("\n{}", "✓ FFmpeg libraries ready!".green().bold());
-        }
-
-        Commands::CrossSetup => {
-            println!("{}", "=== Cross-Compilation Setup ===".cyan().bold());
-            cross::ensure_cross()?;
-            println!("\n{}", "✓ Cross-compilation tools ready!".green().bold());
-        }
-
-        Commands::Clean { all } => {
-            println!("{}", "=== Cleaning Build Artifacts ===".yellow());
-
-            // Clean cargo build artifacts
-            run_cmd("cargo", &["clean"])?;
-
-            // Clean dist directory
-            if Path::new("dist").exists() {
-                fs::remove_dir_all("dist")?;
-                println!("  ✓ Removed dist/");
-            }
-
-            // Clean FFmpeg if requested
-            if all {
-                if Path::new(".ffmpeg").exists() {
-                    fs::remove_dir_all(".ffmpeg")?;
-                    println!("  ✓ Removed .ffmpeg/");
-                }
-            }
-
-            println!("\n{}", "✓ Cleanup complete!".green().bold());
-        }
+        Commands::Dist { platform, variant } => build_dist(&platform, &variant)?,
     }
 
     Ok(())
 }
 
-fn project_root() -> Result<PathBuf> {
-    let dir = std::env::current_dir()?;
-    let mut current = dir.as_path();
+fn build_dist(platform: &str, variant: &str) -> Result<()> {
+    let root = project_root();
+    let dist_dir = root.join("dist");
 
-    loop {
-        if current.join("Cargo.toml").exists() && current.join("crates").exists() {
-            return Ok(current.to_path_buf());
-        }
+    // Determine which platforms to build
+    let platforms = if platform == "all" {
+        vec!["linux", "macos", "windows"]
+    } else {
+        vec![platform]
+    };
 
-        match current.parent() {
-            Some(parent) => current = parent,
-            None => bail!("Could not find project root"),
+    // Determine which variants to build
+    let variants = if variant == "all" {
+        vec!["full", "demo"]
+    } else {
+        vec![variant]
+    };
+
+    for platform in platforms {
+        for variant in variants.iter() {
+            println!("\n=== Building {} - {} ===", platform, variant);
+            build_platform(&root, &dist_dir, platform, variant)?;
         }
     }
+
+    println!("\n✓ All distributions built successfully!");
+    println!("Outputs in: {}", dist_dir.display());
+
+    Ok(())
 }
 
-fn run_cmd(program: &str, args: &[&str]) -> Result<()> {
-    let status = Command::new(program)
-        .args(args)
-        .status()
-        .with_context(|| format!("Failed to execute: {} {:?}", program, args))?;
+fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -> Result<()> {
+    // Detect current platform
+    let current_os = env::consts::OS;
+
+    // Build the application
+    println!("  [1/4] Building application...");
+    let mut build_cmd = Command::new("cargo");
+    build_cmd
+        .arg("build")
+        .arg("--release")
+        .arg("--package")
+        .arg("summit_hip_numbers");
+
+    if variant == &"demo" {
+        build_cmd.arg("--features").arg("demo");
+    }
+
+    // Add target for cross-compilation if needed
+    let (target, use_cross) = match (current_os, platform) {
+        // Native builds
+        ("linux", "linux") => ("x86_64-unknown-linux-gnu", false),
+        ("macos", "macos") => ("x86_64-apple-darwin", false),
+        ("windows", "windows") => ("x86_64-pc-windows-gnu", false),
+
+        // Cross-compilation (requires `cross` tool)
+        (_, "linux") => ("x86_64-unknown-linux-gnu", true),
+        (_, "windows") => ("x86_64-pc-windows-gnu", true),
+
+        // Can't cross-compile to macOS (requires actual macOS)
+        (_, "macos") if current_os != "macos" => {
+            println!("  ⚠ Skipping macOS build (requires macOS runner)");
+            return Ok(());
+        }
+
+        _ => return Err(anyhow::anyhow!("Unsupported platform combination")),
+    };
+
+    build_cmd.arg("--target").arg(target);
+
+    let status = if use_cross {
+        println!("  Using cross for {} target", target);
+        Command::new("cross")
+            .args(&build_cmd.get_args().collect::<Vec<_>>())
+            .status()
+            .context("Failed to run cross")?
+    } else {
+        build_cmd.status().context("Failed to run cargo build")?
+    };
 
     if !status.success() {
-        bail!("Command failed: {} {:?}", program, args);
+        return Err(anyhow::anyhow!("Build failed for {} - {}", platform, variant));
+    }
+
+    // Create distribution directory
+    println!("  [2/4] Creating distribution directory...");
+    let dist_name = format!("{}-{}", platform, variant);
+    let platform_dist = dist_dir.join(&dist_name);
+    fs::create_dir_all(&platform_dist)?;
+
+    // Copy binary
+    println!("  [3/4] Copying binary and assets...");
+    let binary_name = if platform == "windows" {
+        if variant == "demo" {
+            "summit_hip_numbers_demo.exe"
+        } else {
+            "summit_hip_numbers.exe"
+        }
+    } else {
+        if variant == "demo" {
+            "summit_hip_numbers_demo"
+        } else {
+            "summit_hip_numbers"
+        }
+    };
+
+    let binary_src = root
+        .join("target")
+        .join(target)
+        .join("release")
+        .join(binary_name);
+
+    if !binary_src.exists() {
+        return Err(anyhow::anyhow!(
+            "Binary not found at: {}",
+            binary_src.display()
+        ));
+    }
+
+    let binary_dest = platform_dist.join(binary_name);
+    fs::copy(&binary_src, &binary_dest)
+        .context(format!("Failed to copy binary to {}", binary_dest.display()))?;
+
+    // Make executable on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&binary_dest)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&binary_dest, perms)?;
+    }
+
+    // Copy assets
+    copy_assets(root, &platform_dist)?;
+
+    // Create archive
+    println!("  [4/4] Creating archive...");
+    create_archive(&dist_name, &platform_dist, platform)?;
+
+    println!("  ✓ {} - {} complete", platform, variant);
+
+    Ok(())
+}
+
+fn copy_assets(root: &Path, dist: &Path) -> Result<()> {
+    let assets = root.join("assets");
+
+    // Copy config
+    if let Ok(config) = fs::read(assets.join("config.toml")) {
+        fs::write(dist.join("config.toml"), config)?;
+    }
+
+    // Copy asset directories
+    for dir in &["videos", "splash", "logo"] {
+        let src = assets.join(dir);
+        if src.exists() {
+            let dest = dist.join(dir);
+            copy_dir_recursive(&src, &dest)?;
+        }
     }
 
     Ok(())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_recursive(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+fn create_archive(name: &str, source: &Path, platform: &str) -> Result<()> {
+    let parent = source.parent().unwrap();
+
+    if platform == "windows" {
+        // Create ZIP for Windows
+        let archive_name = format!("{}.zip", name);
+        let archive_path = parent.join(&archive_name);
+
+        let status = Command::new("zip")
+            .args(&["-r", archive_name.as_str(), name])
+            .current_dir(parent)
+            .status()
+            .context("Failed to create ZIP archive")?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("ZIP creation failed"));
+        }
+    } else {
+        // Create tar.gz for Unix
+        let archive_name = format!("{}.tar.gz", name);
+        let archive_path = parent.join(&archive_name);
+
+        let status = Command::new("tar")
+            .args(&["-czf", archive_name.as_str(), name])
+            .current_dir(parent)
+            .status()
+            .context("Failed to create tar.gz archive")?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("tar.gz creation failed"));
+        }
+    }
+
+    Ok(())
+}
+
+fn project_root() -> PathBuf {
+    Path::new(&env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(1)
+        .unwrap()
+        .to_path_buf()
 }
