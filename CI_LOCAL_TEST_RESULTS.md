@@ -114,4 +114,40 @@ The `coreaudio-sys` crate's bindgen can't find `stdint.h` types from the macOS S
 ---
 
 **Last Updated:** 2025-10-15 08:25 UTC
-**Status:** 🔄 Ongoing investigation, Linux fix ready to test
+**Status:** 🔄 Ongoing investigation, applying codec library fixes
+
+## Latest Build Run (2b69f84 - LIBCLANG_PATH Fix)
+
+### ✅ Linux Progress
+The LIBCLANG_PATH fix worked! Bindgen now successfully finds libclang. However, a new linking error has appeared:
+
+**New Error:** Missing FFmpeg optional codec libraries during linking:
+```
+/nix/store/.../ld: cannot find -lgmp: No such file or directory
+/nix/store/.../ld: cannot find -llzma: No such file or directory
+/nix/store/.../ld: cannot find -lmp3lame: No such file or directory
+/nix/store/.../ld: cannot find -ltheoraenc: No such file or directory
+/nix/store/.../ld: cannot find -ltheoradec: No such file or directory
+/nix/store/.../ld: cannot find -logg: No such file or directory
+/nix/store/.../ld: cannot find -lxvidcore: No such file or directory
+/nix/store/.../ld: cannot find -lsoxr: No such file or directory
+/nix/store/.../ld: cannot find -lvdpau: No such file or directory
+```
+
+**Next Fix:** Add these packages to buildInputs in flake.nix:
+- gmp
+- xz (provides lzma)
+- lame (provides mp3lame)
+- libtheora (provides theoraenc/theoradec)
+- libogg
+- xvidcore
+- soxr
+- libvdpau
+
+### ❌ Windows - Still Failing
+Same error persists: `fatal error: '/usr/include/libavcodec/avfft.h' file not found`
+The ffmpeg-sys-next crate hardcodes this path in its build.rs.
+
+### ❌ macOS - Still Failing
+Same error persists: `error: unknown type name 'uint32_t', 'uint64_t', 'uint8_t'`
+The coreaudio-sys crate can't find stdint.h types despite explicit SDK paths.

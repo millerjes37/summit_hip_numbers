@@ -46,6 +46,16 @@
 
         ffmpegLibs = with pkgs; [
           ffmpeg.dev
+        ] ++ lib.optionals pkgs.stdenv.isLinux [
+          # FFmpeg optional codec dependencies (required by ffmpeg-sys-next linking)
+          gmp
+          xz              # provides liblzma
+          lame            # provides libmp3lame
+          libtheora       # provides libtheoraenc/libtheoradec
+          libogg
+          xvidcore
+          soxr
+          libvdpau
         ];
 
         # Build inputs for GUI applications
