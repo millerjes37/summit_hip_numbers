@@ -113,10 +113,31 @@ The `coreaudio-sys` crate's bindgen can't find `stdint.h` types from the macOS S
 
 ---
 
-**Last Updated:** 2025-10-15 13:30 UTC
-**Status:** 🔄 Ongoing investigation, applying codec library fixes
+**Last Updated:** 2025-10-15 15:35 UTC
+**Status:** 🔄 Testing FFmpeg deprecated API fix
 
-## Latest Build Run (2b69f84 - LIBCLANG_PATH Fix)
+## Latest Build Run (12480c9 - FFmpeg Deprecated API Fix)
+
+**Build Run:** 18534266552
+**Commit:** 12480c9
+**Status:** In Progress
+
+### Fixes Applied:
+1. **Linux Test Fix**: Corrected directory path after archive extraction
+   - Changed from `dist/linux-${{ matrix.variant }}` to `linux-${{ matrix.variant }}`
+2. **Windows/macOS FFmpeg Fix**: Disabled deprecated FFmpeg APIs
+   - Added `CPPFLAGS=-DFFMPEG_NO_DEPRECATED` to skip avfft.h and other deprecated headers
+   - Applied to both Windows (workflow) and macOS (build script)
+
+### Expected Results:
+- ✅ Linux builds: Should still pass (already working)
+- 🔄 Linux tests: Should now pass (fixed directory path)
+- 🔄 Windows builds: Should pass (FFmpeg deprecated API disabled)
+- 🔄 macOS builds: Should pass (FFmpeg deprecated API disabled)
+
+---
+
+## Previous Build Run (c3ec1a5 - Comprehensive Fixes)
 
 ### ✅ Linux Progress
 The LIBCLANG_PATH fix worked! Bindgen now successfully finds libclang. However, a new linking error has appeared:
