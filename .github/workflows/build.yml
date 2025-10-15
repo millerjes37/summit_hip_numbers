@@ -49,7 +49,24 @@ jobs:
             pkg-config \
             clang \
             llvm-dev \
-            libclang-dev
+            libclang-dev \
+            libavc1394-dev \
+            libraw1394-dev \
+            libiec61883-dev \
+            libjack-dev \
+            libopenal-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libcdio-dev \
+            libcdio-paranoia-dev \
+            libdc1394-dev \
+            libcaca-dev \
+            libpulse-dev \
+            libsdl2-dev \
+            libxv-dev \
+            libpocketsphinx-dev \
+            libsphinxbase-dev \
+            libbs2b-dev
           
           # Verify FFmpeg installation
           pkg-config --exists --print-errors libavutil libavcodec libavformat libswscale libswresample
