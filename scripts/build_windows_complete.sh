@@ -43,22 +43,6 @@ export MSYSTEM=MINGW64
 export MSYSTEM_PREFIX=/mingw64
 export PATH="$MSYSTEM_PREFIX/bin:$PATH"
 
-# Create symlink to redirect /usr/include to /mingw64/include for stubborn crates
-log "Creating symlink from /usr/include to /mingw64/include..."
-mkdir -p /usr
-if [ -L /usr/include ]; then
-    log "Symlink /usr/include already exists, removing it..."
-    rm -f /usr/include
-fi
-ln -sf /mingw64/include /usr/include
-if [ -L /usr/include ] && [ -d /mingw64/include ]; then
-    log "✓ Symlink created successfully"
-else
-    log "✗ Failed to create symlink"
-    ls -la /usr/
-    ls -la /mingw64/ | head -5
-fi
-
 # Use Windows-style paths for PKG_CONFIG_PATH since Cargo converts MSYS paths incorrectly
 # Cargo expects Windows semicolon-separated paths when running on Windows
 if [ -n "${MSYS2_PATH_TYPE:-}" ]; then
@@ -96,6 +80,24 @@ fi
 export FFMPEG_INCLUDE_DIR="${FFMPEG_INCLUDE_DIR:-/mingw64/include}"
 export FFMPEG_LIB_DIR="${FFMPEG_LIB_DIR:-/mingw64/lib}"
 export FFMPEG_PKG_CONFIG="${FFMPEG_PKG_CONFIG:-0}"
+
+# Create symlink to redirect /usr/include to /mingw64/include for ffmpeg-sys-next crate
+# This crate hardcodes paths like /usr/include/libavcodec/avfft.h
+log "Creating symlink from /usr/include to /mingw64/include..."
+mkdir -p /usr
+
+# Remove /usr/include if it exists (as directory or symlink)
+if [ -e /usr/include ] || [ -L /usr/include ]; then
+    log "  Removing existing /usr/include..."
+    rm -rf /usr/include
+fi
+
+# Create the symlink
+if ln -sf /mingw64/include /usr/include 2>/dev/null; then
+    log "  ✓ Symlink created successfully"
+else
+    log "  ⚠ Symlink creation failed (continuing anyway)"
+fi
 
 log "MSYSTEM: $MSYSTEM"
 log "MSYSTEM_PREFIX: $MSYSTEM_PREFIX"
