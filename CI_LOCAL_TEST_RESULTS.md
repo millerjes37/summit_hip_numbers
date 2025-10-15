@@ -113,7 +113,7 @@ The `coreaudio-sys` crate's bindgen can't find `stdint.h` types from the macOS S
 
 ---
 
-**Last Updated:** 2025-10-15 08:25 UTC
+**Last Updated:** 2025-10-15 13:30 UTC
 **Status:** 🔄 Ongoing investigation, applying codec library fixes
 
 ## Latest Build Run (2b69f84 - LIBCLANG_PATH Fix)
@@ -151,3 +151,35 @@ The ffmpeg-sys-next crate hardcodes this path in its build.rs.
 ### ❌ macOS - Still Failing
 Same error persists: `error: unknown type name 'uint32_t', 'uint64_t', 'uint8_t'`
 The coreaudio-sys crate can't find stdint.h types despite explicit SDK paths.
+
+---
+
+## Build Run 5cac825 - Comprehensive Fixes Applied
+
+**Fixes Applied:**
+
+1. **Linux**: Added missing FFmpeg codec libraries (gmp, xz, lame, libtheora, libogg, xvidcore, soxr, libvdpau)
+2. **Windows**: Created /usr/include directory and copied mingw64 headers to satisfy ffmpeg-sys-next hardcoded paths
+3. **macOS**: Added `-include stdint.h` flag to force include standard integer types for coreaudio-sys
+
+**Build Status:** ✅ Completed (run 18530117781)
+
+- ✅ **Validation: PASSING** (5m23s)
+- ✅ **Linux Build (full): PASSING** (10m32s) 🎉
+- ✅ **Linux Build (demo): PASSING** (10m46s) 🎉
+- ✅ Linux Test (full & demo): PASSING
+- ❌ **Windows Build (full & demo): STILL FAILING**
+- ❌ **macOS Build (full & demo): STILL FAILING**
+
+**Windows Analysis:**
+- ✅ Header copy succeeded: "FFmpeg headers successfully copied to /usr/include"
+- ❌ Build still fails: `fatal error: '/usr/include/libavcodec/avfft.h' file not found`
+- **Root Cause**: Path resolution issue. MSYS2 `/usr/include` may not map to the absolute path that clang/bindgen expects
+- **Next Approach**: May need to patch ffmpeg-sys-next crate or find different path override method
+
+**macOS Analysis:**
+- ❌ `-include stdint.h` flag didn't help
+- ❌ Same error persists: `error: unknown type name 'uint32_t', 'uint64_t', 'uint8_t'`
+- **Root Cause**: SDK system headers (sys/resource.h) are themselves failing to find stdint types
+- **Issue**: Even with forced include, the SDK's own headers can't resolve types
+- **Next Approach**: May need to set different sysroot or SDK configuration flags
