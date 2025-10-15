@@ -550,17 +550,17 @@ jobs:
           echo "TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
       
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
       - name: Cache Nix Store
         uses: nix-community/cache-nix-action@v6
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ matrix.variant }}
           purge-primary-key: nix-${{ runner.os }}-
           purge-last-accessed: 7d
-      
-      - name: Install Nix
-        uses: cachix/install-nix-action@v25
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
       
       - name: Build with Nix
         run: |
