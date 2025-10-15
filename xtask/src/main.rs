@@ -113,7 +113,7 @@ fn download_ffmpeg_windows(ffmpeg_dir: &Path) -> Result<()> {
     let cursor = std::io::Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor)?;
 
-    fs::create_dir_all(&ffmpeg_dir)?;
+    fs::create_dir_all(ffmpeg_dir)?;
 
     // Extract files we need (bin/ and lib/)
     for i in 0..archive.len() {
@@ -156,7 +156,7 @@ fn ensure_cross_installed() -> Result<()> {
 
     println!("  ⬇ Installing cross for cross-compilation...");
     let status = Command::new("cargo")
-        .args(&[
+        .args([
             "install",
             "cross",
             "--git",
@@ -270,12 +270,10 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         } else {
             "summit_hip_numbers.exe"
         }
+    } else if variant == "demo" {
+        "summit_hip_numbers_demo"
     } else {
-        if variant == "demo" {
-            "summit_hip_numbers_demo"
-        } else {
-            "summit_hip_numbers"
-        }
+        "summit_hip_numbers"
     };
 
     let binary_src = root
@@ -395,7 +393,7 @@ fn create_archive(name: &str, source: &Path, platform: &str) -> Result<()> {
         let archive_name = format!("{}.zip", name);
 
         let status = Command::new("zip")
-            .args(&["-r", archive_name.as_str(), name])
+            .args(["-r", archive_name.as_str(), name])
             .current_dir(parent)
             .status()
             .context("Failed to create ZIP archive")?;
@@ -408,7 +406,7 @@ fn create_archive(name: &str, source: &Path, platform: &str) -> Result<()> {
         let archive_name = format!("{}.tar.gz", name);
 
         let status = Command::new("tar")
-            .args(&["-czf", archive_name.as_str(), name])
+            .args(["-czf", archive_name.as_str(), name])
             .current_dir(parent)
             .status()
             .context("Failed to create tar.gz archive")?;
