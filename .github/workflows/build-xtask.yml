@@ -34,6 +34,16 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
+      # Install system dependencies needed for compilation (Clippy needs to compile)
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libavutil-dev libavcodec-dev libavformat-dev \
+            libswscale-dev libswresample-dev \
+            pkg-config clang
+
       - name: Format Check
         run: cargo fmt --all -- --check
 
