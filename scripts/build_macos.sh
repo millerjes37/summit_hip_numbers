@@ -148,7 +148,11 @@ fi
 # Add FFmpeg includes
 export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS -I$FFMPEG_INCLUDE_DIR"
 
+# Disable deprecated FFmpeg APIs to avoid missing avfft.h
+export CPPFLAGS="-DFFMPEG_NO_DEPRECATED"
+
 log "BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
+log "CPPFLAGS=$CPPFLAGS"
 
 # Build with cargo
 cargo build --release --package summit_hip_numbers $FEATURES 2>&1 | tee -a "$LOG_FILE"

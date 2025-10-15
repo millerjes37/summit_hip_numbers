@@ -332,6 +332,9 @@ jobs:
           # Tell ffmpeg-sys-next to use pkg-config
           echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
 
+          # Disable deprecated FFmpeg APIs to avoid missing avfft.h
+          echo "CPPFLAGS=-DFFMPEG_NO_DEPRECATED" >> $GITHUB_ENV
+
       - name: Create /usr/include Directory Structure
         shell: msys2 {0}
         run: |
@@ -402,6 +405,7 @@ jobs:
           export FFMPEG_INCLUDE_DIR="/mingw64/include"
           export FFMPEG_LIB_DIR="/mingw64/lib"
           export FFMPEG_PKG_CONFIG="1"
+          export CPPFLAGS="-DFFMPEG_NO_DEPRECATED"
 
           echo "Build environment:"
           echo "  LIBCLANG_PATH=$LIBCLANG_PATH"
@@ -1097,11 +1101,11 @@ jobs:
           
           # Validate structure
           echo -e "\n[2/5] Validating structure..."
-          find dist/linux-${{ matrix.variant }} -type f -exec ls -lh {} \;
-          
+          find linux-${{ matrix.variant }} -type f -exec ls -lh {} \;
+
           # Find binary
           echo -e "\n[3/5] Locating binary..."
-          BINARY=$(find dist/linux-${{ matrix.variant }} -name "summit_hip_numbers*" -type f -executable | head -n 1)
+          BINARY=$(find linux-${{ matrix.variant }} -name "summit_hip_numbers*" -type f -executable | head -n 1)
           if [ -z "$BINARY" ]; then
             echo "ERROR: Binary not found"
             exit 1
