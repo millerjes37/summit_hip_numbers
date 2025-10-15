@@ -297,62 +297,39 @@ jobs:
           # Set up environment for bindgen (used by ffmpeg-sys-next)
           export MSYSTEM=MINGW64
           export MSYSTEM_PREFIX=/mingw64
-          
+
           # Find libclang for bindgen
           if [ -f "/mingw64/bin/libclang.dll" ]; then
             echo "Found libclang.dll at: /mingw64/bin/libclang.dll"
             echo "LIBCLANG_PATH=/mingw64/bin" >> $GITHUB_ENV
           fi
-          
+
           # Configure clang to use MSYS2 system headers properly
-          CLANG_ARGS="-I/mingw64/include"
-          
+          # IMPORTANT: Use -nostdinc to prevent looking in /usr/include
+          CLANG_ARGS="-nostdinc -I/mingw64/include"
+
           CLANG_BUILTIN_INCLUDE=$(find /mingw64/lib/clang -type d -name include 2>/dev/null | head -n1)
           if [ -n "$CLANG_BUILTIN_INCLUDE" ]; then
             CLANG_ARGS="$CLANG_ARGS -I$CLANG_BUILTIN_INCLUDE"
           fi
-          
+
           CLANG_ARGS="$CLANG_ARGS -I/mingw64/x86_64-w64-mingw32/include"
           CLANG_ARGS="$CLANG_ARGS --target=x86_64-w64-mingw32 --sysroot=/mingw64"
           CLANG_ARGS="$CLANG_ARGS -isystem /mingw64/include"
           CLANG_ARGS="$CLANG_ARGS -D__MINGW64__ -fms-extensions"
 
           echo "BINDGEN_EXTRA_CLANG_ARGS=$CLANG_ARGS" >> $GITHUB_ENV
-          
+
+          # Override CPATH to point to mingw64/include instead of /usr/include
+          echo "CPATH=/mingw64/include" >> $GITHUB_ENV
+          echo "C_INCLUDE_PATH=/mingw64/include" >> $GITHUB_ENV
+
           # FFmpeg include paths for pkg-config fallback
           echo "FFMPEG_INCLUDE_DIR=/mingw64/include" >> $GITHUB_ENV
           echo "FFMPEG_LIB_DIR=/mingw64/lib" >> $GITHUB_ENV
-          
+
           # Tell ffmpeg-sys-next to use pkg-config
           echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
-
-      - name: Create Symlink for ffmpeg-sys-next
-        shell: msys2 {0}
-        run: |
-          # Create symlink to redirect /usr/include to /mingw64/include
-          # This is required because ffmpeg-sys-next hardcodes /usr/include paths
-          echo "Creating symlink /usr/include -> /mingw64/include"
-          mkdir -p /usr
-
-          # Remove any existing /usr/include (file, directory, or symlink)
-          if [ -e /usr/include ] || [ -L /usr/include ]; then
-            echo "Removing existing /usr/include"
-            rm -rf /usr/include
-          fi
-
-          # Create the symlink
-          if ln -sf /mingw64/include /usr/include 2>/dev/null; then
-            echo "✓ Symlink created successfully"
-            # Verify it works
-            if [ -f /usr/include/libavcodec/avcodec.h ]; then
-              echo "✓ FFmpeg headers accessible via /usr/include"
-            else
-              echo "⚠ Warning: FFmpeg headers not found via symlink"
-            fi
-          else
-            echo "✗ Symlink creation failed"
-            exit 1
-          fi
 
       - name: Use Complete Build Script
         shell: msys2 {0}
@@ -369,25 +346,25 @@ jobs:
           export PATH="/mingw64/bin:$PATH"
           export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig"
 
-          # Recreate the symlink that may have been lost
-          mkdir -p /usr
-          ln -sf /mingw64/include /usr/include || true
-
           # FFmpeg bindgen configuration - set explicitly since GITHUB_ENV may not carry over
           export LIBCLANG_PATH="/mingw64/bin"
-          export BINDGEN_EXTRA_CLANG_ARGS="-I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 --sysroot=/mingw64 -isystem /mingw64/include -D__MINGW64__ -fms-extensions"
+          export BINDGEN_EXTRA_CLANG_ARGS="-nostdinc -I/mingw64/include -I/mingw64/x86_64-w64-mingw32/include --target=x86_64-w64-mingw32 --sysroot=/mingw64 -isystem /mingw64/include -D__MINGW64__ -fms-extensions"
+          export CPATH="/mingw64/include"
+          export C_INCLUDE_PATH="/mingw64/include"
           export FFMPEG_INCLUDE_DIR="/mingw64/include"
           export FFMPEG_LIB_DIR="/mingw64/lib"
           export FFMPEG_PKG_CONFIG="1"
-          
+
           echo "Build environment:"
           echo "  LIBCLANG_PATH=$LIBCLANG_PATH"
           echo "  BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
+          echo "  CPATH=$CPATH"
+          echo "  C_INCLUDE_PATH=$C_INCLUDE_PATH"
           echo "  FFMPEG_INCLUDE_DIR=$FFMPEG_INCLUDE_DIR"
           echo "  FFMPEG_LIB_DIR=$FFMPEG_LIB_DIR"
           echo "  FFMPEG_PKG_CONFIG=$FFMPEG_PKG_CONFIG"
           echo "  PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-          
+
           # Run the complete build script
           ./scripts/build_windows_complete.sh ${{ matrix.variant }}
           
