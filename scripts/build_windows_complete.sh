@@ -81,24 +81,6 @@ export FFMPEG_INCLUDE_DIR="${FFMPEG_INCLUDE_DIR:-/mingw64/include}"
 export FFMPEG_LIB_DIR="${FFMPEG_LIB_DIR:-/mingw64/lib}"
 export FFMPEG_PKG_CONFIG="${FFMPEG_PKG_CONFIG:-0}"
 
-# Create symlink to redirect /usr/include to /mingw64/include for ffmpeg-sys-next crate
-# This crate hardcodes paths like /usr/include/libavcodec/avfft.h
-log "Creating symlink from /usr/include to /mingw64/include..."
-mkdir -p /usr
-
-# Remove /usr/include if it exists (as directory or symlink)
-if [ -e /usr/include ] || [ -L /usr/include ]; then
-    log "  Removing existing /usr/include..."
-    rm -rf /usr/include
-fi
-
-# Create the symlink
-if ln -sf /mingw64/include /usr/include 2>/dev/null; then
-    log "  ✓ Symlink created successfully"
-else
-    log "  ⚠ Symlink creation failed (continuing anyway)"
-fi
-
 log "MSYSTEM: $MSYSTEM"
 log "MSYSTEM_PREFIX: $MSYSTEM_PREFIX"
 log "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
