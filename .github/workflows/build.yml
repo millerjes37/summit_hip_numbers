@@ -541,6 +541,9 @@ jobs:
       
       - name: Build with Nix
         run: |
+          # Unset LD_LIBRARY_PATH to prevent conflicts with Nix's library management
+          unset LD_LIBRARY_PATH
+
           if [ "${{ matrix.variant }}" = "demo" ]; then
             nix build .#demo --print-build-logs
           else
