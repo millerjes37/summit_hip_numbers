@@ -1,27 +1,21 @@
 # Cross-compilation configuration
 # https://github.com/cross-rs/cross
 
-[build]
-# Use pre-built images with FFmpeg
 [target.x86_64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
-# Mount the project directory
-volumes = [".:/project"]
 
-# Additional packages needed for build
+# Install all dependencies needed for compilation
 pre-build = [
     "apt-get update",
-    "apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev",
+    "apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev libavfilter-dev libavdevice-dev",
     "apt-get install -y libasound2-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev",
-    "apt-get install -y libwayland-dev libxkbcommon-dev",
+    "apt-get install -y libwayland-dev libxkbcommon-dev pkg-config clang",
 ]
 
 [target.x86_64-pc-windows-gnu]
 image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:main"
-volumes = [".:/project"]
 
-# Note: Windows cross-compilation for FFmpeg is complex
-# Consider using MSYS2 native builds for production
+# Minimal Windows setup - FFmpeg DLLs will be bundled by xtask
 pre-build = [
     "dpkg --add-architecture i386",
     "apt-get update",

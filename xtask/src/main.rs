@@ -219,7 +219,29 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
                 println!("  ⚠ Skipping macOS build (requires macOS runner)");
                 return Ok(());
             }
-            ("x86_64-apple-darwin", false)
+            // Detect current architecture and use it for native build
+            let arch = env::consts::ARCH;
+            let target = match arch {
+                "aarch64" => "aarch64-apple-darwin",
+                "x86_64" => "x86_64-apple-darwin",
+                _ => {
+                    println!("  ⚠ Unsupported macOS architecture: {}", arch);
+                    return Ok(());
+                }
+            };
+
+            // Ensure target is installed
+            println!("  Ensuring Rust target {} is installed...", target);
+            let status = Command::new("rustup")
+                .args(["target", "add", target])
+                .status()
+                .context("Failed to run rustup")?;
+
+            if !status.success() {
+                bail!("Failed to install Rust target: {}", target);
+            }
+
+            (target, false)
         }
         _ => return Err(anyhow::anyhow!("Unsupported platform: {}", platform)),
     };
