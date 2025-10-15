@@ -325,7 +325,35 @@ jobs:
           
           # Tell ffmpeg-sys-next to use pkg-config
           echo "FFMPEG_PKG_CONFIG=1" >> $GITHUB_ENV
-      
+
+      - name: Create Symlink for ffmpeg-sys-next
+        shell: msys2 {0}
+        run: |
+          # Create symlink to redirect /usr/include to /mingw64/include
+          # This is required because ffmpeg-sys-next hardcodes /usr/include paths
+          echo "Creating symlink /usr/include -> /mingw64/include"
+          mkdir -p /usr
+
+          # Remove any existing /usr/include (file, directory, or symlink)
+          if [ -e /usr/include ] || [ -L /usr/include ]; then
+            echo "Removing existing /usr/include"
+            rm -rf /usr/include
+          fi
+
+          # Create the symlink
+          if ln -sf /mingw64/include /usr/include 2>/dev/null; then
+            echo "✓ Symlink created successfully"
+            # Verify it works
+            if [ -f /usr/include/libavcodec/avcodec.h ]; then
+              echo "✓ FFmpeg headers accessible via /usr/include"
+            else
+              echo "⚠ Warning: FFmpeg headers not found via symlink"
+            fi
+          else
+            echo "✗ Symlink creation failed"
+            exit 1
+          fi
+
       - name: Use Complete Build Script
         shell: msys2 {0}
         run: |
