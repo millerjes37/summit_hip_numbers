@@ -15,9 +15,8 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
   RUST_LOG: debug
-  LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu
-  CPATH: /usr/include
-  C_INCLUDE_PATH: /usr/include
+  # Note: LD_LIBRARY_PATH, CPATH, and C_INCLUDE_PATH are set per-job where needed
+  # Setting them globally causes conflicts with Nix (Linux) and SDK paths (macOS)
 
 jobs:
   # ============================================================================
@@ -27,11 +26,16 @@ jobs:
   validate:
     name: Code Quality & Security
     runs-on: ubuntu-latest
+    env:
+      # Ubuntu/Linux-specific paths for validation job
+      LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu
+      CPATH: /usr/include
+      C_INCLUDE_PATH: /usr/include
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
-      
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
