@@ -355,19 +355,38 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
 }
 
 fn copy_assets(root: &Path, dist: &Path) -> Result<()> {
-    let assets = root.join("assets");
-
-    // Copy config
-    if let Ok(config) = fs::read(assets.join("config.toml")) {
-        fs::write(dist.join("config.toml"), config)?;
+    // Copy distribution config (config.dist.toml -> config.toml)
+    let dist_config = root.join("config.dist.toml");
+    if dist_config.exists() {
+        fs::copy(&dist_config, dist.join("config.toml"))
+            .context("Failed to copy config.dist.toml")?;
+        println!("  ✓ Copied config.dist.toml -> config.toml");
+    } else {
+        // Fallback to assets/config.toml if config.dist.toml doesn't exist
+        let assets_config = root.join("assets").join("config.toml");
+        if assets_config.exists() {
+            fs::copy(&assets_config, dist.join("config.toml"))
+                .context("Failed to copy config.toml")?;
+            println!("  ✓ Copied config.toml");
+        } else {
+            println!("  ⚠ No config file found");
+        }
     }
 
-    // Copy asset directories
+    // Copy or create asset directories
+    let assets = root.join("assets");
     for dir in &["videos", "splash", "logo"] {
         let src = assets.join(dir);
+        let dest = dist.join(dir);
+
         if src.exists() {
-            let dest = dist.join(dir);
             copy_dir_recursive(&src, &dest)?;
+            println!("  ✓ Copied {} directory", dir);
+        } else {
+            // Create empty directory structure for user to populate
+            fs::create_dir_all(&dest)
+                .with_context(|| format!("Failed to create {} directory", dir))?;
+            println!("  ✓ Created empty {} directory", dir);
         }
     }
 
