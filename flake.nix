@@ -98,6 +98,7 @@
                WINIT_UNIX_BACKEND = "x11";
                XDG_SESSION_TYPE = "x11";
                GDK_BACKEND = "x11";
+               LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
              };
              
               postInstall = ''
@@ -133,6 +134,7 @@
                WINIT_UNIX_BACKEND = "x11";
                XDG_SESSION_TYPE = "x11";
                GDK_BACKEND = "x11";
+               LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
              };
              
               postInstall = ''
@@ -171,6 +173,7 @@
                WINIT_UNIX_BACKEND = "x11";
                XDG_SESSION_TYPE = "x11";
                GDK_BACKEND = "x11";
+               LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
              };
              
               postInstall = ''
