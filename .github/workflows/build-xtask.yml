@@ -118,37 +118,37 @@ jobs:
           echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
-       # Install Docker for cross-compilation (Linux/Windows from Ubuntu, or ARM64 macOS)
-       - name: Set up Docker
-         if: matrix.platform != 'macos' || matrix.os == 'macos-latest'
-         uses: docker/setup-docker-action@v4
-         with:
-           daemon-config: |
-             {
-               "features": {
-                 "containerd-snapshotter": true
-               }
-             }
+      # Install Docker for cross-compilation (Linux/Windows from Ubuntu, or ARM64 macOS)
+      - name: Set up Docker
+        if: matrix.platform != 'macos' || matrix.os == 'macos-latest'
+        uses: docker/setup-docker-action@v4
+        with:
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
 
-       # Install cross for Linux/Windows builds
-       - name: Install Cross
-         if: matrix.platform != 'macos'
-         run: |
-           cargo install cross --git https://github.com/cross-rs/cross
+      # Install cross for Linux/Windows builds
+      - name: Install Cross
+        if: matrix.platform != 'macos'
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
 
-       # macOS: Docker is available by default on GitHub Actions macOS runners
-       - name: Verify macOS Docker
-         if: matrix.os == 'macos-latest'
-         run: |
-           docker --version
-           docker run --rm --platform linux/amd64 hello-world
+      # macOS: Docker is available by default on GitHub Actions macOS runners
+      - name: Verify macOS Docker
+        if: matrix.os == 'macos-latest'
+        run: |
+          docker --version
+          docker run --rm --platform linux/amd64 hello-world
 
-       # Build using xtask
-       - name: Build with xtask
-         run: |
-           # Build xtask first
-           cargo build --package xtask --release
-           ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
+      # Build using xtask
+      - name: Build with xtask
+        run: |
+          # Build xtask first
+          cargo build --package xtask --release
+          ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
 
       # Upload artifacts
       - name: Upload Distribution
@@ -209,39 +209,39 @@ jobs:
           file "$BINARY"
           ldd "$BINARY" || echo "Note: ldd failed"
 
-       - name: Test macOS Distribution
-         if: matrix.platform == 'macos'
-         run: |
-           echo "Testing macOS distribution..."
-           unzip -l *.zip | head -20
-           unzip *.zip
+      - name: Test macOS Distribution
+        if: matrix.platform == 'macos'
+        run: |
+          echo "Testing macOS distribution..."
+          unzip -l *.zip | head -20
+          unzip *.zip
 
-           # Find app bundle
-           APP=$(find . -name "*.app" -type d | head -n 1)
-           if [ -z "$APP" ]; then
-             echo "ERROR: App bundle not found"
-             exit 1
-           fi
+          # Find app bundle
+          APP=$(find . -name "*.app" -type d | head -n 1)
+          if [ -z "$APP" ]; then
+            echo "ERROR: App bundle not found"
+            exit 1
+          fi
 
-           echo "✓ Found app bundle: $APP"
-           ls -la "$APP/Contents/MacOS/"
+          echo "✓ Found app bundle: $APP"
+          ls -la "$APP/Contents/MacOS/"
 
-       - name: Test Windows Distribution
-         if: matrix.platform == 'windows'
-         run: |
-           echo "Testing Windows distribution..."
-           unzip -l *.zip | head -20
-           unzip *.zip
+      - name: Test Windows Distribution
+        if: matrix.platform == 'windows'
+        run: |
+          echo "Testing Windows distribution..."
+          unzip -l *.zip | head -20
+          unzip *.zip
 
-           # Find executable
-           EXE=$(find . -name "*.exe" -type f | head -n 1)
-           if [ -z "$EXE" ]; then
-             echo "ERROR: Executable not found"
-             exit 1
-           fi
+          # Find executable
+          EXE=$(find . -name "*.exe" -type f | head -n 1)
+          if [ -z "$EXE" ]; then
+            echo "ERROR: Executable not found"
+            exit 1
+          fi
 
-           echo "✓ Found executable: $EXE"
-           file "$EXE"
+          echo "✓ Found executable: $EXE"
+          file "$EXE"
 
   # ============================================================================
   # BUILD SUMMARY
