@@ -284,6 +284,7 @@ fn find_ffmpeg_pkgconfig_path() -> Result<PathBuf> {
     Ok(pkgconfig_dir.to_path_buf())
 }
 
+#[allow(dead_code)]
 fn download_ffmpeg_macos(ffmpeg_dir: &Path) -> Result<()> {
     // Download static FFmpeg build from evermeet.cx (universal binary)
     let url = "https://evermeet.cx/ffmpeg/ffmpeg-7.1.7z";
@@ -350,7 +351,7 @@ fn download_ffmpeg_macos(ffmpeg_dir: &Path) -> Result<()> {
         fs::create_dir_all(&include_dir)?;
 
         // Find ffmpeg binary and copy it
-        for entry in fs::read_dir(&extracted_dir)? {
+        for entry in fs::read_dir(extracted_dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.file_name().and_then(|n| n.to_str()) == Some("ffmpeg")
@@ -705,6 +706,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn bundle_macos_dylibs(dist_dir: &Path) -> Result<()> {
     println!("  [3.5/4] Bundling macOS dylibs...");
 
