@@ -170,8 +170,14 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     let ffmpeg_pkgconfig_path = find_ffmpeg_pkgconfig_path()?;
 
     println!("  ✓ Found FFmpeg lib: {}", ffmpeg_lib_path.display());
-    println!("  ✓ Found FFmpeg include: {}", ffmpeg_include_path.display());
-    println!("  ✓ Found FFmpeg pkgconfig: {}", ffmpeg_pkgconfig_path.display());
+    println!(
+        "  ✓ Found FFmpeg include: {}",
+        ffmpeg_include_path.display()
+    );
+    println!(
+        "  ✓ Found FFmpeg pkgconfig: {}",
+        ffmpeg_pkgconfig_path.display()
+    );
 
     // Set environment variables for FFmpeg linking
     build_cmd.env("CPATH", &ffmpeg_include_path);
@@ -182,7 +188,11 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     let new_pkg_config_path = if current_pkg_config_path.is_empty() {
         ffmpeg_pkgconfig_path.to_string_lossy().to_string()
     } else {
-        format!("{}:{}", ffmpeg_pkgconfig_path.display(), current_pkg_config_path)
+        format!(
+            "{}:{}",
+            ffmpeg_pkgconfig_path.display(),
+            current_pkg_config_path
+        )
     };
     build_cmd.env("PKG_CONFIG_PATH", new_pkg_config_path);
 
@@ -215,7 +225,9 @@ fn find_ffmpeg_lib_path() -> Result<PathBuf> {
         .to_string();
 
     let lib_path = PathBuf::from(lib_path_str);
-    let lib_dir = lib_path.parent().context("FFmpeg library has no parent directory")?;
+    let lib_dir = lib_path
+        .parent()
+        .context("FFmpeg library has no parent directory")?;
 
     Ok(lib_dir.to_path_buf())
 }
@@ -239,7 +251,9 @@ fn find_ffmpeg_include_path() -> Result<PathBuf> {
         .to_string();
 
     let include_path = PathBuf::from(include_path_str);
-    let include_dir = include_path.parent().context("FFmpeg include has no parent directory")?;
+    let include_dir = include_path
+        .parent()
+        .context("FFmpeg include has no parent directory")?;
 
     Ok(include_dir.to_path_buf())
 }
@@ -263,7 +277,9 @@ fn find_ffmpeg_pkgconfig_path() -> Result<PathBuf> {
         .to_string();
 
     let pc_path = PathBuf::from(pc_path_str);
-    let pkgconfig_dir = pc_path.parent().context("FFmpeg pkgconfig has no parent directory")?;
+    let pkgconfig_dir = pc_path
+        .parent()
+        .context("FFmpeg pkgconfig has no parent directory")?;
 
     Ok(pkgconfig_dir.to_path_buf())
 }
@@ -291,7 +307,11 @@ fn download_ffmpeg_macos(ffmpeg_dir: &Path) -> Result<()> {
 
     // Extract using 7z command
     let status = Command::new("7z")
-        .args(["x", temp_file.to_str().unwrap(), &format!("-o{}", ffmpeg_dir.display())])
+        .args([
+            "x",
+            temp_file.to_str().unwrap(),
+            &format!("-o{}", ffmpeg_dir.display()),
+        ])
         .status()
         .context("Failed to extract FFmpeg archive with 7z")?;
 
@@ -299,7 +319,12 @@ fn download_ffmpeg_macos(ffmpeg_dir: &Path) -> Result<()> {
         // Try tar if 7z fails
         println!("    7z failed, trying tar...");
         let status = Command::new("tar")
-            .args(["-xf", temp_file.to_str().unwrap(), "-C", ffmpeg_dir.parent().unwrap().to_str().unwrap()])
+            .args([
+                "-xf",
+                temp_file.to_str().unwrap(),
+                "-C",
+                ffmpeg_dir.parent().unwrap().to_str().unwrap(),
+            ])
             .status()
             .context("Failed to extract FFmpeg archive with tar")?;
 
@@ -328,7 +353,9 @@ fn download_ffmpeg_macos(ffmpeg_dir: &Path) -> Result<()> {
         for entry in fs::read_dir(&extracted_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.file_name().and_then(|n| n.to_str()) == Some("ffmpeg") && entry.file_type()?.is_file() {
+            if path.file_name().and_then(|n| n.to_str()) == Some("ffmpeg")
+                && entry.file_type()?.is_file()
+            {
                 fs::copy(&path, bin_dir.join("ffmpeg"))?;
                 break;
             }
@@ -473,13 +500,25 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         // Check if we're on ARM64 macOS - cross has issues with Docker platform detection
         let is_arm64_macos = env::consts::OS == "macos" && env::consts::ARCH == "aarch64";
 
-        if is_arm64_macos && (target == "x86_64-unknown-linux-gnu" || target == "x86_64-pc-windows-gnu") {
+        if is_arm64_macos
+            && (target == "x86_64-unknown-linux-gnu" || target == "x86_64-pc-windows-gnu")
+        {
             // Use Docker directly for ARM64 macOS cross-compilation
-            let platform_name = if target == "x86_64-unknown-linux-gnu" { "Linux" } else { "Windows" };
-            println!("  Using Docker directly for ARM64 macOS -> {} cross-compilation", platform_name);
+            let platform_name = if target == "x86_64-unknown-linux-gnu" {
+                "Linux"
+            } else {
+                "Windows"
+            };
+            println!(
+                "  Using Docker directly for ARM64 macOS -> {} cross-compilation",
+                platform_name
+            );
 
             // Build the cargo command string
-            let mut cargo_cmd = format!("cargo build --release --package summit_hip_numbers --target {}", target);
+            let mut cargo_cmd = format!(
+                "cargo build --release --package summit_hip_numbers --target {}",
+                target
+            );
             if variant == "demo" {
                 cargo_cmd.push_str(" --features demo");
             }
@@ -558,14 +597,10 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
 
     let binary_src = if platform == "macos" && current_os == "macos" {
         // For native macOS builds, don't use target triple
-        root
-            .join("target")
-            .join("release")
-            .join(binary_name)
+        root.join("target").join("release").join(binary_name)
     } else {
         // For cross-compilation, use target triple
-        root
-            .join("target")
+        root.join("target")
             .join(target)
             .join("release")
             .join(binary_name)
@@ -689,7 +724,13 @@ fn bundle_macos_dylibs(dist_dir: &Path) -> Result<()> {
 
     for pattern in &ffmpeg_libs {
         let output = Command::new("find")
-            .args([ffmpeg_lib_path.to_str().unwrap(), "-name", pattern, "-type", "f"])
+            .args([
+                ffmpeg_lib_path.to_str().unwrap(),
+                "-name",
+                pattern,
+                "-type",
+                "f",
+            ])
             .output()
             .with_context(|| format!("Failed to find {} libraries", pattern))?;
 
@@ -697,8 +738,7 @@ fn bundle_macos_dylibs(dist_dir: &Path) -> Result<()> {
             continue;
         }
 
-        let lib_paths = String::from_utf8(output.stdout)
-            .context("Invalid UTF-8 in find output")?;
+        let lib_paths = String::from_utf8(output.stdout).context("Invalid UTF-8 in find output")?;
 
         for lib_path_str in lib_paths.lines() {
             let lib_path = PathBuf::from(lib_path_str);
