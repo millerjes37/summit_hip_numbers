@@ -80,9 +80,9 @@ fn ensure_ffmpeg(root: &Path, platform: &str) -> Result<PathBuf> {
     match platform {
         "windows" => download_ffmpeg_windows(&ffmpeg_dir)?,
         "macos" => {
-            // macOS uses system FFmpeg via Homebrew or system libraries
-            println!("  ℹ macOS will use system FFmpeg libraries");
-            return Ok(ffmpeg_dir); // Return dummy path
+            // macOS uses nix-provided FFmpeg libraries
+            println!("  ℹ macOS will use nix FFmpeg libraries");
+            return Ok(ffmpeg_dir); // Return dummy path, we'll set env vars later
         }
         "linux" => {
             // Linux uses system libraries
@@ -97,8 +97,8 @@ fn ensure_ffmpeg(root: &Path, platform: &str) -> Result<PathBuf> {
 }
 
 fn download_ffmpeg_windows(ffmpeg_dir: &Path) -> Result<()> {
-    // Download FFmpeg shared build from gyan.dev
-    let url = "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip";
+    // Download FFmpeg full build with headers from gyan.dev
+    let url = "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-full_build-shared.zip";
 
     println!("    Downloading from: {}", url);
     let response = reqwest::blocking::get(url).context("Failed to download FFmpeg")?;
@@ -163,6 +163,185 @@ fn download_ffmpeg_windows(ffmpeg_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()> {
+    // Find FFmpeg paths in nix store
+    let ffmpeg_lib_path = find_ffmpeg_lib_path()?;
+    let ffmpeg_include_path = find_ffmpeg_include_path()?;
+    let ffmpeg_pkgconfig_path = find_ffmpeg_pkgconfig_path()?;
+
+    println!("  ✓ Found FFmpeg lib: {}", ffmpeg_lib_path.display());
+    println!("  ✓ Found FFmpeg include: {}", ffmpeg_include_path.display());
+    println!("  ✓ Found FFmpeg pkgconfig: {}", ffmpeg_pkgconfig_path.display());
+
+    // Set environment variables for FFmpeg linking
+    build_cmd.env("CPATH", &ffmpeg_include_path);
+    build_cmd.env("LIBRARY_PATH", &ffmpeg_lib_path);
+
+    // Set pkg-config path
+    let current_pkg_config_path = env::var("PKG_CONFIG_PATH").unwrap_or_default();
+    let new_pkg_config_path = if current_pkg_config_path.is_empty() {
+        ffmpeg_pkgconfig_path.to_string_lossy().to_string()
+    } else {
+        format!("{}:{}", ffmpeg_pkgconfig_path.display(), current_pkg_config_path)
+    };
+    build_cmd.env("PKG_CONFIG_PATH", new_pkg_config_path);
+
+    // On macOS, force use of libc++ instead of libstdc++
+    if platform == "macos" {
+        build_cmd.env("CXXSTDLIB", "c++");
+        build_cmd.env("CXXFLAGS", "-stdlib=libc++");
+        build_cmd.env("LDFLAGS", "-stdlib=libc++");
+    }
+
+    Ok(())
+}
+
+fn find_ffmpeg_lib_path() -> Result<PathBuf> {
+    // Find FFmpeg lib directory in nix store
+    let output = Command::new("find")
+        .args(["/nix/store", "-name", "libavcodec*.dylib", "-type", "f"])
+        .output()
+        .context("Failed to find FFmpeg libraries")?;
+
+    if !output.status.success() {
+        bail!("No FFmpeg libraries found in nix store");
+    }
+
+    let lib_path_str = String::from_utf8(output.stdout)
+        .context("Invalid UTF-8 in find output")?
+        .lines()
+        .next()
+        .context("No FFmpeg library found")?
+        .to_string();
+
+    let lib_path = PathBuf::from(lib_path_str);
+    let lib_dir = lib_path.parent().context("FFmpeg library has no parent directory")?;
+
+    Ok(lib_dir.to_path_buf())
+}
+
+fn find_ffmpeg_include_path() -> Result<PathBuf> {
+    // Find FFmpeg include directory in nix store
+    let output = Command::new("find")
+        .args(["/nix/store", "-name", "libavcodec", "-type", "d"])
+        .output()
+        .context("Failed to find FFmpeg includes")?;
+
+    if !output.status.success() {
+        bail!("No FFmpeg includes found in nix store");
+    }
+
+    let include_path_str = String::from_utf8(output.stdout)
+        .context("Invalid UTF-8 in find output")?
+        .lines()
+        .next()
+        .context("No FFmpeg include directory found")?
+        .to_string();
+
+    let include_path = PathBuf::from(include_path_str);
+    let include_dir = include_path.parent().context("FFmpeg include has no parent directory")?;
+
+    Ok(include_dir.to_path_buf())
+}
+
+fn find_ffmpeg_pkgconfig_path() -> Result<PathBuf> {
+    // Find FFmpeg pkgconfig directory in nix store
+    let output = Command::new("find")
+        .args(["/nix/store", "-name", "libavcodec.pc", "-type", "f"])
+        .output()
+        .context("Failed to find FFmpeg pkgconfig")?;
+
+    if !output.status.success() {
+        bail!("No FFmpeg pkgconfig found in nix store");
+    }
+
+    let pc_path_str = String::from_utf8(output.stdout)
+        .context("Invalid UTF-8 in find output")?
+        .lines()
+        .next()
+        .context("No FFmpeg pkgconfig file found")?
+        .to_string();
+
+    let pc_path = PathBuf::from(pc_path_str);
+    let pkgconfig_dir = pc_path.parent().context("FFmpeg pkgconfig has no parent directory")?;
+
+    Ok(pkgconfig_dir.to_path_buf())
+}
+
+fn download_ffmpeg_macos(ffmpeg_dir: &Path) -> Result<()> {
+    // Download static FFmpeg build from evermeet.cx (universal binary)
+    let url = "https://evermeet.cx/ffmpeg/ffmpeg-7.1.7z";
+
+    println!("    Downloading from: {}", url);
+    let response = reqwest::blocking::get(url).context("Failed to download FFmpeg")?;
+
+    if !response.status().is_success() {
+        bail!("Failed to download FFmpeg: HTTP {}", response.status());
+    }
+
+    let bytes = response.bytes().context("Failed to read response")?;
+
+    println!("    Extracting FFmpeg archive...");
+
+    // Use 7z to extract (since it's a 7z archive)
+    // First write to a temp file
+    let temp_file = ffmpeg_dir.with_extension("7z");
+    fs::create_dir_all(ffmpeg_dir.parent().unwrap())?;
+    fs::write(&temp_file, &bytes).context("Failed to write temp file")?;
+
+    // Extract using 7z command
+    let status = Command::new("7z")
+        .args(["x", temp_file.to_str().unwrap(), &format!("-o{}", ffmpeg_dir.display())])
+        .status()
+        .context("Failed to extract FFmpeg archive with 7z")?;
+
+    if !status.success() {
+        // Try tar if 7z fails
+        println!("    7z failed, trying tar...");
+        let status = Command::new("tar")
+            .args(["-xf", temp_file.to_str().unwrap(), "-C", ffmpeg_dir.parent().unwrap().to_str().unwrap()])
+            .status()
+            .context("Failed to extract FFmpeg archive with tar")?;
+
+        if !status.success() {
+            bail!("Failed to extract FFmpeg archive");
+        }
+    }
+
+    // Clean up temp file
+    let _ = fs::remove_file(&temp_file);
+
+    // Find the extracted ffmpeg binary and move it to the expected location
+    let extracted_dir = ffmpeg_dir;
+    if extracted_dir.exists() {
+        // The archive extracts to a directory, we need to organize it like Windows
+        // Create bin/ and lib/ directories
+        let bin_dir = ffmpeg_dir.join("bin");
+        let lib_dir = ffmpeg_dir.join("lib");
+        let include_dir = ffmpeg_dir.join("include");
+
+        fs::create_dir_all(&bin_dir)?;
+        fs::create_dir_all(&lib_dir)?;
+        fs::create_dir_all(&include_dir)?;
+
+        // Find ffmpeg binary and copy it
+        for entry in fs::read_dir(&extracted_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.file_name().and_then(|n| n.to_str()) == Some("ffmpeg") && entry.file_type()?.is_file() {
+                fs::copy(&path, bin_dir.join("ffmpeg"))?;
+                break;
+            }
+        }
+
+        // For static linking, we don't need separate libs since it's all in the binary
+        // But create dummy .pc files if needed
+        println!("    ✓ FFmpeg static binary extracted");
+    }
+
+    Ok(())
+}
+
 fn ensure_cross_installed() -> Result<()> {
     // Check if cross is installed
     if Command::new("cross").arg("--version").output().is_ok() {
@@ -209,11 +388,33 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         build_cmd.arg("--features").arg("demo");
     }
 
-    // Always use cross for Linux and Windows to ensure self-contained builds
+    // Check if Docker is available for cross-compilation
+    let docker_available = Command::new("docker")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false);
+
+    // Always use cross for Linux to ensure self-contained builds
+    // For Windows, try to use downloaded FFmpeg if Docker not available
     // Only macOS requires native builds (can't cross-compile to macOS)
     let (target, use_cross) = match platform {
-        "linux" => ("x86_64-unknown-linux-gnu", true),
-        "windows" => ("x86_64-pc-windows-gnu", true),
+        "linux" => {
+            if !docker_available {
+                println!("  ⚠ Skipping Linux build (requires Docker for cross-compilation)");
+                return Ok(());
+            }
+            ("x86_64-unknown-linux-gnu", true)
+        }
+        "windows" => {
+            if docker_available {
+                ("x86_64-pc-windows-gnu", true)
+            } else {
+                // Try Windows build with downloaded FFmpeg
+                println!("  ℹ Attempting Windows build with downloaded FFmpeg (experimental)");
+                ("x86_64-pc-windows-gnu", false)
+            }
+        }
         "macos" => {
             if current_os != "macos" {
                 println!("  ⚠ Skipping macOS build (requires macOS runner)");
@@ -248,35 +449,81 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
 
     build_cmd.arg("--target").arg(target);
 
-    // Set FFmpeg environment variables for Windows builds
+    // Set FFmpeg environment variables
     if platform == "windows" && ffmpeg_dir.exists() {
         let bin_dir = ffmpeg_dir.join("bin");
         let lib_dir = ffmpeg_dir.join("lib");
         let include_dir = ffmpeg_dir.join("include");
 
-        if bin_dir.exists() {
+        if bin_dir.exists() || lib_dir.exists() {
             build_cmd.env("FFMPEG_DIR", &ffmpeg_dir);
-            build_cmd.env("FFMPEG_LIB_DIR", &lib_dir);
-            build_cmd.env("FFMPEG_INCLUDE_DIR", &include_dir);
+            if lib_dir.exists() {
+                build_cmd.env("FFMPEG_LIB_DIR", &lib_dir);
+            }
+            if include_dir.exists() {
+                build_cmd.env("FFMPEG_INCLUDE_DIR", &include_dir);
+            }
         }
+    } else if platform == "macos" {
+        // For macOS, set up nix FFmpeg paths
+        setup_macos_ffmpeg_env(&mut build_cmd, platform)?;
     }
 
     let status = if use_cross {
-        // Ensure cross is installed
-        ensure_cross_installed()?;
+        // Check if we're on ARM64 macOS - cross has issues with Docker platform detection
+        let is_arm64_macos = env::consts::OS == "macos" && env::consts::ARCH == "aarch64";
 
-        println!("  Using cross for {} target", target);
-        let mut cross_cmd = Command::new("cross");
-        cross_cmd.args(build_cmd.get_args().collect::<Vec<_>>());
+        if is_arm64_macos && (target == "x86_64-unknown-linux-gnu" || target == "x86_64-pc-windows-gnu") {
+            // Use Docker directly for ARM64 macOS cross-compilation
+            let platform_name = if target == "x86_64-unknown-linux-gnu" { "Linux" } else { "Windows" };
+            println!("  Using Docker directly for ARM64 macOS -> {} cross-compilation", platform_name);
 
-        // Copy environment variables to cross
-        for (key, value) in build_cmd.get_envs() {
-            if let Some(val) = value {
-                cross_cmd.env(key, val);
+            // Build the cargo command string
+            let mut cargo_cmd = format!("cargo build --release --package summit_hip_numbers --target {}", target);
+            if variant == "demo" {
+                cargo_cmd.push_str(" --features demo");
             }
-        }
 
-        cross_cmd.status().context("Failed to run cross")?
+            let image = if target == "x86_64-unknown-linux-gnu" {
+                "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
+            } else {
+                "ghcr.io/cross-rs/x86_64-pc-windows-gnu:main"
+            };
+
+            let mut docker_cmd = Command::new("docker");
+            docker_cmd.args([
+                "run", "--rm", "--platform", "linux/amd64",
+                "-v", &format!("{}:/project", root.display()),
+                "-w", "/project",
+                "-e", "PKG_CONFIG_ALLOW_CROSS=1",
+                image,
+                "bash", "-c",
+                &format!("apt-get update && \
+                 apt-get install -y curl build-essential pkg-config && \
+                 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0-{} --profile minimal && \
+                 source ~/.cargo/env && \
+                 apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev && \
+                 {}", target, cargo_cmd)
+            ]);
+
+            docker_cmd.status().context("Failed to run docker")?
+        } else {
+            // Ensure cross is installed
+            ensure_cross_installed()?;
+
+            println!("  Using cross for {} target", target);
+            let mut cross_cmd = Command::new("cross");
+            cross_cmd.args(build_cmd.get_args().collect::<Vec<_>>());
+
+            // Copy environment variables to cross
+            for (key, value) in build_cmd.get_envs() {
+                if let Some(val) = value {
+                    cross_cmd.env(key, val);
+                }
+            }
+
+            cross_cmd.status().context("Failed to run cross")?
+        }
     } else {
         build_cmd.status().context("Failed to run cargo build")?
     };
@@ -309,11 +556,20 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         "summit_hip_numbers"
     };
 
-    let binary_src = root
-        .join("target")
-        .join(target)
-        .join("release")
-        .join(binary_name);
+    let binary_src = if platform == "macos" && current_os == "macos" {
+        // For native macOS builds, don't use target triple
+        root
+            .join("target")
+            .join("release")
+            .join(binary_name)
+    } else {
+        // For cross-compilation, use target triple
+        root
+            .join("target")
+            .join(target)
+            .join("release")
+            .join(binary_name)
+    };
 
     if !binary_src.exists() {
         return Err(anyhow::anyhow!(
@@ -343,6 +599,13 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     // Bundle Windows DLLs if needed
     if platform == "windows" {
         bundle_windows_dlls(root, &platform_dist)?;
+    }
+
+    // Bundle macOS dylibs if needed
+    if platform == "macos" {
+        // On macOS with nix, FFmpeg libraries are available system-wide
+        // so we don't need to bundle them
+        println!("  ℹ macOS uses system FFmpeg libraries (no bundling needed)");
     }
 
     // Create archive
@@ -404,6 +667,69 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
             fs::copy(entry.path(), dst.join(entry.file_name()))?;
         }
     }
+    Ok(())
+}
+
+fn bundle_macos_dylibs(dist_dir: &Path) -> Result<()> {
+    println!("  [3.5/4] Bundling macOS dylibs...");
+
+    let ffmpeg_lib_path = find_ffmpeg_lib_path()?;
+
+    let mut copied = 0;
+    let mut dylib_names = Vec::new();
+
+    // Copy FFmpeg dylibs that the application links against
+    let ffmpeg_libs = [
+        "libavcodec*.dylib",
+        "libavformat*.dylib",
+        "libavutil*.dylib",
+        "libswscale*.dylib",
+        "libswresample*.dylib",
+    ];
+
+    for pattern in &ffmpeg_libs {
+        let output = Command::new("find")
+            .args([ffmpeg_lib_path.to_str().unwrap(), "-name", pattern, "-type", "f"])
+            .output()
+            .with_context(|| format!("Failed to find {} libraries", pattern))?;
+
+        if !output.status.success() {
+            continue;
+        }
+
+        let lib_paths = String::from_utf8(output.stdout)
+            .context("Invalid UTF-8 in find output")?;
+
+        for lib_path_str in lib_paths.lines() {
+            let lib_path = PathBuf::from(lib_path_str);
+            let filename = lib_path.file_name().unwrap();
+            let dest = dist_dir.join(filename);
+
+            // Use cp command for better permission handling with nix store files
+            let status = Command::new("cp")
+                .args([lib_path_str, &dest.to_string_lossy()])
+                .status()
+                .with_context(|| format!("Failed to copy dylib: {}", filename.to_string_lossy()))?;
+
+            if !status.success() {
+                bail!("cp command failed for {}", filename.to_string_lossy());
+            }
+
+            dylib_names.push(filename.to_string_lossy().to_string());
+            copied += 1;
+        }
+    }
+
+    if copied > 0 {
+        dylib_names.sort();
+        println!("  ✓ Copied {} dylibs:", copied);
+        for dylib in &dylib_names {
+            println!("    - {}", dylib);
+        }
+    } else {
+        println!("  ⚠ No FFmpeg dylibs found to bundle");
+    }
+
     Ok(())
 }
 

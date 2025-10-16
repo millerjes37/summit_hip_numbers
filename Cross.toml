@@ -3,6 +3,8 @@
 
 [target.x86_64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
+# Force platform for ARM64 macOS
+runner = "docker run --platform linux/amd64 --rm -v /var/run/docker.sock:/var/run/docker.sock"
 
 # Install all dependencies needed for compilation
 pre-build = [
@@ -18,7 +20,6 @@ pre-build = [
     "apt-get install -y libsdl2-dev || true",
     "apt-get install -y libpulse-dev || true",
     "apt-get install -y libcaca-dev || true",
-    "apt-get install -y libgl1-mesa-dev || true",
     # Optional FFmpeg video input libraries
     "apt-get install -y libraw1394-dev || true",
     "apt-get install -y libavc1394-dev || true",
