@@ -423,16 +423,22 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         .map(|output| output.status.success())
         .unwrap_or(false);
 
-    // Always use cross for Linux to ensure self-contained builds
+    // Use native builds for Linux on Linux runners to avoid GLIBC issues
+    // Use cross for Linux from non-Linux runners (e.g., macOS ARM64)
     // For Windows, try to use downloaded FFmpeg if Docker not available
     // Only macOS requires native builds (can't cross-compile to macOS)
     let (target, use_cross) = match platform {
         "linux" => {
-            if !docker_available {
+            if current_os == "linux" {
+                // Native Linux build on Linux runner
+                ("x86_64-unknown-linux-gnu", false)
+            } else if !docker_available {
                 println!("  ⚠ Skipping Linux build (requires Docker for cross-compilation)");
                 return Ok(());
+            } else {
+                // Cross-compilation from non-Linux runner
+                ("x86_64-unknown-linux-gnu", true)
             }
-            ("x86_64-unknown-linux-gnu", true)
         }
         "windows" => {
             if docker_available {
@@ -478,7 +484,8 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     build_cmd.arg("--target").arg(target);
 
     // Set FFmpeg environment variables
-    if platform == "windows" && ffmpeg_dir.exists() {
+    // For Windows cross-compilation, use system FFmpeg libraries installed in Docker container
+    if platform == "windows" && ffmpeg_dir.exists() && !use_cross {
         let bin_dir = ffmpeg_dir.join("bin");
         let lib_dir = ffmpeg_dir.join("lib");
         let include_dir = ffmpeg_dir.join("include");
