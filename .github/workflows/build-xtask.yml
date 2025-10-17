@@ -11,6 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -34,15 +39,16 @@ jobs:
        - name: Install Rust
          uses: dtolnay/rust-toolchain@stable
 
-       - name: Install FFmpeg and dependencies
-         run: |
-           apt-get update
-           apt-get install -y \
-             libasound2-dev \
-             libavutil-dev libavcodec-dev libavformat-dev \
-             libswscale-dev libswresample-dev libavfilter-dev \
-             libavdevice-dev \
-             pkg-config clang
+        - name: Install FFmpeg and dependencies
+          run: |
+            apt-get update
+            apt-get install -y \
+              libasound2-dev \
+              libssl-dev \
+              libavutil-dev libavcodec-dev libavformat-dev \
+              libswscale-dev libswresample-dev libavfilter-dev \
+              libavdevice-dev \
+              pkg-config clang
 
        - name: Build with xtask
          run: |
