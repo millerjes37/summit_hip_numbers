@@ -39,11 +39,15 @@ jobs:
             libswscale-dev libswresample-dev libavfilter-dev \
             libavdevice-dev \
             pkg-config clang
+          # Ensure pkg-config can find openssl
+          find /usr -name "openssl.pc" 2>/dev/null || echo "openssl.pc not found"
+          pkg-config --list-all | grep -i openssl || echo "openssl not found by pkg-config"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build with xtask
         run: |
+          export PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
           cargo build --package xtask --release
           ./target/release/xtask dist --platform linux --variant full
