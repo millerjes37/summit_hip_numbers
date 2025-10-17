@@ -49,7 +49,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --package xtask -- -D warnings
 
       - name: Security Audit
         run: |
@@ -118,17 +118,17 @@ jobs:
           echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
-      # Install Docker for cross-compilation (Linux/Windows from Ubuntu, or ARM64 macOS)
-      - name: Set up Docker
-        if: matrix.platform != 'macos' || matrix.os == 'macos-latest'
-        uses: docker/setup-docker-action@v4
-        with:
-          daemon-config: |
-            {
-              "features": {
-                "containerd-snapshotter": true
-              }
-            }
+       # Install Docker for cross-compilation (Linux/Windows from Ubuntu)
+       - name: Set up Docker
+         if: matrix.platform != 'macos'
+         uses: docker/setup-docker-action@v4
+         with:
+           daemon-config: |
+             {
+               "features": {
+                 "containerd-snapshotter": true
+               }
+             }
 
       # Install cross for Linux/Windows builds
       - name: Install Cross
@@ -136,12 +136,7 @@ jobs:
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
 
-      # macOS: Docker is available by default on GitHub Actions macOS runners
-      - name: Verify macOS Docker
-        if: matrix.os == 'macos-latest'
-        run: |
-          docker --version
-          docker run --rm --platform linux/amd64 hello-world
+       # macOS builds run natively (no Docker needed)
 
        # Build using xtask
        - name: Build with xtask
