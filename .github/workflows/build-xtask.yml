@@ -67,33 +67,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Linux builds - use cross from Ubuntu
+        os: [ubuntu-latest, macos-latest]
+        platform: [linux, macos, windows]
+        variant: [full, demo]
+        exclude:
+          # macOS builds must run on macOS
           - os: ubuntu-latest
-            platform: linux
-            variant: full
-
-          - os: ubuntu-latest
-            platform: linux
-            variant: demo
-
-          # macOS builds - must run on macOS, handle ARM64 with Docker
-          - os: macos-latest
             platform: macos
-            variant: full
-
+          # Linux/Windows builds run on Ubuntu
           - os: macos-latest
-            platform: macos
-            variant: demo
-
-          # Windows builds - use cross from Ubuntu
-          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
             platform: windows
-            variant: full
-
-          - os: ubuntu-latest
-            platform: windows
-            variant: demo
 
     steps:
       - uses: actions/checkout@v4
