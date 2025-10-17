@@ -169,7 +169,10 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     let ffmpeg_include_path = PathBuf::from("/opt/homebrew/include");
     let ffmpeg_pkgconfig_path = PathBuf::from("/opt/homebrew/lib/pkgconfig");
 
-    println!("  ✓ Using Homebrew FFmpeg lib: {}", ffmpeg_lib_path.display());
+    println!(
+        "  ✓ Using Homebrew FFmpeg lib: {}",
+        ffmpeg_lib_path.display()
+    );
     println!(
         "  ✓ Using Homebrew FFmpeg include: {}",
         ffmpeg_include_path.display()
