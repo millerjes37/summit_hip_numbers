@@ -235,8 +235,6 @@ fn find_ffmpeg_lib_path() -> Result<PathBuf> {
     Ok(lib_dir.to_path_buf())
 }
 
-
-
 #[allow(dead_code)]
 fn download_ffmpeg_macos(ffmpeg_dir: &Path) -> Result<()> {
     // Download static FFmpeg build from evermeet.cx (universal binary)
