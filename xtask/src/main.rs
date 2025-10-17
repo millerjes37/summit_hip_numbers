@@ -80,8 +80,8 @@ fn ensure_ffmpeg(root: &Path, platform: &str) -> Result<PathBuf> {
     match platform {
         "windows" => download_ffmpeg_windows(&ffmpeg_dir)?,
         "macos" => {
-            // macOS uses nix-provided FFmpeg libraries
-            println!("  ℹ macOS will use nix FFmpeg libraries");
+            // macOS uses Homebrew-provided FFmpeg libraries
+            println!("  ℹ macOS will use Homebrew FFmpeg libraries");
             return Ok(ffmpeg_dir); // Return dummy path, we'll set env vars later
         }
         "linux" => {
@@ -164,18 +164,18 @@ fn download_ffmpeg_windows(ffmpeg_dir: &Path) -> Result<()> {
 }
 
 fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()> {
-    // Find FFmpeg paths in nix store
-    let ffmpeg_lib_path = find_ffmpeg_lib_path()?;
-    let ffmpeg_include_path = find_ffmpeg_include_path()?;
-    let ffmpeg_pkgconfig_path = find_ffmpeg_pkgconfig_path()?;
+    // Use Homebrew FFmpeg paths (GitHub Actions installs via brew)
+    let ffmpeg_lib_path = PathBuf::from("/opt/homebrew/lib");
+    let ffmpeg_include_path = PathBuf::from("/opt/homebrew/include");
+    let ffmpeg_pkgconfig_path = PathBuf::from("/opt/homebrew/lib/pkgconfig");
 
-    println!("  ✓ Found FFmpeg lib: {}", ffmpeg_lib_path.display());
+    println!("  ✓ Using Homebrew FFmpeg lib: {}", ffmpeg_lib_path.display());
     println!(
-        "  ✓ Found FFmpeg include: {}",
+        "  ✓ Using Homebrew FFmpeg include: {}",
         ffmpeg_include_path.display()
     );
     println!(
-        "  ✓ Found FFmpeg pkgconfig: {}",
+        "  ✓ Using Homebrew FFmpeg pkgconfig: {}",
         ffmpeg_pkgconfig_path.display()
     );
 
