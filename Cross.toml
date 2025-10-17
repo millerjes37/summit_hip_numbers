@@ -2,7 +2,7 @@
 # https://github.com/cross-rs/cross
 
 [target.x86_64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:ubuntu22.04"
 # Force platform for ARM64 macOS
 runner = "docker run --platform linux/amd64 --rm -v /var/run/docker.sock:/var/run/docker.sock"
 
@@ -25,4 +25,15 @@ pre-build = [
 ]
 
 [target.x86_64-pc-windows-gnu]
-image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:main"
+image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:ubuntu22.04"
+
+# Install FFmpeg development libraries for Windows cross-compilation
+pre-build = [
+    "apt-get update",
+    # Core FFmpeg libraries (required)
+    "apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev",
+    # GUI and window system libraries (for egui/eframe)
+    "apt-get install -y libasound2-dev pkg-config clang",
+    # Basic optional libraries that are commonly available
+    "apt-get install -y libsdl2-dev libgl1-mesa-dev || true",
+]
