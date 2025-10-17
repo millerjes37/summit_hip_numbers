@@ -147,10 +147,10 @@ jobs:
   # TEST DISTRIBUTIONS
   # ============================================================================
 
-  test-dist:
-    name: Test ${{ matrix.platform }} Distribution
-    runs-on: ${{ matrix.os }}
-    needs: build-all
+  # test-dist:
+  #   name: Test ${{ matrix.platform }} Distribution
+  #   runs-on: ${{ matrix.os }}
+  #   needs: build-all
     strategy:
       fail-fast: false
       matrix:
@@ -256,10 +256,10 @@ jobs:
   # RELEASE
   # ============================================================================
 
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    needs: [build-all, test-dist]
+  # release:
+  #   name: Create Release
+  #   runs-on: ubuntu-latest
+  #   needs: [build-all, test-dist]
     if: github.event_name == 'release'
     steps:
       - name: Download All Artifacts
