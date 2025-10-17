@@ -138,7 +138,7 @@ jobs:
 
       # macOS builds run natively (no Docker needed)
 
-       # Build using xtask
+      # Build using xtask
        - name: Build with xtask
          run: |
            # Build xtask first
