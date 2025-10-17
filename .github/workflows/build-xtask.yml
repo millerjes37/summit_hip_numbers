@@ -4,32 +4,34 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
 jobs:
+  # ============================================================================
+  # VALIDATION - Code Quality & Security
+  # ============================================================================
+
   validate:
     name: Code Quality & Security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
+        with:
+          lfs: true
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Clippy
-        run: cargo clippy --package xtask -- -D warnings
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
 
-  build-linux:
-    name: Build Linux
-    runs-on: ubuntu-latest
-    needs: validate
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
+      # Install system dependencies needed for compilation (Clippy needs to compile)
+      - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -39,15 +41,251 @@ jobs:
             libswscale-dev libswresample-dev libavfilter-dev \
             libavdevice-dev \
             pkg-config clang
-          # Ensure pkg-config can find openssl
-          find /usr -name "openssl.pc" 2>/dev/null || echo "openssl.pc not found"
-          pkg-config --list-all | grep -i openssl || echo "openssl not found by pkg-config"
+
+      - name: Format Check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --package xtask -- -D warnings
+
+      - name: Security Audit
+        run: |
+          cargo install cargo-audit
+          cargo audit
+
+  # ============================================================================
+  # BUILD ALL PLATFORMS - Using xtask
+  # ============================================================================
+
+  build-all:
+    name: Build All Platforms
+    runs-on: ${{ matrix.os }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux builds - native on Ubuntu
+          - os: ubuntu-latest
+            platform: linux
+            variant: full
+
+          - os: ubuntu-latest
+            platform: linux
+            variant: demo
+
+          # macOS builds - must run on macOS
+          - os: macos-latest
+            platform: macos
+            variant: full
+
+          - os: macos-latest
+            platform: macos
+            variant: demo
+
+          # Windows builds - cross-compile from Ubuntu
+          - os: ubuntu-latest
+            platform: windows
+            variant: full
+
+          - os: ubuntu-latest
+            platform: windows
+            variant: demo
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.variant }}
+
+      # macOS-specific: Install FFmpeg via Homebrew
+      - name: Install macOS Dependencies
+        if: matrix.platform == 'macos'
+        run: |
+          brew install ffmpeg pkg-config
+          # Set paths for FFmpeg headers (needed for bindgen)
+          echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+
+      # Install Docker for cross-compilation (Linux/Windows from Ubuntu)
+      - name: Set up Docker
+        if: matrix.platform != 'macos'
+        uses: docker/setup-docker-action@v4
+        with:
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+
+      # Install cross for Linux/Windows builds
+      - name: Install Cross
+        if: matrix.platform != 'macos'
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+
+      # Build using xtask
       - name: Build with xtask
         run: |
+          # Set environment variables to control FFmpeg linking
+          export PKG_CONFIG_ALLOW_CROSS=1
           export PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
           cargo build --package xtask --release
-          ./target/release/xtask dist --platform linux --variant full
+          ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
+
+      # Upload artifacts
+      - name: Upload Distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.variant }}-dist
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.dmg
+          retention-days: 30
+
+  # ============================================================================
+  # TEST DISTRIBUTIONS
+  # ============================================================================
+
+  test-dist:
+    name: Test ${{ matrix.platform }} Distribution
+    runs-on: ${{ matrix.os }}
+    needs: build-all
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+            variant: full
+
+          - platform: macos
+            os: macos-latest
+            variant: full
+
+          - platform: windows
+            os: ubuntu-latest
+            variant: full
+
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.variant }}-dist
+
+      - name: Test Linux Distribution
+        if: matrix.platform == 'linux'
+        run: |
+          echo "Testing Linux distribution..."
+          tar -tzf *.tar.gz | head -20
+          tar -xzf *.tar.gz
+
+          # Find and test binary
+          BINARY=$(find . -name "summit_hip_numbers" -type f -executable | head -n 1)
+          if [ -z "$BINARY" ]; then
+            echo "ERROR: Binary not found"
+            exit 1
+          fi
+
+          echo "✓ Found binary: $BINARY"
+          file "$BINARY"
+          ldd "$BINARY" || echo "Note: ldd failed"
+
+      - name: Test macOS Distribution
+        if: matrix.platform == 'macos'
+        run: |
+          echo "Testing macOS distribution..."
+          unzip -l *.zip | head -20
+          unzip *.zip
+
+          # Find app bundle
+          APP=$(find . -name "*.app" -type d | head -n 1)
+          if [ -z "$APP" ]; then
+            echo "ERROR: App bundle not found"
+            exit 1
+          fi
+
+          echo "✓ Found app bundle: $APP"
+          ls -la "$APP/Contents/MacOS/"
+
+      - name: Test Windows Distribution
+        if: matrix.platform == 'windows'
+        run: |
+          echo "Testing Windows distribution..."
+          unzip -l *.zip | head -20
+          unzip *.zip
+
+          # Find executable
+          EXE=$(find . -name "*.exe" -type f | head -n 1)
+          if [ -z "$EXE" ]; then
+            echo "ERROR: Executable not found"
+            exit 1
+          fi
+
+          echo "✓ Found executable: $EXE"
+          file "$EXE"
+
+  # ============================================================================
+  # BUILD SUMMARY
+  # ============================================================================
+
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-all, test-dist]
+    if: always()
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate Summary
+        run: |
+          echo "# Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Artifacts" >> $GITHUB_STEP_SUMMARY
+          find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.dmg" \) -exec sh -c '
+            for file; do
+              size=$(du -h "$file" | cut -f1)
+              echo "- $(basename "$file") ($size)" >> $GITHUB_STEP_SUMMARY
+            done
+          ' sh {} +
+
+  # ============================================================================
+  # RELEASE
+  # ============================================================================
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-all, test-dist]
+    if: github.event_name == 'release'
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare Release Files
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.dmg" \) -exec cp {} release/ \;
+          ls -lh release/
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
