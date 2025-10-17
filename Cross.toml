@@ -2,7 +2,7 @@
 # https://github.com/cross-rs/cross
 
 [target.x86_64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:edge"
 # Force platform for ARM64 macOS
 runner = "docker run --platform linux/amd64 --rm -v /var/run/docker.sock:/var/run/docker.sock"
 
@@ -25,7 +25,7 @@ pre-build = [
 ]
 
 [target.x86_64-pc-windows-gnu]
-image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:main"
+image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:edge"
 
 # Install FFmpeg development libraries for Windows cross-compilation
 pre-build = [
