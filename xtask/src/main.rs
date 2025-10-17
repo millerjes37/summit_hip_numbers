@@ -235,57 +235,7 @@ fn find_ffmpeg_lib_path() -> Result<PathBuf> {
     Ok(lib_dir.to_path_buf())
 }
 
-fn find_ffmpeg_include_path() -> Result<PathBuf> {
-    // Find FFmpeg include directory in nix store
-    let output = Command::new("find")
-        .args(["/nix/store", "-name", "libavcodec", "-type", "d"])
-        .output()
-        .context("Failed to find FFmpeg includes")?;
 
-    if !output.status.success() {
-        bail!("No FFmpeg includes found in nix store");
-    }
-
-    let include_path_str = String::from_utf8(output.stdout)
-        .context("Invalid UTF-8 in find output")?
-        .lines()
-        .next()
-        .context("No FFmpeg include directory found")?
-        .to_string();
-
-    let include_path = PathBuf::from(include_path_str);
-    let include_dir = include_path
-        .parent()
-        .context("FFmpeg include has no parent directory")?;
-
-    Ok(include_dir.to_path_buf())
-}
-
-fn find_ffmpeg_pkgconfig_path() -> Result<PathBuf> {
-    // Find FFmpeg pkgconfig directory in nix store
-    let output = Command::new("find")
-        .args(["/nix/store", "-name", "libavcodec.pc", "-type", "f"])
-        .output()
-        .context("Failed to find FFmpeg pkgconfig")?;
-
-    if !output.status.success() {
-        bail!("No FFmpeg pkgconfig found in nix store");
-    }
-
-    let pc_path_str = String::from_utf8(output.stdout)
-        .context("Invalid UTF-8 in find output")?
-        .lines()
-        .next()
-        .context("No FFmpeg pkgconfig file found")?
-        .to_string();
-
-    let pc_path = PathBuf::from(pc_path_str);
-    let pkgconfig_dir = pc_path
-        .parent()
-        .context("FFmpeg pkgconfig has no parent directory")?;
-
-    Ok(pkgconfig_dir.to_path_buf())
-}
 
 #[allow(dead_code)]
 fn download_ffmpeg_macos(ffmpeg_dir: &Path) -> Result<()> {
