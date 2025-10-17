@@ -143,12 +143,14 @@ jobs:
           docker --version
           docker run --rm --platform linux/amd64 hello-world
 
-      # Build using xtask
-      - name: Build with xtask
-        run: |
-          # Build xtask first
-          cargo build --package xtask --release
-          ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
+       # Build using xtask
+       - name: Build with xtask
+         run: |
+           # Build xtask first
+           cargo build --package xtask --release
+           # Set environment variables to control FFmpeg linking
+           export PKG_CONFIG_ALLOW_CROSS=1
+           ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
 
       # Upload artifacts
       - name: Upload Distribution

@@ -85,8 +85,8 @@ fn ensure_ffmpeg(root: &Path, platform: &str) -> Result<PathBuf> {
             return Ok(ffmpeg_dir); // Return dummy path, we'll set env vars later
         }
         "linux" => {
-            // Linux uses system libraries
-            println!("  ℹ Linux will use system FFmpeg libraries");
+            // Linux uses vendored FFmpeg (compiled from source)
+            println!("  ℹ Linux will use vendored FFmpeg (compiled from source)");
             return Ok(ffmpeg_dir); // Return dummy path
         }
         _ => bail!("Unsupported platform: {}", platform),
@@ -498,72 +498,21 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     }
 
     let status = if use_cross {
-        // Check if we're on ARM64 macOS - cross has issues with Docker platform detection
-        let is_arm64_macos = env::consts::OS == "macos" && env::consts::ARCH == "aarch64";
+        // Ensure cross is installed
+        ensure_cross_installed()?;
 
-        if is_arm64_macos
-            && (target == "x86_64-unknown-linux-gnu" || target == "x86_64-pc-windows-gnu")
-        {
-            // Use Docker directly for ARM64 macOS cross-compilation
-            let platform_name = if target == "x86_64-unknown-linux-gnu" {
-                "Linux"
-            } else {
-                "Windows"
-            };
-            println!(
-                "  Using Docker directly for ARM64 macOS -> {} cross-compilation",
-                platform_name
-            );
+        println!("  Using cross for {} target", target);
+        let mut cross_cmd = Command::new("cross");
+        cross_cmd.args(build_cmd.get_args().collect::<Vec<_>>());
 
-            // Build the cargo command string
-            let mut cargo_cmd = format!(
-                "cargo build --release --package summit_hip_numbers --target {}",
-                target
-            );
-            if variant == "demo" {
-                cargo_cmd.push_str(" --features demo");
+        // Copy environment variables to cross
+        for (key, value) in build_cmd.get_envs() {
+            if let Some(val) = value {
+                cross_cmd.env(key, val);
             }
-
-            let image = if target == "x86_64-unknown-linux-gnu" {
-                "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
-            } else {
-                "ghcr.io/cross-rs/x86_64-pc-windows-gnu:main"
-            };
-
-            let mut docker_cmd = Command::new("docker");
-            docker_cmd.args([
-                "run", "--rm", "--platform", "linux/amd64",
-                "-v", &format!("{}:/project", root.display()),
-                "-w", "/project",
-                "-e", "PKG_CONFIG_ALLOW_CROSS=1",
-                image,
-                "bash", "-c",
-                &format!("apt-get update && \
-                 apt-get install -y curl build-essential pkg-config && \
-                 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0-{} --profile minimal && \
-                 source ~/.cargo/env && \
-                 apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev && \
-                 {}", target, cargo_cmd)
-            ]);
-
-            docker_cmd.status().context("Failed to run docker")?
-        } else {
-            // Ensure cross is installed
-            ensure_cross_installed()?;
-
-            println!("  Using cross for {} target", target);
-            let mut cross_cmd = Command::new("cross");
-            cross_cmd.args(build_cmd.get_args().collect::<Vec<_>>());
-
-            // Copy environment variables to cross
-            for (key, value) in build_cmd.get_envs() {
-                if let Some(val) = value {
-                    cross_cmd.env(key, val);
-                }
-            }
-
-            cross_cmd.status().context("Failed to run cross")?
         }
+
+        cross_cmd.status().context("Failed to run cross")?
     } else {
         build_cmd.status().context("Failed to run cargo build")?
     };

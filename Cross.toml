@@ -14,28 +14,15 @@ pre-build = [
     # GUI and window system libraries
     "apt-get install -y libasound2-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev",
     "apt-get install -y libwayland-dev libxkbcommon-dev pkg-config clang",
-    # Optional FFmpeg audio libraries
-    "apt-get install -y libjack-dev || true",
-    "apt-get install -y libopenal-dev || true",
-    "apt-get install -y libsdl2-dev || true",
-    "apt-get install -y libpulse-dev || true",
-    "apt-get install -y libcaca-dev || true",
-    # Optional FFmpeg video input libraries
-    "apt-get install -y libraw1394-dev || true",
-    "apt-get install -y libavc1394-dev || true",
-    "apt-get install -y libiec61883-dev || true",
-    "apt-get install -y libdc1394-dev || true",
-    # Optional FFmpeg audio/video libraries
-    "apt-get install -y libcdio-dev || true",
-    "apt-get install -y libcdio-paranoia-dev || true",
-    "apt-get install -y libbs2b-dev || true",
+    # Optional FFmpeg audio libraries (required for linking)
+    "apt-get install -y libjack-dev libopenal-dev libsdl2-dev libpulse-dev libcaca-dev libsndio-dev",
+    # Optional FFmpeg video input libraries (required for linking)
+    "apt-get install -y libraw1394-dev libavc1394-dev libiec61883-dev libdc1394-dev",
+    # Optional FFmpeg audio/video libraries (required for linking)
+    "apt-get install -y libcdio-dev libcdio-paranoia-dev libcdio-cdda-dev libbs2b-dev",
+    # Graphics libraries (required for linking)
+    "apt-get install -y libgl1-mesa-dev",
 ]
 
 [target.x86_64-pc-windows-gnu]
 image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:main"
-
-# Minimal Windows setup - FFmpeg DLLs will be bundled by xtask
-pre-build = [
-    "dpkg --add-architecture i386",
-    "apt-get update",
-]
