@@ -40,17 +40,17 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install FFmpeg and dependencies
-          run: |
-            apt-get update
-            apt-get install -y \
-              libasound2-dev \
-              libssl-dev \
-              libavutil-dev libavcodec-dev libavformat-dev \
-              libswscale-dev libswresample-dev libavfilter-dev \
-              libavdevice-dev \
-              pkg-config clang
+        run: |
+          apt-get update
+          apt-get install -y \
+            libasound2-dev \
+            libssl-dev \
+            libavutil-dev libavcodec-dev libavformat-dev \
+            libswscale-dev libswresample-dev libavfilter-dev \
+            libavdevice-dev \
+            pkg-config clang
 
-       - name: Build with xtask
+      - name: Build with xtask
          run: |
            cargo build --package xtask --release
            ./target/release/xtask dist --platform linux --variant full
