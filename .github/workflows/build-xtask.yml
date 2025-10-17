@@ -105,6 +105,15 @@ jobs:
         with:
           key: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.variant }}
 
+      # Linux-specific: Install system dependencies
+      - name: Install Linux Dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            pkg-config clang
+
       # macOS-specific: Install FFmpeg via Homebrew
       - name: Install macOS Dependencies
         if: matrix.platform == 'macos'
