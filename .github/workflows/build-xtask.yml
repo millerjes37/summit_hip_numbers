@@ -74,14 +74,14 @@ jobs:
             platform: linux
             variant: demo
 
-          # macOS builds - must run on macOS
-          - os: macos-latest
-            platform: macos
-            variant: full
+           # macOS builds - must run on macOS
+           - os: macos-latest
+             platform: macos
+             variant: full
 
-          - os: macos-latest
-            platform: macos
-            variant: demo
+           - os: macos-latest
+             platform: macos
+             variant: demo
 
            # Windows builds - native on Windows
            - os: windows-latest
