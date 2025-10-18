@@ -218,39 +218,31 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     };
     build_cmd.env("PKG_CONFIG_PATH", new_pkg_config_path);
 
-    // On macOS, create symlinks for FFmpeg headers to work around hardcoded paths
+    // On macOS, set comprehensive FFmpeg environment variables
     if platform == "macos" {
         build_cmd.env("CXXSTDLIB", "c++");
         build_cmd.env("CXXFLAGS", "-stdlib=libc++");
         build_cmd.env("LDFLAGS", "-stdlib=libc++");
 
-        // Create symlinks from /usr/include to /opt/homebrew/include for FFmpeg headers
-        // This works around ffmpeg-sys-next's hardcoded header search paths
-        let ffmpeg_include_path = PathBuf::from("/opt/homebrew/include");
-        if ffmpeg_include_path.exists() {
-            // Create /usr/include if it doesn't exist
-            let _ = Command::new("sudo")
-                .args(["mkdir", "-p", "/usr/include"])
-                .status();
+        // Set FFMPEG_DIR to point to Homebrew location
+        build_cmd.env("FFMPEG_DIR", "/opt/homebrew");
 
-            // Create symlinks for FFmpeg libraries
-            let ffmpeg_libs = [
-                "libavcodec",
-                "libavformat",
-                "libavutil",
-                "libswscale",
-                "libswresample",
-                "libavfilter",
-                "libavdevice",
-            ];
-            for lib in &ffmpeg_libs {
-                let src = ffmpeg_include_path.join(lib);
-                let dest = PathBuf::from("/usr/include").join(lib);
-                if src.exists() && !dest.exists() {
-                    let _ = Command::new("sudo")
-                        .args(["ln", "-sf", &src.to_string_lossy(), &dest.to_string_lossy()])
-                        .status();
-                }
+        // Set comprehensive include and library paths
+        build_cmd.env("C_INCLUDE_PATH", "/opt/homebrew/include");
+        build_cmd.env("CPLUS_INCLUDE_PATH", "/opt/homebrew/include");
+        build_cmd.env("LIBRARY_PATH", "/opt/homebrew/lib");
+        build_cmd.env("PKG_CONFIG_PATH", "/opt/homebrew/lib/pkgconfig");
+
+        // Set clang arguments to include FFmpeg headers
+        build_cmd.env(
+            "BINDGEN_EXTRA_CLANG_ARGS",
+            "-I/opt/homebrew/include -I/opt/homebrew/include/libavcodec -I/opt/homebrew/include/libavformat -I/opt/homebrew/include/libavutil -I/opt/homebrew/include/libswscale -I/opt/homebrew/include/libswresample",
+        );
+
+        // Set compiler flags
+        build_cmd.env("CFLAGS", "-I/opt/homebrew/include");
+        build_cmd.env("CXXFLAGS", "-I/opt/homebrew/include -stdlib=libc++");
+    }
             }
         }
     }
