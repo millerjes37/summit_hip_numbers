@@ -229,15 +229,27 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         let ffmpeg_include_path = PathBuf::from("/opt/homebrew/include");
         if ffmpeg_include_path.exists() {
             // Create /usr/include if it doesn't exist
-            let _ = Command::new("sudo").args(["mkdir", "-p", "/usr/include"]).status();
+            let _ = Command::new("sudo")
+                .args(["mkdir", "-p", "/usr/include"])
+                .status();
 
             // Create symlinks for FFmpeg libraries
-            let ffmpeg_libs = ["libavcodec", "libavformat", "libavutil", "libswscale", "libswresample", "libavfilter", "libavdevice"];
+            let ffmpeg_libs = [
+                "libavcodec",
+                "libavformat",
+                "libavutil",
+                "libswscale",
+                "libswresample",
+                "libavfilter",
+                "libavdevice",
+            ];
             for lib in &ffmpeg_libs {
                 let src = ffmpeg_include_path.join(lib);
                 let dest = PathBuf::from("/usr/include").join(lib);
                 if src.exists() && !dest.exists() {
-                    let _ = Command::new("sudo").args(["ln", "-sf", &src.to_string_lossy(), &dest.to_string_lossy()]).status();
+                    let _ = Command::new("sudo")
+                        .args(["ln", "-sf", &src.to_string_lossy(), &dest.to_string_lossy()])
+                        .status();
                 }
             }
         }
