@@ -42,28 +42,37 @@ pub fn build_platform(platform: &str, variant: &str) -> Result<()> {
 
     // For macOS, inherit environment variables from the workflow and add FFmpeg-specific ones
     if platform == "macos" {
+        println!("    macOS build: checking for FFMPEG_DIR environment variable...");
+
         // Check if FFMPEG_DIR is already set in the environment (from GitHub Actions)
-        if let Ok(ffmpeg_dir) = std::env::var("FFMPEG_DIR") {
-            println!("    Using FFMPEG_DIR from environment: {}", ffmpeg_dir);
-            cmd.env("FFMPEG_DIR", &ffmpeg_dir);
-            cmd.env("FFMPEG_INCLUDE_DIR", format!("{}/include", ffmpeg_dir));
-            cmd.env("FFMPEG_LIBRARY_DIR", format!("{}/lib", ffmpeg_dir));
-            cmd.env("PKG_CONFIG_PATH", format!("{}/lib/pkgconfig", ffmpeg_dir));
+        match env::var("FFMPEG_DIR") {
+            Ok(ffmpeg_dir) => {
+                println!("    ✓ Using FFMPEG_DIR from environment: {}", ffmpeg_dir);
+                cmd.env("FFMPEG_DIR", &ffmpeg_dir);
+                cmd.env("FFMPEG_INCLUDE_DIR", format!("{}/include", ffmpeg_dir));
+                cmd.env("FFMPEG_LIBRARY_DIR", format!("{}/lib", ffmpeg_dir));
+                cmd.env("PKG_CONFIG_PATH", format!("{}/lib/pkgconfig", ffmpeg_dir));
 
-            // Set bindgen-specific environment variables
-            cmd.env("BINDGEN_EXTRA_CLANG_ARGS", format!("-I{}/include", ffmpeg_dir));
+                // Set bindgen-specific environment variables
+                cmd.env("BINDGEN_EXTRA_CLANG_ARGS", format!("-I{}/include", ffmpeg_dir));
 
-            // Also set standard paths
-            if let Ok(cpath) = std::env::var("CPATH") {
-                cmd.env("CPATH", cpath);
+                // Also set standard paths
+                if let Ok(cpath) = env::var("CPATH") {
+                    println!("    ✓ Found CPATH: {}", cpath);
+                    cmd.env("CPATH", cpath);
+                }
+                if let Ok(library_path) = env::var("LIBRARY_PATH") {
+                    println!("    ✓ Found LIBRARY_PATH: {}", library_path);
+                    cmd.env("LIBRARY_PATH", library_path);
+                }
             }
-            if let Ok(library_path) = std::env::var("LIBRARY_PATH") {
-                cmd.env("LIBRARY_PATH", library_path);
-            }
-        } else {
-            // Try to detect from Homebrew
-            for (key, value) in ffmpeg::get_env_for_platform(platform, &libs) {
-                cmd.env(key, value);
+            Err(e) => {
+                println!("    ⚠ FFMPEG_DIR not found in environment: {}", e);
+                println!("    Trying to detect from Homebrew...");
+                // Try to detect from Homebrew
+                for (key, value) in ffmpeg::get_env_for_platform(platform, &libs) {
+                    cmd.env(key, value);
+                }
             }
         }
     } else {
