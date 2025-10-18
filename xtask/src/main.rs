@@ -243,7 +243,6 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         build_cmd.env("CFLAGS", "-I/opt/homebrew/include");
         build_cmd.env("CXXFLAGS", "-I/opt/homebrew/include -stdlib=libc++");
     }
-    }
 
     Ok(())
 }
