@@ -83,14 +83,14 @@ jobs:
             platform: macos
             variant: demo
 
-          # Windows builds - cross-compile from Ubuntu
-          - os: ubuntu-latest
-            platform: windows
-            variant: full
+           # Windows builds - native on Windows
+           - os: windows-latest
+             platform: windows
+             variant: full
 
-          - os: ubuntu-latest
-            platform: windows
-            variant: demo
+           - os: windows-latest
+             platform: windows
+             variant: demo
 
     steps:
       - uses: actions/checkout@v4
@@ -127,9 +127,9 @@ jobs:
           echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
-      # Install Docker for cross-compilation (Linux/Windows from Ubuntu)
+      # Install Docker for cross-compilation (Linux from Ubuntu)
       - name: Set up Docker
-        if: matrix.platform != 'macos'
+        if: matrix.platform == 'linux'
         uses: docker/setup-docker-action@v4
         with:
           daemon-config: |
@@ -139,20 +139,18 @@ jobs:
               }
             }
 
-      # Install cross for Linux/Windows builds
+      # Install cross for Linux builds
       - name: Install Cross
-        if: matrix.platform != 'macos'
+        if: matrix.platform == 'linux'
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
 
       # Build using xtask
       - name: Build with xtask
         run: |
-          # Set environment variables to control FFmpeg linking
-          export PKG_CONFIG_ALLOW_CROSS=1
-          export PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
           cargo build --package xtask --release
           ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
+        shell: bash
 
       # Upload artifacts
       - name: Upload Distribution
