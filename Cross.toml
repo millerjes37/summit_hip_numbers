@@ -2,38 +2,9 @@
 # https://github.com/cross-rs/cross
 
 [target.x86_64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:edge"
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
 # Force platform for ARM64 macOS
 runner = "docker run --platform linux/amd64 --rm -v /var/run/docker.sock:/var/run/docker.sock"
 
-# Install all dependencies needed for compilation
-pre-build = [
-    "apt-get update",
-    # Core FFmpeg libraries
-    "apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev libavfilter-dev libavdevice-dev",
-    # GUI and window system libraries
-    "apt-get install -y libasound2-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev",
-    "apt-get install -y libwayland-dev libxkbcommon-dev pkg-config clang",
-    # Optional FFmpeg audio libraries (required for linking)
-    "apt-get install -y libjack-dev libopenal-dev libsdl2-dev libpulse-dev libcaca-dev libsndio-dev",
-    # Optional FFmpeg video input libraries (required for linking)
-    "apt-get install -y libraw1394-dev libavc1394-dev libiec61883-dev libdc1394-dev",
-    # Optional FFmpeg audio/video libraries (required for linking)
-    "apt-get install -y libcdio-dev libcdio-paranoia-dev libcdio-cdda-dev libbs2b-dev",
-    # Graphics libraries (required for linking)
-    "apt-get install -y libgl1-mesa-dev",
-]
-
 [target.x86_64-pc-windows-gnu]
-image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:edge"
-
-# Install FFmpeg development libraries for Windows cross-compilation
-pre-build = [
-    "apt-get update",
-    # Core FFmpeg libraries (required)
-    "apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev",
-    # GUI and window system libraries (for egui/eframe)
-    "apt-get install -y libasound2-dev pkg-config clang",
-    # Basic optional libraries that are commonly available
-    "apt-get install -y libsdl2-dev libgl1-mesa-dev || true",
-]
+image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:main"
