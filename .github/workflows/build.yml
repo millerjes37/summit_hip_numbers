@@ -128,16 +128,31 @@ jobs:
             libavdevice-dev \
             pkg-config clang
 
-      # macOS-specific: Install FFmpeg via Homebrew
-      - name: Install macOS Dependencies
-        if: matrix.platform == 'macos'
-        run: |
-          brew install ffmpeg pkg-config
-          # Set FFMPEG_DIR to point to Homebrew installation
-          echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
-          echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV
+       # macOS-specific: Install FFmpeg via Homebrew
+       - name: Install macOS Dependencies
+         if: matrix.platform == 'macos'
+          run: |
+            brew install ffmpeg pkg-config
+            # Create symlinks for FFmpeg headers in /usr/include where ffmpeg-sys-next looks
+            sudo mkdir -p /usr/include
+            # Create individual header file symlinks
+            for header in /opt/homebrew/include/libav*/*.h /opt/homebrew/include/libsw*/*.h /opt/homebrew/include/libpostproc/*.h; do
+              if [ -f "$header" ]; then
+                sudo ln -sf "$header" "/usr/include/$(basename "$header")" 2>/dev/null || true
+              fi
+            done
+            # Also create directory symlinks as fallback
+            sudo ln -sf /opt/homebrew/include/libav* /usr/include/ 2>/dev/null || true
+            sudo ln -sf /opt/homebrew/include/libsw* /usr/include/ 2>/dev/null || true
+            sudo ln -sf /opt/homebrew/include/libpostproc /usr/include/ 2>/dev/null || true
+            # Set environment variables
+           echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
+           echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
+           echo "C_INCLUDE_PATH=/opt/homebrew/include:$C_INCLUDE_PATH" >> $GITHUB_ENV
+           echo "CPLUS_INCLUDE_PATH=/opt/homebrew/include:$CPLUS_INCLUDE_PATH" >> $GITHUB_ENV
+           echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+           echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+           echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV
 
       # Install Docker for cross-compilation (Linux from Ubuntu)
       - name: Set up Docker
