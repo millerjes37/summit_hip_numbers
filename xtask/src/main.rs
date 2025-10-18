@@ -392,12 +392,15 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
             }
         }
         "windows" => {
-            if docker_available {
+            if current_os == "windows" {
+                // Native Windows build on Windows runner
+                ("x86_64-pc-windows-msvc", false)
+            } else if docker_available {
+                // Cross-compilation from non-Windows runner
                 ("x86_64-pc-windows-gnu", true)
             } else {
-                // Try Windows build with downloaded FFmpeg
-                println!("  ℹ Attempting Windows build with downloaded FFmpeg (experimental)");
-                ("x86_64-pc-windows-gnu", false)
+                println!("  ⚠ Skipping Windows build (requires Windows runner or Docker)");
+                return Ok(());
             }
         }
         "macos" => {
@@ -492,13 +495,7 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     // Copy binary
     println!("  [3/4] Copying binary and assets...");
     let binary_name = if platform == "windows" {
-        if variant == "demo" {
-            "summit_hip_numbers_demo.exe"
-        } else {
-            "summit_hip_numbers.exe"
-        }
-    } else if variant == "demo" {
-        "summit_hip_numbers_demo"
+        "summit_hip_numbers.exe"
     } else {
         "summit_hip_numbers"
     };
