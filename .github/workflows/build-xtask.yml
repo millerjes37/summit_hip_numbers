@@ -70,9 +70,9 @@ jobs:
             platform: linux
             variant: full
 
-          - os: ubuntu-latest
-            platform: linux
-            variant: demo
+           - os: ubuntu-latest
+             platform: linux
+             variant: demo
 
            # macOS builds - must run on macOS
            - os: macos-latest
