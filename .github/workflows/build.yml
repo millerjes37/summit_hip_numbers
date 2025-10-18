@@ -153,9 +153,9 @@ jobs:
           echo "CFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
           # Also set bindgen-specific environment variables
-          # Use -isysroot to ensure clang can find system headers (including time.h)
+          # Use -isysroot and explicitly include SDK's usr/include for system headers (time.h)
           SDKROOT=$(xcrun --show-sdk-path)
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT -I/opt/homebrew/include" >> $GITHUB_ENV
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT -I$SDKROOT/usr/include -I/opt/homebrew/include" >> $GITHUB_ENV
 
       # Install Docker for cross-compilation (Linux from Ubuntu)
       - name: Set up Docker

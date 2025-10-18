@@ -234,8 +234,7 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         build_cmd.env("PKG_CONFIG_PATH", "/opt/homebrew/lib/pkgconfig");
 
         // Set clang arguments to include FFmpeg headers
-        // Include time.h first to ensure time_t is defined before processing FFmpeg headers
-        // Get macOS SDK path for system headers
+        // Get macOS SDK path for system headers (where time.h is located)
         let sdk_path = std::process::Command::new("xcrun")
             .args(["--show-sdk-path"])
             .output()
@@ -250,8 +249,9 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk".to_string());
 
+        // Include SDK's usr/include for system headers like time.h
         let bindgen_args = format!(
-            "-isysroot {} -I/opt/homebrew/include \
+            "-isysroot {} -I{}/usr/include -I/opt/homebrew/include \
              -I/opt/homebrew/include/libavcodec \
              -I/opt/homebrew/include/libavformat \
              -I/opt/homebrew/include/libavutil \
@@ -259,7 +259,7 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
              -I/opt/homebrew/include/libswresample \
              -I/opt/homebrew/include/libavdevice \
              -I/opt/homebrew/include/libavfilter",
-            sdk_path
+            sdk_path, sdk_path
         );
         build_cmd.env("BINDGEN_EXTRA_CLANG_ARGS", &bindgen_args);
         println!("  ✓ BINDGEN_EXTRA_CLANG_ARGS: {}", bindgen_args);
