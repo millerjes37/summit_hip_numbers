@@ -235,17 +235,15 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
 
         // Set clang arguments to include FFmpeg headers
         // Use --sysroot to override system include paths
-        let bindgen_args = format!(
-            "-I/opt/homebrew/include \
+        let bindgen_args = "-I/opt/homebrew/include \
              -I/opt/homebrew/include/libavcodec \
              -I/opt/homebrew/include/libavformat \
              -I/opt/homebrew/include/libavutil \
              -I/opt/homebrew/include/libswscale \
              -I/opt/homebrew/include/libswresample \
              -I/opt/homebrew/include/libavdevice \
-             -I/opt/homebrew/include/libavfilter"
-        );
-        build_cmd.env("BINDGEN_EXTRA_CLANG_ARGS", &bindgen_args);
+             -I/opt/homebrew/include/libavfilter";
+        build_cmd.env("BINDGEN_EXTRA_CLANG_ARGS", bindgen_args);
         println!("  ✓ BINDGEN_EXTRA_CLANG_ARGS: {}", bindgen_args);
 
         // Set compiler flags
