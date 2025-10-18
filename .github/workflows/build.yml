@@ -128,26 +128,26 @@ jobs:
             libavdevice-dev \
             pkg-config clang
 
-       # macOS-specific: Install FFmpeg via Homebrew
-        - name: Install macOS Dependencies
-          if: matrix.platform == 'macos'
-          run: |
-            brew install ffmpeg pkg-config
-            # Set up FFmpeg for bindgen - ffmpeg-sys-next needs these specific variables
-            echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
-            echo "FFMPEG_INCLUDE_DIR=/opt/homebrew/include" >> $GITHUB_ENV
-            echo "FFMPEG_LIBRARY_DIR=/opt/homebrew/lib" >> $GITHUB_ENV
-            # Set standard include/library paths
-            echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
-            echo "C_INCLUDE_PATH=/opt/homebrew/include:$C_INCLUDE_PATH" >> $GITHUB_ENV
-            echo "CPLUS_INCLUDE_PATH=/opt/homebrew/include:$CPLUS_INCLUDE_PATH" >> $GITHUB_ENV
-            echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
-            echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-            echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV
-            echo "CFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
-            echo "CXXFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
-            # Also set bindgen-specific environment variables
-            echo "BINDGEN_EXTRA_CLANG_ARGS=-I/opt/homebrew/include" >> $GITHUB_ENV
+      # macOS-specific: Install FFmpeg via Homebrew
+      - name: Install macOS Dependencies
+        if: matrix.platform == 'macos'
+        run: |
+          brew install ffmpeg pkg-config
+          # Set up FFmpeg for bindgen - ffmpeg-sys-next needs these specific variables
+          echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
+          echo "FFMPEG_INCLUDE_DIR=/opt/homebrew/include" >> $GITHUB_ENV
+          echo "FFMPEG_LIBRARY_DIR=/opt/homebrew/lib" >> $GITHUB_ENV
+          # Set standard include/library paths
+          echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
+          echo "C_INCLUDE_PATH=/opt/homebrew/include:$C_INCLUDE_PATH" >> $GITHUB_ENV
+          echo "CPLUS_INCLUDE_PATH=/opt/homebrew/include:$CPLUS_INCLUDE_PATH" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV
+          echo "CFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
+          echo "CXXFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
+          # Also set bindgen-specific environment variables
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I/opt/homebrew/include" >> $GITHUB_ENV
 
       # Install Docker for cross-compilation (Linux from Ubuntu)
       - name: Set up Docker

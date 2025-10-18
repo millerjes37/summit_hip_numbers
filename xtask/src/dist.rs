@@ -202,13 +202,136 @@ fn create_version_file(dist_dir: &Path, variant: &str) -> Result<()> {
 fn bundle_dependencies(platform: &str, _variant: &str, target_triple: &str, dist_dir: &Path) -> Result<()> {
     match platform {
         "windows" => bundle_windows_dlls(target_triple, dist_dir)?,
-        "linux" => {
-            println!("    {} Linux binary is dynamically linked (system libs)", "ℹ".cyan());
-        }
-        "macos" => {
-            println!("    {} macOS app bundle will be created separately", "ℹ".cyan());
-        }
+        "linux" => bundle_linux_libs(target_triple, dist_dir)?,
+        "macos" => bundle_macos_dylibs(target_triple, dist_dir)?,
         _ => {}
+    }
+
+    Ok(())
+}
+
+fn bundle_linux_libs(_target_triple: &str, dist_dir: &Path) -> Result<()> {
+    println!("    Bundling Linux FFmpeg libraries...");
+
+    // For Linux, we'll bundle FFmpeg .so files
+    let ffmpeg_lib_patterns = vec![
+        "libavutil.so*",
+        "libavcodec.so*",
+        "libavformat.so*",
+        "libswscale.so*",
+        "libswresample.so*",
+    ];
+
+    let lib_search_paths = vec![
+        "/usr/lib/x86_64-linux-gnu",
+        "/usr/lib64",
+        "/usr/lib",
+    ];
+
+    let mut bundled_count = 0;
+
+    for pattern in &ffmpeg_lib_patterns {
+        let mut found = false;
+        for search_path in &lib_search_paths {
+            let search_pattern = format!("{}/{}", search_path, pattern);
+            if let Ok(entries) = glob::glob(&search_pattern) {
+                for entry in entries.flatten() {
+                    if let Some(filename) = entry.file_name() {
+                        let dest = dist_dir.join(filename);
+                        if let Ok(_) = fs::copy(&entry, &dest) {
+                            println!("      {} {}", "✓".green(), filename.to_string_lossy().dimmed());
+                            bundled_count += 1;
+                            found = true;
+                        }
+                    }
+                }
+            }
+            if found {
+                break;
+            }
+        }
+    }
+
+    if bundled_count > 0 {
+        println!("    {} Bundled {} FFmpeg libraries", "✓".green(), bundled_count);
+
+        // Create a launcher script to set LD_LIBRARY_PATH
+        let launcher_script = r#"#!/bin/bash
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export LD_LIBRARY_PATH="$DIR:$LD_LIBRARY_PATH"
+exec "$DIR/summit_hip_numbers" "$@"
+"#;
+
+        let launcher_path = dist_dir.join("run.sh");
+        fs::write(&launcher_path, launcher_script)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&launcher_path)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&launcher_path, perms)?;
+        }
+
+        println!("    {} Created launcher script: run.sh", "✓".green());
+    } else {
+        println!("    {} No FFmpeg libraries found, will use system libraries", "ℹ".cyan());
+    }
+
+    Ok(())
+}
+
+fn bundle_macos_dylibs(_target_triple: &str, dist_dir: &Path) -> Result<()> {
+    println!("    Bundling macOS FFmpeg dylibs...");
+
+    let homebrew_paths = vec![
+        "/opt/homebrew/lib",      // ARM64
+        "/usr/local/lib",          // x86_64
+    ];
+
+    let dylib_patterns = vec![
+        "libavutil.*.dylib",
+        "libavcodec.*.dylib",
+        "libavformat.*.dylib",
+        "libswscale.*.dylib",
+        "libswresample.*.dylib",
+    ];
+
+    let mut bundled_count = 0;
+    let mut bundled_dylibs = Vec::new();
+
+    for homebrew_path in &homebrew_paths {
+        if !PathBuf::from(homebrew_path).exists() {
+            continue;
+        }
+
+        for pattern in &dylib_patterns {
+            let search_pattern = format!("{}/{}", homebrew_path, pattern);
+            if let Ok(entries) = glob::glob(&search_pattern) {
+                for entry in entries.flatten() {
+                    if let Some(filename) = entry.file_name() {
+                        let dest = dist_dir.join(filename);
+                        if let Ok(_) = fs::copy(&entry, &dest) {
+                            println!("      {} {}", "✓".green(), filename.to_string_lossy().dimmed());
+                            bundled_dylibs.push(filename.to_string_lossy().to_string());
+                            bundled_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        if bundled_count > 0 {
+            break; // Found libraries, no need to check other paths
+        }
+    }
+
+    if bundled_count > 0 {
+        println!("    {} Bundled {} FFmpeg dylibs", "✓".green(), bundled_count);
+    } else {
+        println!("    {} No Homebrew FFmpeg dylibs found", "!".yellow());
+        println!("      Install with: brew install ffmpeg");
+        anyhow::bail!("FFmpeg dylibs not found. Please install with: brew install ffmpeg");
     }
 
     Ok(())
@@ -220,44 +343,71 @@ fn bundle_windows_dlls(_target_triple: &str, dist_dir: &Path) -> Result<()> {
     // Check for FFmpeg DLLs in .ffmpeg/windows-x64/bin
     let ffmpeg_dlls_dir = PathBuf::from(".ffmpeg/windows-x64/bin");
 
-    if ffmpeg_dlls_dir.exists() {
-        // Copy FFmpeg DLLs
-        let dll_patterns = vec![
-            "avutil-*.dll",
-            "avcodec-*.dll",
-            "avformat-*.dll",
-            "swscale-*.dll",
-            "swresample-*.dll",
-            "avdevice-*.dll",
-            "avfilter-*.dll",
-        ];
+    let mut required_dlls_found = Vec::new();
+    let mut required_dlls_missing = Vec::new();
 
-        let mut copied_count = 0;
-        for pattern in &dll_patterns {
-            if let Ok(entries) = glob::glob(&format!("{}/**/{}", ffmpeg_dlls_dir.display(), pattern)) {
+    // Required FFmpeg DLLs for video playback
+    let required_dll_patterns = vec![
+        ("avutil", "avutil-*.dll"),
+        ("avcodec", "avcodec-*.dll"),
+        ("avformat", "avformat-*.dll"),
+        ("swscale", "swscale-*.dll"),
+        ("swresample", "swresample-*.dll"),
+    ];
+
+    // Optional FFmpeg DLLs
+    let optional_dll_patterns = vec![
+        "avdevice-*.dll",
+        "avfilter-*.dll",
+    ];
+
+    if ffmpeg_dlls_dir.exists() {
+        println!("    {} Found FFmpeg directory: {}", "✓".green(), ffmpeg_dlls_dir.display());
+
+        // Copy required FFmpeg DLLs
+        for (name, pattern) in &required_dll_patterns {
+            let mut found = false;
+            if let Ok(entries) = glob::glob(&format!("{}/{}", ffmpeg_dlls_dir.display(), pattern)) {
                 for entry in entries.flatten() {
                     if let Some(filename) = entry.file_name() {
                         let dest = dist_dir.join(filename);
                         fs::copy(&entry, &dest)
                             .with_context(|| format!("Failed to copy {:?}", entry))?;
-                        copied_count += 1;
                         println!("      {} {}", "✓".green(), filename.to_string_lossy().dimmed());
+                        required_dlls_found.push(name.to_string());
+                        found = true;
+                    }
+                }
+            }
+            if !found {
+                required_dlls_missing.push(name.to_string());
+            }
+        }
+
+        // Copy optional FFmpeg DLLs
+        for pattern in &optional_dll_patterns {
+            if let Ok(entries) = glob::glob(&format!("{}/{}", ffmpeg_dlls_dir.display(), pattern)) {
+                for entry in entries.flatten() {
+                    if let Some(filename) = entry.file_name() {
+                        let dest = dist_dir.join(filename);
+                        fs::copy(&entry, &dest)
+                            .with_context(|| format!("Failed to copy {:?}", entry))?;
+                        println!("      {} {} (optional)", "✓".green(), filename.to_string_lossy().dimmed());
                     }
                 }
             }
         }
 
-        if copied_count > 0 {
-            println!("    {} Copied {} FFmpeg DLLs", "✓".green(), copied_count);
+        if !required_dlls_missing.is_empty() {
+            println!("    {} Missing required DLLs: {}", "✗".red(), required_dlls_missing.join(", "));
+            anyhow::bail!("Missing required FFmpeg DLLs: {}", required_dlls_missing.join(", "));
         } else {
-            println!("    {} No FFmpeg DLLs found in {}", "!".yellow(), ffmpeg_dlls_dir.display());
+            println!("    {} All required FFmpeg DLLs bundled ({} DLLs)", "✓".green(), required_dlls_found.len());
         }
     } else {
-        println!("    {} FFmpeg DLLs directory not found: {}", "!".yellow(), ffmpeg_dlls_dir.display());
-        println!("      For Windows builds, you need FFmpeg DLLs in: .ffmpeg/windows-x64/bin/");
-        println!("      Options:");
-        println!("        1. Download from: https://github.com/GyanD/codexffmpeg/releases");
-        println!("        2. Or build with MSYS2 which auto-bundles DLLs");
+        println!("    {} FFmpeg DLLs directory not found: {}", "✗".red(), ffmpeg_dlls_dir.display());
+        println!("      Run: cargo build --package xtask --release && ./target/release/xtask dist --platform windows");
+        anyhow::bail!("FFmpeg DLLs not found. Please ensure FFmpeg is downloaded.");
     }
 
     // Also check for runtime DLLs (libgcc, libstdc++, etc.)
@@ -267,6 +417,8 @@ fn bundle_windows_dlls(_target_triple: &str, dist_dir: &Path) -> Result<()> {
         "libwinpthread-1.dll",
     ];
 
+    println!("    Bundling runtime DLLs...");
+
     // These typically come from MinGW, check common locations
     let mingw_bin_paths = vec![
         PathBuf::from("/mingw64/bin"),
@@ -274,7 +426,9 @@ fn bundle_windows_dlls(_target_triple: &str, dist_dir: &Path) -> Result<()> {
         PathBuf::from(".ffmpeg/windows-x64/bin"),
     ];
 
+    let mut runtime_count = 0;
     for dll_name in &runtime_dlls {
+        let mut found = false;
         for mingw_path in &mingw_bin_paths {
             let dll_path = mingw_path.join(dll_name);
             if dll_path.exists() {
@@ -283,10 +437,19 @@ fn bundle_windows_dlls(_target_triple: &str, dist_dir: &Path) -> Result<()> {
                     fs::copy(&dll_path, &dest)
                         .with_context(|| format!("Failed to copy {:?}", dll_path))?;
                     println!("      {} {}", "✓".green(), dll_name.dimmed());
+                    runtime_count += 1;
                 }
+                found = true;
                 break;
             }
         }
+        if !found {
+            println!("      {} {} (not found, may not be needed)", "!".yellow(), dll_name.dimmed());
+        }
+    }
+
+    if runtime_count > 0 {
+        println!("    {} Bundled {} runtime DLLs", "✓".green(), runtime_count);
     }
 
     Ok(())

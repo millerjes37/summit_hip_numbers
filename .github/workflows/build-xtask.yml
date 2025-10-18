@@ -126,6 +126,17 @@ jobs:
           echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
           echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
+          echo "FFMPEG_INCLUDE_DIR=/opt/homebrew/include" >> $GITHUB_ENV
+          echo "FFMPEG_LIBRARY_DIR=/opt/homebrew/lib" >> $GITHUB_ENV
+
+      # Windows-specific: Setup environment for FFmpeg
+      - name: Setup Windows Build Environment
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          # xtask will download FFmpeg automatically, but we set up the environment
+          echo "Setting up Windows build environment..."
 
       # Install Docker for cross-compilation (Linux from Ubuntu)
       - name: Set up Docker
@@ -145,11 +156,22 @@ jobs:
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
 
+      # Build xtask first
+      - name: Build xtask
+        run: cargo build --package xtask --release
+        shell: bash
+
+      # Ensure FFmpeg is downloaded (xtask will auto-download if needed)
+      - name: Prepare FFmpeg Dependencies
+        if: matrix.platform == 'windows'
+        run: |
+          echo "FFmpeg will be automatically downloaded by xtask if needed..."
+          # The dist command will call ensure_ffmpeg_libs which downloads FFmpeg
+        shell: bash
+
       # Build using xtask
       - name: Build with xtask
-        run: |
-          cargo build --package xtask --release
-          ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
+        run: ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
         shell: bash
 
       # Upload artifacts
@@ -209,6 +231,40 @@ jobs:
 
           echo "✓ Found binary: $BINARY"
           file "$BINARY"
+          DIST_DIR=$(dirname "$BINARY")
+
+          # Check if launcher script exists
+          if [ -f "$DIST_DIR/run.sh" ]; then
+            echo "✓ Found launcher script: run.sh"
+          fi
+
+          # Verify FFmpeg .so files if bundled
+          echo ""
+          echo "Checking for bundled FFmpeg libraries..."
+
+          FFMPEG_LIBS=("libavutil.so" "libavcodec.so" "libavformat.so" "libswscale.so" "libswresample.so")
+          BUNDLED_COUNT=0
+
+          for lib in "${FFMPEG_LIBS[@]}"; do
+            if ls "$DIST_DIR"/${lib}* 1> /dev/null 2>&1; then
+              LIB_FILE=$(ls "$DIST_DIR"/${lib}* | head -n 1)
+              LIB_SIZE=$(stat -c%s "$LIB_FILE")
+              echo "✓ Bundled: $(basename "$LIB_FILE") (${LIB_SIZE} bytes)"
+              BUNDLED_COUNT=$((BUNDLED_COUNT + 1))
+            fi
+          done
+
+          if [ $BUNDLED_COUNT -gt 0 ]; then
+            echo ""
+            echo "✓ Found $BUNDLED_COUNT bundled FFmpeg libraries"
+          else
+            echo ""
+            echo "ℹ No bundled libraries (will use system FFmpeg)"
+          fi
+
+          # Check dynamic dependencies
+          echo ""
+          echo "Checking dynamic dependencies..."
           ldd "$BINARY" || echo "Note: ldd failed"
 
       - name: Test macOS Distribution
@@ -218,15 +274,43 @@ jobs:
           unzip -l *.zip | head -20
           unzip *.zip
 
-          # Find app bundle
-          APP=$(find . -name "*.app" -type d | head -n 1)
-          if [ -z "$APP" ]; then
-            echo "ERROR: App bundle not found"
+          # Find binary (check for app bundle first, then standalone binary)
+          BINARY=$(find . -name "summit_hip_numbers*" -type f -perm +111 | grep -v "\.app" | head -n 1)
+          if [ -z "$BINARY" ]; then
+            echo "ERROR: Binary not found"
             exit 1
           fi
 
-          echo "✓ Found app bundle: $APP"
-          ls -la "$APP/Contents/MacOS/"
+          echo "✓ Found binary: $BINARY"
+          file "$BINARY"
+          DIST_DIR=$(dirname "$BINARY")
+
+          # Verify FFmpeg dylibs are present
+          echo ""
+          echo "Verifying FFmpeg dylibs..."
+
+          REQUIRED_DYLIBS=("libavutil" "libavcodec" "libavformat" "libswscale" "libswresample")
+          MISSING_DYLIBS=()
+
+          for dylib in "${REQUIRED_DYLIBS[@]}"; do
+            if ! ls "$DIST_DIR"/${dylib}.*.dylib 1> /dev/null 2>&1; then
+              MISSING_DYLIBS+=("$dylib")
+              echo "✗ Missing: ${dylib}.*.dylib"
+            else
+              DYLIB_FILE=$(ls "$DIST_DIR"/${dylib}.*.dylib | head -n 1)
+              DYLIB_SIZE=$(stat -f%z "$DYLIB_FILE")
+              echo "✓ Found: $(basename "$DYLIB_FILE") (${DYLIB_SIZE} bytes)"
+            fi
+          done
+
+          if [ ${#MISSING_DYLIBS[@]} -ne 0 ]; then
+            echo ""
+            echo "ERROR: Missing required dylibs: ${MISSING_DYLIBS[*]}"
+            exit 1
+          fi
+
+          echo ""
+          echo "✓ All required FFmpeg dylibs present"
 
       - name: Test Windows Distribution
         if: matrix.platform == 'windows'
@@ -244,6 +328,34 @@ jobs:
 
           echo "✓ Found executable: $EXE"
           file "$EXE"
+
+          # Verify FFmpeg DLLs are present
+          echo ""
+          echo "Verifying FFmpeg DLLs..."
+          DIST_DIR=$(dirname "$EXE")
+
+          REQUIRED_DLLS=("avutil" "avcodec" "avformat" "swscale" "swresample")
+          MISSING_DLLS=()
+
+          for dll in "${REQUIRED_DLLS[@]}"; do
+            if ! ls "$DIST_DIR"/${dll}-*.dll 1> /dev/null 2>&1; then
+              MISSING_DLLS+=("$dll")
+              echo "✗ Missing: ${dll}-*.dll"
+            else
+              DLL_FILE=$(ls "$DIST_DIR"/${dll}-*.dll | head -n 1)
+              DLL_SIZE=$(stat -f%z "$DLL_FILE" 2>/dev/null || stat -c%s "$DLL_FILE" 2>/dev/null)
+              echo "✓ Found: $(basename "$DLL_FILE") (${DLL_SIZE} bytes)"
+            fi
+          done
+
+          if [ ${#MISSING_DLLS[@]} -ne 0 ]; then
+            echo ""
+            echo "ERROR: Missing required DLLs: ${MISSING_DLLS[*]}"
+            exit 1
+          fi
+
+          echo ""
+          echo "✓ All required FFmpeg DLLs present"
 
   # ============================================================================
   # BUILD SUMMARY

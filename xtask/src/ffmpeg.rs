@@ -1,7 +1,8 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::*;
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::io::Write;
 
 const FFMPEG_VERSION: &str = "7.0";
 
@@ -40,25 +41,76 @@ fn ensure_windows_ffmpeg(base_dir: &Path, force: bool) -> Result<PathBuf> {
         return Ok(target_dir);
     }
 
-    println!("  {} Downloading Windows FFmpeg static libraries...", "⬇".cyan());
+    println!("  {} Downloading Windows FFmpeg shared libraries...", "⬇".cyan());
 
     fs::create_dir_all(&target_dir)?;
 
-    // Download FFmpeg Windows shared build (gpl) from gyan.dev
-    let url = format!(
-        "https://github.com/GyanD/codexffmpeg/releases/download/{}/ffmpeg-{}-full_build-shared.7z",
-        FFMPEG_VERSION, FFMPEG_VERSION
-    );
+    // Download FFmpeg Windows shared build from gyan.dev (using .zip instead of .7z)
+    let url = "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-full_build-shared.zip";
 
     println!("    From: {}", url.dimmed());
 
-    // For now, provide instructions since 7z requires external tool
-    println!("    {} Windows FFmpeg needs to be downloaded manually:", "!".yellow());
-    println!("      1. Download from: {}", url);
-    println!("      2. Extract to: {}", target_dir.display());
-    println!("      3. Ensure bin/*.dll files are present");
-    println!();
-    println!("    {} Alternatively, use the existing MSYS2/MinGW approach", "ℹ".cyan());
+    let response = reqwest::blocking::get(url)
+        .context("Failed to download FFmpeg")?;
+
+    if !response.status().is_success() {
+        anyhow::bail!("Failed to download FFmpeg: HTTP {}", response.status());
+    }
+
+    let bytes = response.bytes().context("Failed to read response")?;
+    println!("    {} Downloaded {} MB", "✓".green(), bytes.len() / 1_048_576);
+
+    println!("    Extracting FFmpeg archive...");
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor)?;
+
+    // Extract files we need (bin/, lib/, include/)
+    let mut extracted_count = 0;
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => path,
+            None => continue,
+        };
+
+        // Strip the top-level directory (e.g., "ffmpeg-7.1-full_build-shared/")
+        let components: Vec<_> = outpath.components().collect();
+        if components.len() < 2 {
+            continue;
+        }
+
+        // Skip the first component (top-level directory)
+        let relative_path: std::path::PathBuf = components[1..].iter().collect();
+
+        // Check if this is a bin/lib/include file
+        let first_dir = relative_path.components().next();
+        let should_extract = match first_dir {
+            Some(std::path::Component::Normal(dir)) => {
+                let dir_str = dir.to_string_lossy();
+                dir_str == "bin" || dir_str == "lib" || dir_str == "include"
+            }
+            _ => false,
+        };
+
+        if !should_extract {
+            continue;
+        }
+
+        let outpath = target_dir.join(&relative_path);
+
+        if file.name().ends_with('/') {
+            fs::create_dir_all(&outpath)?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                fs::create_dir_all(p)?;
+            }
+            let mut outfile = fs::File::create(&outpath)?;
+            std::io::copy(&mut file, &mut outfile)?;
+            extracted_count += 1;
+        }
+    }
+
+    println!("    {} Extracted {} files to {}", "✓".green(), extracted_count, target_dir.display());
 
     Ok(target_dir)
 }
