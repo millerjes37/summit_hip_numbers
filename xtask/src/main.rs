@@ -234,8 +234,9 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         build_cmd.env("PKG_CONFIG_PATH", "/opt/homebrew/lib/pkgconfig");
 
         // Set clang arguments to include FFmpeg headers
-        // Use --sysroot to override system include paths
-        let bindgen_args = "-I/opt/homebrew/include \
+        // Include time.h first to ensure time_t is defined before processing FFmpeg headers
+        let bindgen_args = "-include time.h \
+             -I/opt/homebrew/include \
              -I/opt/homebrew/include/libavcodec \
              -I/opt/homebrew/include/libavformat \
              -I/opt/homebrew/include/libavutil \

@@ -153,7 +153,8 @@ jobs:
           echo "CFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
           # Also set bindgen-specific environment variables
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-I/opt/homebrew/include" >> $GITHUB_ENV
+          # Include time.h first to ensure time_t is defined before processing FFmpeg headers
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-include time.h -I/opt/homebrew/include" >> $GITHUB_ENV
 
       # Install Docker for cross-compilation (Linux from Ubuntu)
       - name: Set up Docker
