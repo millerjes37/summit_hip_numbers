@@ -218,11 +218,29 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     };
     build_cmd.env("PKG_CONFIG_PATH", new_pkg_config_path);
 
-    // On macOS, force use of libc++ instead of libstdc++
+    // On macOS, create symlinks for FFmpeg headers to work around hardcoded paths
     if platform == "macos" {
         build_cmd.env("CXXSTDLIB", "c++");
         build_cmd.env("CXXFLAGS", "-stdlib=libc++");
         build_cmd.env("LDFLAGS", "-stdlib=libc++");
+
+        // Create symlinks from /usr/include to /opt/homebrew/include for FFmpeg headers
+        // This works around ffmpeg-sys-next's hardcoded header search paths
+        let ffmpeg_include_path = PathBuf::from("/opt/homebrew/include");
+        if ffmpeg_include_path.exists() {
+            // Create /usr/include if it doesn't exist
+            let _ = Command::new("sudo").args(["mkdir", "-p", "/usr/include"]).status();
+
+            // Create symlinks for FFmpeg libraries
+            let ffmpeg_libs = ["libavcodec", "libavformat", "libavutil", "libswscale", "libswresample", "libavfilter", "libavdevice"];
+            for lib in &ffmpeg_libs {
+                let src = ffmpeg_include_path.join(lib);
+                let dest = PathBuf::from("/usr/include").join(lib);
+                if src.exists() && !dest.exists() {
+                    let _ = Command::new("sudo").args(["ln", "-sf", &src.to_string_lossy(), &dest.to_string_lossy()]).status();
+                }
+            }
+        }
     }
 
     Ok(())
