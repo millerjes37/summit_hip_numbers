@@ -190,7 +190,10 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     build_cmd.env("C_INCLUDE_PATH", &ffmpeg_include_path);
     build_cmd.env("CPLUS_INCLUDE_PATH", &ffmpeg_include_path);
     build_cmd.env("LIBRARY_PATH", &ffmpeg_lib_path);
-    build_cmd.env("BINDGEN_EXTRA_CLANG_ARGS", format!("-I{}", &ffmpeg_include_path));
+    build_cmd.env(
+        "BINDGEN_EXTRA_CLANG_ARGS",
+        format!("-I{}", &ffmpeg_include_path),
+    );
 
     // Set pkg-config path
     let current_pkg_config_path = env::var("PKG_CONFIG_PATH").unwrap_or_default();
