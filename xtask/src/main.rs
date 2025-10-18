@@ -3,6 +3,8 @@ use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
+use std::io::Write;
+use walkdir::WalkDir;
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -763,34 +765,64 @@ fn bundle_linux_libs(dist_dir: &Path) -> Result<()> {
 fn create_archive(name: &str, source: &Path, platform: &str) -> Result<()> {
     let parent = source.parent().unwrap();
 
-    if platform == "windows" {
-        // Create ZIP for Windows
-        let archive_name = format!("{}.zip", name);
-
-        let status = Command::new("zip")
-            .args(["-r", archive_name.as_str(), name])
-            .current_dir(parent)
-            .status()
-            .context("Failed to create ZIP archive")?;
-
-        if !status.success() {
-            return Err(anyhow::anyhow!("ZIP creation failed"));
+    match platform {
+        "windows" => {
+            // Create ZIP for Windows using zip crate
+            let archive_name = format!("{}.zip", name);
+            let zip_path = parent.join(&archive_name);
+            create_zip(source, &zip_path)?;
         }
-    } else {
-        // Create tar.gz for Unix
-        let archive_name = format!("{}.tar.gz", name);
+        _ => {
+            // Create tar.gz for Unix
+            let archive_name = format!("{}.tar.gz", name);
 
-        let status = Command::new("tar")
-            .args(["-czf", archive_name.as_str(), name])
-            .current_dir(parent)
-            .status()
-            .context("Failed to create tar.gz archive")?;
+            let status = Command::new("tar")
+                .args(["-czf", archive_name.as_str(), name])
+                .current_dir(parent)
+                .status()
+                .context("Failed to create tar.gz archive")?;
 
-        if !status.success() {
-            return Err(anyhow::anyhow!("tar.gz creation failed"));
+            if !status.success() {
+                return Err(anyhow::anyhow!("tar.gz creation failed"));
+            }
         }
     }
 
+    Ok(())
+}
+
+fn create_zip(source_dir: &Path, output_path: &Path) -> Result<()> {
+    let file = fs::File::create(output_path)?;
+    let mut zip = zip::ZipWriter::new(file);
+
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o755);
+
+    let base_name = source_dir.file_name().unwrap().to_string_lossy();
+
+    for entry in WalkDir::new(source_dir) {
+        let entry = entry?;
+        let path = entry.path();
+        let relative = path.strip_prefix(source_dir)?;
+
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+
+        let zip_path = PathBuf::from(&*base_name).join(relative);
+        let zip_path_str = zip_path.to_string_lossy().replace("\\", "/");
+
+        if entry.file_type().is_dir() {
+            zip.add_directory(&zip_path_str, options)?;
+        } else {
+            zip.start_file(&zip_path_str, options)?;
+            let contents = fs::read(path)?;
+            zip.write_all(&contents)?;
+        }
+    }
+
+    zip.finish()?;
     Ok(())
 }
 
