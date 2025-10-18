@@ -146,7 +146,7 @@ jobs:
             sudo ln -sf /opt/homebrew/include/libsw* /usr/include/ 2>/dev/null || true
             sudo ln -sf /opt/homebrew/include/libpostproc /usr/include/ 2>/dev/null || true
             # Set environment variables
-           echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
+            echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
            echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
            echo "C_INCLUDE_PATH=/opt/homebrew/include:$C_INCLUDE_PATH" >> $GITHUB_ENV
            echo "CPLUS_INCLUDE_PATH=/opt/homebrew/include:$CPLUS_INCLUDE_PATH" >> $GITHUB_ENV
