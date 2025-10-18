@@ -1,9 +1,9 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
-use std::io::Write;
 use walkdir::WalkDir;
 
 #[derive(Parser)]
