@@ -235,16 +235,33 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
 
         // Set clang arguments to include FFmpeg headers
         // Include time.h first to ensure time_t is defined before processing FFmpeg headers
-        let bindgen_args = "-include time.h \
-             -I/opt/homebrew/include \
+        // Get macOS SDK path for system headers
+        let sdk_path = std::process::Command::new("xcrun")
+            .args(["--show-sdk-path"])
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    String::from_utf8(output.stdout).ok()
+                } else {
+                    None
+                }
+            })
+            .map(|s| s.trim().to_string())
+            .unwrap_or_else(|| "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk".to_string());
+
+        let bindgen_args = format!(
+            "-isysroot {} -I/opt/homebrew/include \
              -I/opt/homebrew/include/libavcodec \
              -I/opt/homebrew/include/libavformat \
              -I/opt/homebrew/include/libavutil \
              -I/opt/homebrew/include/libswscale \
              -I/opt/homebrew/include/libswresample \
              -I/opt/homebrew/include/libavdevice \
-             -I/opt/homebrew/include/libavfilter";
-        build_cmd.env("BINDGEN_EXTRA_CLANG_ARGS", bindgen_args);
+             -I/opt/homebrew/include/libavfilter",
+            sdk_path
+        );
+        build_cmd.env("BINDGEN_EXTRA_CLANG_ARGS", &bindgen_args);
         println!("  ✓ BINDGEN_EXTRA_CLANG_ARGS: {}", bindgen_args);
 
         // Set compiler flags

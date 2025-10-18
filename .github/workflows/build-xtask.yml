@@ -135,8 +135,9 @@ jobs:
           echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
           echo "FFMPEG_INCLUDE_DIR=/opt/homebrew/include" >> $GITHUB_ENV
           echo "FFMPEG_LIBRARY_DIR=/opt/homebrew/lib" >> $GITHUB_ENV
-          # Include time.h first to ensure time_t is defined before processing FFmpeg headers
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-include time.h -I/opt/homebrew/include" >> $GITHUB_ENV
+          # Use -isysroot to ensure clang can find system headers (including time.h)
+          SDKROOT=$(xcrun --show-sdk-path)
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT -I/opt/homebrew/include" >> $GITHUB_ENV
 
       # Windows-specific: Setup environment for FFmpeg
       - name: Setup Windows Build Environment
