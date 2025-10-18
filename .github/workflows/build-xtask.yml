@@ -66,9 +66,9 @@ jobs:
       matrix:
         include:
           # Linux builds - native on Ubuntu
-          - os: ubuntu-latest
-            platform: linux
-            variant: full
+           - os: ubuntu-latest
+             platform: linux
+             variant: full
 
            - os: ubuntu-latest
              platform: linux
