@@ -129,8 +129,8 @@ jobs:
             pkg-config clang
 
        # macOS-specific: Install FFmpeg via Homebrew
-       - name: Install macOS Dependencies
-         if: matrix.platform == 'macos'
+        - name: Install macOS Dependencies
+          if: matrix.platform == 'macos'
           run: |
             brew install ffmpeg pkg-config
             # Create symlinks for FFmpeg headers in /usr/include where ffmpeg-sys-next looks
