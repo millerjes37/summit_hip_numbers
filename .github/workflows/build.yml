@@ -133,10 +133,8 @@ jobs:
         if: matrix.platform == 'macos'
         run: |
           brew install ffmpeg pkg-config
-          # Ensure FFmpeg development headers are available
-          brew link --force ffmpeg
-          # Set paths for FFmpeg headers (needed for bindgen)
-          echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
+          # Set FFMPEG_DIR to point to Homebrew installation
+          echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
           echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV

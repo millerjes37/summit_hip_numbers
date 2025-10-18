@@ -183,6 +183,7 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     );
 
     // Set environment variables for FFmpeg linking
+    build_cmd.env("FFMPEG_DIR", "/opt/homebrew");
     build_cmd.env("CPATH", &ffmpeg_include_path);
     build_cmd.env("LIBRARY_PATH", &ffmpeg_lib_path);
 
