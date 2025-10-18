@@ -182,10 +182,15 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         ffmpeg_pkgconfig_path.display()
     );
 
-    // Set environment variables for FFmpeg linking
+    // Set environment variables for FFmpeg linking and bindgen
     build_cmd.env("FFMPEG_DIR", "/opt/homebrew");
+    build_cmd.env("FFMPEG_INCLUDE_DIR", &ffmpeg_include_path);
+    build_cmd.env("FFMPEG_LIBRARY_DIR", &ffmpeg_lib_path);
     build_cmd.env("CPATH", &ffmpeg_include_path);
+    build_cmd.env("C_INCLUDE_PATH", &ffmpeg_include_path);
+    build_cmd.env("CPLUS_INCLUDE_PATH", &ffmpeg_include_path);
     build_cmd.env("LIBRARY_PATH", &ffmpeg_lib_path);
+    build_cmd.env("BINDGEN_EXTRA_CLANG_ARGS", format!("-I{}", &ffmpeg_include_path));
 
     // Set pkg-config path
     let current_pkg_config_path = env::var("PKG_CONFIG_PATH").unwrap_or_default();
@@ -208,32 +213,6 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     }
 
     Ok(())
-}
-
-fn find_ffmpeg_lib_path() -> Result<PathBuf> {
-    // Find FFmpeg lib directory in nix store
-    let output = Command::new("find")
-        .args(["/nix/store", "-name", "libavcodec*.dylib", "-type", "f"])
-        .output()
-        .context("Failed to find FFmpeg libraries")?;
-
-    if !output.status.success() {
-        bail!("No FFmpeg libraries found in nix store");
-    }
-
-    let lib_path_str = String::from_utf8(output.stdout)
-        .context("Invalid UTF-8 in find output")?
-        .lines()
-        .next()
-        .context("No FFmpeg library found")?
-        .to_string();
-
-    let lib_path = PathBuf::from(lib_path_str);
-    let lib_dir = lib_path
-        .parent()
-        .context("FFmpeg library has no parent directory")?;
-
-    Ok(lib_dir.to_path_buf())
 }
 
 #[allow(dead_code)]
@@ -537,16 +516,13 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     // Copy assets
     copy_assets(root, &platform_dist)?;
 
-    // Bundle Windows DLLs if needed
+    // Bundle platform-specific FFmpeg libraries
     if platform == "windows" {
         bundle_windows_dlls(root, &platform_dist)?;
-    }
-
-    // Bundle macOS dylibs if needed
-    if platform == "macos" {
-        // On macOS with nix, FFmpeg libraries are available system-wide
-        // so we don't need to bundle them
-        println!("  ℹ macOS uses system FFmpeg libraries (no bundling needed)");
+    } else if platform == "macos" {
+        bundle_macos_dylibs(&platform_dist)?;
+    } else if platform == "linux" {
+        bundle_linux_libs(&platform_dist)?;
     }
 
     // Create archive
@@ -611,11 +587,10 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
 fn bundle_macos_dylibs(dist_dir: &Path) -> Result<()> {
-    println!("  [3.5/4] Bundling macOS dylibs...");
+    println!("  [3.5/4] Bundling macOS FFmpeg dylibs...");
 
-    let ffmpeg_lib_path = find_ffmpeg_lib_path()?;
+    let ffmpeg_lib_path = PathBuf::from("/opt/homebrew/lib");
 
     let mut copied = 0;
     let mut dylib_names = Vec::new();
@@ -716,6 +691,67 @@ fn bundle_windows_dlls(root: &Path, dist_dir: &Path) -> Result<()> {
         }
     } else {
         println!("  ⚠ No DLLs found in FFmpeg bin directory");
+    }
+
+    Ok(())
+}
+
+fn bundle_linux_libs(dist_dir: &Path) -> Result<()> {
+    println!("  [3.5/4] Bundling Linux FFmpeg libraries...");
+
+    let mut copied = 0;
+    let mut lib_names = Vec::new();
+
+    // FFmpeg libraries that the application links against
+    let ffmpeg_libs = [
+        "libavcodec.so*",
+        "libavformat.so*",
+        "libavutil.so*",
+        "libswscale.so*",
+        "libswresample.so*",
+    ];
+
+    for pattern in &ffmpeg_libs {
+        let output = Command::new("find")
+            .args([
+                "/usr/lib",
+                "/usr/lib/x86_64-linux-gnu",
+                "-name",
+                pattern,
+                "-type",
+                "f",
+            ])
+            .output()
+            .with_context(|| format!("Failed to find {} libraries", pattern))?;
+
+        if !output.status.success() {
+            continue;
+        }
+
+        let lib_paths = String::from_utf8(output.stdout).context("Invalid UTF-8 in find output")?;
+
+        for lib_path_str in lib_paths.lines() {
+            let lib_path = PathBuf::from(lib_path_str);
+            let filename = lib_path.file_name().unwrap();
+            let dest = dist_dir.join(filename);
+
+            fs::copy(&lib_path, &dest).with_context(|| {
+                format!("Failed to copy library: {}", filename.to_string_lossy())
+            })?;
+
+            lib_names.push(filename.to_string_lossy().to_string());
+            copied += 1;
+        }
+    }
+
+    if copied > 0 {
+        lib_names.sort();
+        println!("  ✓ Copied {} libraries:", copied);
+        for lib in &lib_names {
+            println!("    - {}", lib);
+        }
+    } else {
+        println!("  ⚠ No FFmpeg libraries found to bundle");
     }
 
     Ok(())

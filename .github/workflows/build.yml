@@ -133,32 +133,21 @@ jobs:
           if: matrix.platform == 'macos'
           run: |
             brew install ffmpeg pkg-config
-            # Create symlinks for FFmpeg headers in /usr/local/include where bindgen might look
-            sudo mkdir -p /usr/local/include
-            sudo ln -sf /opt/homebrew/include/libavcodec /usr/local/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libavformat /usr/local/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libavutil /usr/local/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libswscale /usr/local/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libswresample /usr/local/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libpostproc /usr/local/include/ 2>/dev/null || true
-            # Also try /usr/include as fallback
-            sudo mkdir -p /usr/include
-            sudo ln -sf /opt/homebrew/include/libavcodec /usr/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libavformat /usr/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libavutil /usr/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libswscale /usr/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libswresample /usr/include/ 2>/dev/null || true
-            sudo ln -sf /opt/homebrew/include/libpostproc /usr/include/ 2>/dev/null || true
-            # Set environment variables for both locations
+            # Set up FFmpeg for bindgen - ffmpeg-sys-next needs these specific variables
             echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
-            echo "CPATH=/opt/homebrew/include:/usr/local/include:/usr/include:$CPATH" >> $GITHUB_ENV
-            echo "C_INCLUDE_PATH=/opt/homebrew/include:/usr/local/include:/usr/include:$C_INCLUDE_PATH" >> $GITHUB_ENV
-            echo "CPLUS_INCLUDE_PATH=/opt/homebrew/include:/usr/local/include:/usr/include:$CPLUS_INCLUDE_PATH" >> $GITHUB_ENV
+            echo "FFMPEG_INCLUDE_DIR=/opt/homebrew/include" >> $GITHUB_ENV
+            echo "FFMPEG_LIBRARY_DIR=/opt/homebrew/lib" >> $GITHUB_ENV
+            # Set standard include/library paths
+            echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
+            echo "C_INCLUDE_PATH=/opt/homebrew/include:$C_INCLUDE_PATH" >> $GITHUB_ENV
+            echo "CPLUS_INCLUDE_PATH=/opt/homebrew/include:$CPLUS_INCLUDE_PATH" >> $GITHUB_ENV
             echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
             echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
             echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV
-            echo "CFLAGS=-I/opt/homebrew/include -I/usr/local/include -I/usr/include" >> $GITHUB_ENV
-            echo "CXXFLAGS=-I/opt/homebrew/include -I/usr/local/include -I/usr/include" >> $GITHUB_ENV
+            echo "CFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
+            echo "CXXFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
+            # Also set bindgen-specific environment variables
+            echo "BINDGEN_EXTRA_CLANG_ARGS=-I/opt/homebrew/include" >> $GITHUB_ENV
 
       # Install Docker for cross-compilation (Linux from Ubuntu)
       - name: Set up Docker
