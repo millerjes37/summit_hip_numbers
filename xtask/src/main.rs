@@ -192,9 +192,17 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     build_cmd.env("C_INCLUDE_PATH", &ffmpeg_include_path);
     build_cmd.env("CPLUS_INCLUDE_PATH", &ffmpeg_include_path);
     build_cmd.env("LIBRARY_PATH", &ffmpeg_lib_path);
+    build_cmd.env("CFLAGS", format!("-I{}", ffmpeg_include_path.display()));
+    build_cmd.env("CXXFLAGS", format!("-I{}", ffmpeg_include_path.display()));
     build_cmd.env(
         "BINDGEN_EXTRA_CLANG_ARGS",
-        format!("-I{}", ffmpeg_include_path.display()),
+        format!("-I{} -I{}/libavcodec -I{}/libavformat -I{}/libavutil -I{}/libswscale -I{}/libswresample",
+                ffmpeg_include_path.display(),
+                ffmpeg_include_path.display(),
+                ffmpeg_include_path.display(),
+                ffmpeg_include_path.display(),
+                ffmpeg_include_path.display(),
+                ffmpeg_include_path.display()),
     );
 
     // Set pkg-config path
