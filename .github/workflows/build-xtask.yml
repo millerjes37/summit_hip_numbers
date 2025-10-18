@@ -121,7 +121,13 @@ jobs:
       - name: Install macOS Dependencies
         if: matrix.platform == 'macos'
         run: |
-          brew install ffmpeg pkg-config
+          # Install FFmpeg 7.1 specifically (ffmpeg-sys-next 7.1.3 expects FFmpeg 7.x)
+          # FFmpeg 8.0 removed the avfft.h header which causes build failures
+          brew install ffmpeg@7 pkg-config
+
+          # Link ffmpeg@7 to make it the default
+          brew link --overwrite ffmpeg@7
+
           # Set paths for FFmpeg headers (needed for bindgen)
           echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
           echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
