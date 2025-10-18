@@ -155,6 +155,7 @@ jobs:
           # Also set bindgen-specific environment variables
           # Use -isysroot and explicitly include SDK's usr/include for system headers (time.h)
           SDKROOT=$(xcrun --show-sdk-path)
+          echo "SDKROOT=$SDKROOT" >> $GITHUB_ENV
           echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT -I$SDKROOT/usr/include -I/opt/homebrew/include" >> $GITHUB_ENV
 
       # Install Docker for cross-compilation (Linux from Ubuntu)

@@ -249,6 +249,10 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk".to_string());
 
+        // Set SDKROOT environment variable so clang automatically finds system headers
+        build_cmd.env("SDKROOT", &sdk_path);
+        println!("  ✓ SDKROOT: {}", sdk_path);
+
         // Include SDK's usr/include for system headers like time.h
         let bindgen_args = format!(
             "-isysroot {} -I{}/usr/include -I/opt/homebrew/include \

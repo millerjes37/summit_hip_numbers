@@ -136,7 +136,9 @@ jobs:
           echo "FFMPEG_INCLUDE_DIR=/opt/homebrew/include" >> $GITHUB_ENV
           echo "FFMPEG_LIBRARY_DIR=/opt/homebrew/lib" >> $GITHUB_ENV
           # Use -isysroot and explicitly include SDK's usr/include for system headers (time.h)
+          # Set SDKROOT so clang automatically finds system headers
           SDKROOT=$(xcrun --show-sdk-path)
+          echo "SDKROOT=$SDKROOT" >> $GITHUB_ENV
           echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT -I$SDKROOT/usr/include -I/opt/homebrew/include" >> $GITHUB_ENV
 
       # Windows-specific: Setup environment for FFmpeg
