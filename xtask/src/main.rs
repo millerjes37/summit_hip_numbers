@@ -420,8 +420,8 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     println!("  [1/4] Building application...");
     let mut build_cmd = Command::new("cargo");
     build_cmd
-        .current_dir(root)  // Use project directory so binary goes to project's target/
-        .env("CARGO_TARGET_DIR", root.join("target"))  // Override CARGO_TARGET_DIR to use project's target/
+        .current_dir(root) // Use project directory so binary goes to project's target/
+        .env("CARGO_TARGET_DIR", root.join("target")) // Override CARGO_TARGET_DIR to use project's target/
         .arg("build")
         .arg("--release")
         .arg("--package")
@@ -529,8 +529,8 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         println!("  Using cross for {} target", target);
         let mut cross_cmd = Command::new("cross");
         cross_cmd
-            .current_dir(root)  // Use project directory
-            .env("CARGO_TARGET_DIR", root.join("target"))  // Override CARGO_TARGET_DIR
+            .current_dir(root) // Use project directory
+            .env("CARGO_TARGET_DIR", root.join("target")) // Override CARGO_TARGET_DIR
             .args(build_cmd.get_args().collect::<Vec<_>>());
 
         // Copy environment variables to cross
