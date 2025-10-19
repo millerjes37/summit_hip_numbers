@@ -1,3 +1,8 @@
 [workspace]
 members = ["crates/*", "xtask"]
 resolver = "2"
+
+# Patch ffmpeg-sys-next to use fork with macOS SDK path detection
+# This fixes the "unknown type name 'time_t'" error on macOS 10.14+
+[patch.crates-io]
+ffmpeg-sys-next = { git = "https://github.com/millerjes37/rust-ffmpeg-sys.git", branch = "macos-sdk-fix" }
