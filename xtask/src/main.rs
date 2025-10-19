@@ -420,6 +420,8 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
     println!("  [1/4] Building application...");
     let mut build_cmd = Command::new("cargo");
     build_cmd
+        .current_dir(root)  // Use project directory so binary goes to project's target/
+        .env("CARGO_TARGET_DIR", root.join("target"))  // Override CARGO_TARGET_DIR to use project's target/
         .arg("build")
         .arg("--release")
         .arg("--package")
@@ -526,7 +528,10 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
 
         println!("  Using cross for {} target", target);
         let mut cross_cmd = Command::new("cross");
-        cross_cmd.args(build_cmd.get_args().collect::<Vec<_>>());
+        cross_cmd
+            .current_dir(root)  // Use project directory
+            .env("CARGO_TARGET_DIR", root.join("target"))  // Override CARGO_TARGET_DIR
+            .args(build_cmd.get_args().collect::<Vec<_>>());
 
         // Copy environment variables to cross
         for (key, value) in build_cmd.get_envs() {
@@ -681,6 +686,8 @@ fn bundle_macos_dylibs(dist_dir: &Path) -> Result<()> {
         "libavutil*.dylib",
         "libswscale*.dylib",
         "libswresample*.dylib",
+        "libavdevice*.dylib",
+        "libavfilter*.dylib",
     ];
 
     for pattern in &ffmpeg_libs {
@@ -727,10 +734,96 @@ fn bundle_macos_dylibs(dist_dir: &Path) -> Result<()> {
         for dylib in &dylib_names {
             println!("    - {}", dylib);
         }
+
+        // Fix library paths to use @executable_path for portability
+        println!("  [3.6/4] Fixing dylib paths for portability...");
+        fix_macos_dylib_paths(dist_dir)?;
     } else {
         println!("  ⚠ No FFmpeg dylibs found to bundle");
     }
 
+    Ok(())
+}
+
+fn fix_macos_dylib_paths(dist_dir: &Path) -> Result<()> {
+    let binary_path = dist_dir.join("summit_hip_numbers");
+
+    if !binary_path.exists() {
+        println!("  ⚠ Binary not found, skipping dylib path fixes");
+        return Ok(());
+    }
+
+    // Get all dylibs in the dist directory
+    let mut dylibs = Vec::new();
+    for entry in fs::read_dir(dist_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("dylib") {
+            dylibs.push(path);
+        }
+    }
+
+    // Fix binary's dependency paths
+    for dylib in &dylibs {
+        let filename = dylib.file_name().unwrap().to_string_lossy();
+
+        // Change paths in the binary from absolute paths to @executable_path
+        // This handles both /opt/homebrew/opt/ffmpeg@6/lib and /opt/homebrew/lib paths
+        let patterns_to_replace = [
+            format!("/opt/homebrew/opt/ffmpeg@6/lib/{}", filename),
+            format!("/opt/homebrew/opt/ffmpeg@7/lib/{}", filename),
+            format!("/opt/homebrew/lib/{}", filename),
+        ];
+
+        for old_path in &patterns_to_replace {
+            let _ = Command::new("install_name_tool")
+                .args([
+                    "-change",
+                    old_path,
+                    &format!("@executable_path/{}", filename),
+                    binary_path.to_str().unwrap(),
+                ])
+                .output(); // Ignore errors since not all paths may exist
+        }
+    }
+
+    // Fix each dylib's ID and dependencies
+    for dylib in &dylibs {
+        let filename = dylib.file_name().unwrap().to_string_lossy();
+
+        // Change the dylib's ID to use @executable_path
+        let _ = Command::new("install_name_tool")
+            .args([
+                "-id",
+                &format!("@executable_path/{}", filename),
+                dylib.to_str().unwrap(),
+            ])
+            .output();
+
+        // Fix dependencies within the dylib
+        for other_dylib in &dylibs {
+            let other_filename = other_dylib.file_name().unwrap().to_string_lossy();
+
+            let patterns_to_replace = [
+                format!("/opt/homebrew/opt/ffmpeg@6/lib/{}", other_filename),
+                format!("/opt/homebrew/opt/ffmpeg@7/lib/{}", other_filename),
+                format!("/opt/homebrew/lib/{}", other_filename),
+            ];
+
+            for old_path in &patterns_to_replace {
+                let _ = Command::new("install_name_tool")
+                    .args([
+                        "-change",
+                        old_path,
+                        &format!("@executable_path/{}", other_filename),
+                        dylib.to_str().unwrap(),
+                    ])
+                    .output(); // Ignore errors
+            }
+        }
+    }
+
+    println!("  ✓ Fixed dylib paths to use @executable_path");
     Ok(())
 }
 
