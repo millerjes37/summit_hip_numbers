@@ -181,7 +181,13 @@ jobs:
 
       # Build xtask first
       - name: Build xtask
-        run: cargo build --package xtask --release
+        run: |
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            # Use wrapper script for macOS to set BINDGEN_EXTRA_CLANG_ARGS
+            ./.github/scripts/macos-build-wrapper.sh build --package xtask --release
+          else
+            cargo build --package xtask --release
+          fi
         shell: bash
 
       # Ensure FFmpeg is downloaded (xtask will auto-download if needed)
@@ -194,7 +200,13 @@ jobs:
 
       # Build using xtask
       - name: Build with xtask
-        run: ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
+        run: |
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            # Use wrapper script for macOS to set BINDGEN_EXTRA_CLANG_ARGS
+            ./.github/scripts/macos-build-wrapper.sh run --package xtask --release -- dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
+          else
+            ./target/release/xtask dist --platform ${{ matrix.platform }} --variant ${{ matrix.variant }}
+          fi
         shell: bash
 
       # Upload artifacts
