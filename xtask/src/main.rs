@@ -220,13 +220,6 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
 
     // On macOS, set comprehensive FFmpeg environment variables
     if platform == "macos" {
-        build_cmd.env("CXXSTDLIB", "c++");
-        build_cmd.env("CXXFLAGS", "-stdlib=libc++");
-        build_cmd.env("LDFLAGS", "-stdlib=libc++");
-
-        // Set FFMPEG_DIR to point to Homebrew location
-        build_cmd.env("FFMPEG_DIR", "/opt/homebrew");
-
         // Get macOS SDK path for system headers (where time.h is located)
         let sdk_path = std::process::Command::new("xcrun")
             .args(["--show-sdk-path"])
@@ -246,25 +239,31 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         build_cmd.env("SDKROOT", &sdk_path);
         println!("  ✓ SDKROOT: {}", sdk_path);
 
-        // CRITICAL: Use C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, and CPATH
-        // These are standard clang environment variables that clang reads directly
-        // ffmpeg-sys-next's build.rs does NOT honor BINDGEN_EXTRA_CLANG_ARGS
-        let sdk_include = format!("{}/usr/include", sdk_path);
-        let include_path = format!("{}:/opt/homebrew/include", sdk_include);
+        // Set FFMPEG_DIR to point to Homebrew location
+        build_cmd.env("FFMPEG_DIR", "/opt/homebrew");
 
+        // CRITICAL: Use target-specific Cargo build environment variables
+        // These get passed through to build scripts properly
+        let sdk_include = format!("{}/usr/include", sdk_path);
+        let cflags = format!("-isysroot {} -I{} -I/opt/homebrew/include", sdk_path, sdk_include);
+
+        build_cmd.env("CFLAGS_aarch64_apple_darwin", &cflags);
+        build_cmd.env("CFLAGS_x86_64_apple_darwin", &cflags);
+        build_cmd.env("CXXFLAGS_aarch64_apple_darwin", format!("{} -stdlib=libc++", cflags));
+        build_cmd.env("CXXFLAGS_x86_64_apple_darwin", format!("{} -stdlib=libc++", cflags));
+
+        println!("  ✓ CFLAGS (target-specific): {}", cflags);
+
+        // Also set standard environment variables as backup
+        let include_path = format!("{}:/opt/homebrew/include", sdk_include);
         build_cmd.env("C_INCLUDE_PATH", &include_path);
         build_cmd.env("CPLUS_INCLUDE_PATH", &include_path);
         build_cmd.env("CPATH", &include_path);
         build_cmd.env("LIBRARY_PATH", "/opt/homebrew/lib");
         build_cmd.env("PKG_CONFIG_PATH", "/opt/homebrew/lib/pkgconfig");
-
-        println!("  ✓ C_INCLUDE_PATH: {}", include_path);
-        println!("  ✓ CPLUS_INCLUDE_PATH: {}", include_path);
-        println!("  ✓ CPATH: {}", include_path);
-
-        // Set compiler flags
-        build_cmd.env("CFLAGS", "-I/opt/homebrew/include");
-        build_cmd.env("CXXFLAGS", "-I/opt/homebrew/include -stdlib=libc++");
+        build_cmd.env("CFLAGS", &cflags);
+        build_cmd.env("CXXFLAGS", format!("{} -stdlib=libc++", cflags));
+        build_cmd.env("LDFLAGS", "-L/opt/homebrew/lib -stdlib=libc++");
     }
 
     Ok(())

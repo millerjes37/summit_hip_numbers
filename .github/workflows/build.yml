@@ -139,21 +139,27 @@ jobs:
           # Link ffmpeg@7 to make it the default
           brew link --overwrite ffmpeg@7
 
-          # CRITICAL: Set SDK path and use standard clang environment variables
-          # ffmpeg-sys-next's build.rs does NOT honor BINDGEN_EXTRA_CLANG_ARGS
-          # We must use C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, and CPATH instead
+          # CRITICAL: Use target-specific Cargo build environment variables
+          # These get passed through to build scripts (including ffmpeg-sys-next)
           SDKROOT=$(xcrun --show-sdk-path)
           echo "SDKROOT=$SDKROOT" >> $GITHUB_ENV
 
-          # Set include paths with SDK first, then Homebrew
+          # Set target-specific CFLAGS that include SDK path
+          CFLAGS="-isysroot $SDKROOT -I$SDKROOT/usr/include -I/opt/homebrew/include"
+          echo "CFLAGS_aarch64_apple_darwin=$CFLAGS" >> $GITHUB_ENV
+          echo "CFLAGS_x86_64_apple_darwin=$CFLAGS" >> $GITHUB_ENV
+          echo "CXXFLAGS_aarch64_apple_darwin=$CFLAGS -stdlib=libc++" >> $GITHUB_ENV
+          echo "CXXFLAGS_x86_64_apple_darwin=$CFLAGS -stdlib=libc++" >> $GITHUB_ENV
+
+          # Also set standard environment variables as backup
           echo "C_INCLUDE_PATH=$SDKROOT/usr/include:/opt/homebrew/include" >> $GITHUB_ENV
           echo "CPLUS_INCLUDE_PATH=$SDKROOT/usr/include:/opt/homebrew/include" >> $GITHUB_ENV
           echo "CPATH=$SDKROOT/usr/include:/opt/homebrew/include" >> $GITHUB_ENV
+          echo "CFLAGS=$CFLAGS" >> $GITHUB_ENV
+          echo "CXXFLAGS=$CFLAGS -stdlib=libc++" >> $GITHUB_ENV
+          echo "LDFLAGS=-L/opt/homebrew/lib -stdlib=libc++" >> $GITHUB_ENV
           echo "LIBRARY_PATH=/opt/homebrew/lib" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig" >> $GITHUB_ENV
-          echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV
-          echo "CFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
-          echo "CXXFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
           echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
           echo "FFMPEG_INCLUDE_DIR=/opt/homebrew/include" >> $GITHUB_ENV
           echo "FFMPEG_LIBRARY_DIR=/opt/homebrew/lib" >> $GITHUB_ENV
