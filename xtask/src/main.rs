@@ -194,9 +194,28 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
     build_cmd.env("LIBRARY_PATH", &ffmpeg_lib_path);
     build_cmd.env("CFLAGS", format!("-I{}", ffmpeg_include_path.display()));
     build_cmd.env("CXXFLAGS", format!("-I{}", ffmpeg_include_path.display()));
+    // Get macOS SDK path for system headers (critical for bindgen to find time.h)
+    let sdk_path = std::process::Command::new("xcrun")
+        .args(["--show-sdk-path"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout).ok()
+            } else {
+                None
+            }
+        })
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk".to_string());
+
+    // CRITICAL: Include SDK path in BINDGEN_EXTRA_CLANG_ARGS
+    // This allows libclang (used by bindgen) to find system headers like time.h
     build_cmd.env(
         "BINDGEN_EXTRA_CLANG_ARGS",
-        format!("-I{} -I{}/libavcodec -I{}/libavformat -I{}/libavutil -I{}/libswscale -I{}/libswresample",
+        format!("-isysroot {} -I{}/usr/include -I{} -I{}/libavcodec -I{}/libavformat -I{}/libavutil -I{}/libswscale -I{}/libswresample",
+                sdk_path,
+                sdk_path,
                 ffmpeg_include_path.display(),
                 ffmpeg_include_path.display(),
                 ffmpeg_include_path.display(),
