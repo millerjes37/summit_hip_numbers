@@ -564,7 +564,8 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
 
     // When building with --target flag, Cargo always puts output in target/<triple>/release
     // So we always use the target triple path
-    let binary_src = root.join("target")
+    let binary_src = root
+        .join("target")
         .join(target)
         .join("release")
         .join(binary_name);
