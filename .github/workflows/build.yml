@@ -132,12 +132,12 @@ jobs:
       - name: Install macOS Dependencies
         if: matrix.platform == 'macos'
         run: |
-          # Install FFmpeg 7.1 specifically (ffmpeg-sys-next 7.1.3 expects FFmpeg 7.x)
-          # FFmpeg 8.0 removed the avfft.h header which causes build failures
-          brew install ffmpeg@7 pkg-config
+          # Install FFmpeg 6 to avoid bindgen time_t header issues with FFmpeg 7.x
+          # FFmpeg 6 is compatible with ffmpeg-sys-next 7.1.3
+          brew install ffmpeg@6 pkg-config
 
-          # Link ffmpeg@7 to make it the default
-          brew link --overwrite ffmpeg@7
+          # Link ffmpeg@6 to make it the default
+          brew link --overwrite ffmpeg@6
 
           # CRITICAL: Use target-specific Cargo build environment variables
           # These get passed through to build scripts (including ffmpeg-sys-next)
