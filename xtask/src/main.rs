@@ -245,12 +245,21 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         // CRITICAL: Use target-specific Cargo build environment variables
         // These get passed through to build scripts properly
         let sdk_include = format!("{}/usr/include", sdk_path);
-        let cflags = format!("-isysroot {} -I{} -I/opt/homebrew/include", sdk_path, sdk_include);
+        let cflags = format!(
+            "-isysroot {} -I{} -I/opt/homebrew/include",
+            sdk_path, sdk_include
+        );
 
         build_cmd.env("CFLAGS_aarch64_apple_darwin", &cflags);
         build_cmd.env("CFLAGS_x86_64_apple_darwin", &cflags);
-        build_cmd.env("CXXFLAGS_aarch64_apple_darwin", format!("{} -stdlib=libc++", cflags));
-        build_cmd.env("CXXFLAGS_x86_64_apple_darwin", format!("{} -stdlib=libc++", cflags));
+        build_cmd.env(
+            "CXXFLAGS_aarch64_apple_darwin",
+            format!("{} -stdlib=libc++", cflags),
+        );
+        build_cmd.env(
+            "CXXFLAGS_x86_64_apple_darwin",
+            format!("{} -stdlib=libc++", cflags),
+        );
 
         println!("  ✓ CFLAGS (target-specific): {}", cflags);
 
