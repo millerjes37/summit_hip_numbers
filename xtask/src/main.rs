@@ -562,16 +562,12 @@ fn build_platform(root: &Path, dist_dir: &Path, platform: &str, variant: &str) -
         "summit_hip_numbers"
     };
 
-    let binary_src = if platform == "macos" && current_os == "macos" {
-        // For native macOS builds, don't use target triple
-        root.join("target").join("release").join(binary_name)
-    } else {
-        // For cross-compilation, use target triple
-        root.join("target")
-            .join(target)
-            .join("release")
-            .join(binary_name)
-    };
+    // When building with --target flag, Cargo always puts output in target/<triple>/release
+    // So we always use the target triple path
+    let binary_src = root.join("target")
+        .join(target)
+        .join("release")
+        .join(binary_name);
 
     if !binary_src.exists() {
         return Err(anyhow::anyhow!(
