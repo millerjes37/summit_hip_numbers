@@ -227,13 +227,6 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         // Set FFMPEG_DIR to point to Homebrew location
         build_cmd.env("FFMPEG_DIR", "/opt/homebrew");
 
-        // Set comprehensive include and library paths
-        build_cmd.env("C_INCLUDE_PATH", "/opt/homebrew/include");
-        build_cmd.env("CPLUS_INCLUDE_PATH", "/opt/homebrew/include");
-        build_cmd.env("LIBRARY_PATH", "/opt/homebrew/lib");
-        build_cmd.env("PKG_CONFIG_PATH", "/opt/homebrew/lib/pkgconfig");
-
-        // Set clang arguments to include FFmpeg headers
         // Get macOS SDK path for system headers (where time.h is located)
         let sdk_path = std::process::Command::new("xcrun")
             .args(["--show-sdk-path"])
@@ -253,20 +246,21 @@ fn setup_macos_ffmpeg_env(build_cmd: &mut Command, platform: &str) -> Result<()>
         build_cmd.env("SDKROOT", &sdk_path);
         println!("  ✓ SDKROOT: {}", sdk_path);
 
-        // Include SDK's usr/include for system headers like time.h
-        let bindgen_args = format!(
-            "-isysroot {} -I{}/usr/include -I/opt/homebrew/include \
-             -I/opt/homebrew/include/libavcodec \
-             -I/opt/homebrew/include/libavformat \
-             -I/opt/homebrew/include/libavutil \
-             -I/opt/homebrew/include/libswscale \
-             -I/opt/homebrew/include/libswresample \
-             -I/opt/homebrew/include/libavdevice \
-             -I/opt/homebrew/include/libavfilter",
-            sdk_path, sdk_path
-        );
-        build_cmd.env("BINDGEN_EXTRA_CLANG_ARGS", &bindgen_args);
-        println!("  ✓ BINDGEN_EXTRA_CLANG_ARGS: {}", bindgen_args);
+        // CRITICAL: Use C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, and CPATH
+        // These are standard clang environment variables that clang reads directly
+        // ffmpeg-sys-next's build.rs does NOT honor BINDGEN_EXTRA_CLANG_ARGS
+        let sdk_include = format!("{}/usr/include", sdk_path);
+        let include_path = format!("{}:/opt/homebrew/include", sdk_include);
+
+        build_cmd.env("C_INCLUDE_PATH", &include_path);
+        build_cmd.env("CPLUS_INCLUDE_PATH", &include_path);
+        build_cmd.env("CPATH", &include_path);
+        build_cmd.env("LIBRARY_PATH", "/opt/homebrew/lib");
+        build_cmd.env("PKG_CONFIG_PATH", "/opt/homebrew/lib/pkgconfig");
+
+        println!("  ✓ C_INCLUDE_PATH: {}", include_path);
+        println!("  ✓ CPLUS_INCLUDE_PATH: {}", include_path);
+        println!("  ✓ CPATH: {}", include_path);
 
         // Set compiler flags
         build_cmd.env("CFLAGS", "-I/opt/homebrew/include");

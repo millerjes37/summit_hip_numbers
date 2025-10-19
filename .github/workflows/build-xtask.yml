@@ -128,18 +128,21 @@ jobs:
           # Link ffmpeg@7 to make it the default
           brew link --overwrite ffmpeg@7
 
-          # Set paths for FFmpeg headers (needed for bindgen)
-          echo "CPATH=/opt/homebrew/include:$CPATH" >> $GITHUB_ENV
-          echo "LIBRARY_PATH=/opt/homebrew/lib:$LIBRARY_PATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          # CRITICAL: Set SDK path and use standard clang environment variables
+          # ffmpeg-sys-next's build.rs does NOT honor BINDGEN_EXTRA_CLANG_ARGS
+          # We must use C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, and CPATH instead
+          SDKROOT=$(xcrun --show-sdk-path)
+          echo "SDKROOT=$SDKROOT" >> $GITHUB_ENV
+
+          # Set include paths with SDK first, then Homebrew
+          echo "C_INCLUDE_PATH=$SDKROOT/usr/include:/opt/homebrew/include" >> $GITHUB_ENV
+          echo "CPLUS_INCLUDE_PATH=$SDKROOT/usr/include:/opt/homebrew/include" >> $GITHUB_ENV
+          echo "CPATH=$SDKROOT/usr/include:/opt/homebrew/include" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=/opt/homebrew/lib" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig" >> $GITHUB_ENV
           echo "FFMPEG_DIR=/opt/homebrew" >> $GITHUB_ENV
           echo "FFMPEG_INCLUDE_DIR=/opt/homebrew/include" >> $GITHUB_ENV
           echo "FFMPEG_LIBRARY_DIR=/opt/homebrew/lib" >> $GITHUB_ENV
-          # Use -isysroot and explicitly include SDK's usr/include for system headers (time.h)
-          # Set SDKROOT so clang automatically finds system headers
-          SDKROOT=$(xcrun --show-sdk-path)
-          echo "SDKROOT=$SDKROOT" >> $GITHUB_ENV
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT -I$SDKROOT/usr/include -I/opt/homebrew/include" >> $GITHUB_ENV
 
       # Windows-specific: Setup environment for FFmpeg
       - name: Setup Windows Build Environment
