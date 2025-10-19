@@ -185,6 +185,8 @@ jobs:
       # Build using xtask
       - name: Build with xtask
         run: |
+          # Clean xtask to force rebuild with latest changes
+          cargo clean --package xtask
           if [ "${{ matrix.platform }}" = "macos" ]; then
             # Use wrapper script for macOS to set BINDGEN_EXTRA_CLANG_ARGS
             ./.github/scripts/macos-build-wrapper.sh build --package xtask --release
