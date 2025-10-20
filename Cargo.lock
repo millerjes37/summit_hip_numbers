@@ -1658,9 +1658,9 @@ dependencies = [
 
 [[package]]
 name = "ffmpeg-next"
-version = "7.1.0"
+version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da02698288e0275e442a47fc12ca26d50daf0d48b15398ba5906f20ac2e2a9f9"
+checksum = "d658424d233cbd993a972dd73a66ca733acd12a494c68995c9ac32ae1fe65b40"
 dependencies = [
  "bitflags 2.9.4",
  "ffmpeg-sys-next",
@@ -1669,8 +1669,9 @@ dependencies = [
 
 [[package]]
 name = "ffmpeg-sys-next"
-version = "7.1.3"
-source = "git+https://github.com/millerjes37/rust-ffmpeg-sys.git?branch=macos-sdk-fix#faedf58b76d2a85f8d2ce479608a4f9b21cac07a"
+version = "8.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bca20aa4ee774fe384c2490096c122b0b23cf524a9910add0686691003d797b"
 dependencies = [
  "bindgen",
  "cc",
@@ -6466,3 +6467,8 @@ dependencies = [
  "quote",
  "syn 2.0.106",
 ]
+
+[[patch.unused]]
+name = "ffmpeg-sys-next"
+version = "7.1.3"
+source = "git+https://github.com/millerjes37/rust-ffmpeg-sys.git?branch=macos-sdk-fix#faedf58b76d2a85f8d2ce479608a4f9b21cac07a"
